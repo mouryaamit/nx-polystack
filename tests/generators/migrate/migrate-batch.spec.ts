@@ -5,7 +5,9 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 
 import migrateGenerator from '../../../src/generators/migrate/generator';
 
-import { fixtureCopy, putJson, tmpSource } from './helpers';
+import * as fs from 'fs';
+
+import { FIXTURES, fixtureCopy, put, putJson, tmpSource } from './helpers';
 
 function workspace(): Tree {
   const tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
@@ -52,6 +54,63 @@ describe('migrate --config', () => {
     jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
   });
   afterEach(() => jest.restoreAllMocks());
+
+  it('rewrites imports between entries, both ways, and the last rollback undoes the forward ones (NX-62)', async () => {
+    const before = treeState(tree);
+    const root = tmpSource('pstack-batch-repo-');
+    for (const app of ['one', 'web/two']) {
+      fs.cpSync(path.join(FIXTURES, 'angular15-app'), path.join(root, app), { recursive: true });
+    }
+    put(root, 'one/src/app/util.ts', 'export const u = 1;\n');
+    put(root, 'web/two/src/app/shared.ts', 'export const s = 2;\n');
+    // Forward: one imports what the later entry (two) brings in. Backward: two imports one.
+    put(root, 'one/src/app/uses-two.ts', "export { s } from '../../../web/two/src/app/shared';\n");
+    put(root, 'web/two/src/app/uses-one.ts', "export { u } from '../../../../one/src/app/util';\n");
+    put(root, 'one/src/app/outside.ts', "export { z } from '../../../three/src/z';\n");
+    // The later entry brings in web/two but not this file: listed again with the new reason.
+    put(root, 'one/src/app/gone.ts', "export { g } from '../../../web/two/src/app/gone';\n");
+    put(root, 'three/src/z.ts', 'export const z = 3;\n');
+    const file = batchFile([
+      { source: path.join(root, 'one'), name: 'one' },
+      { source: path.join(root, 'web/two'), name: 'two' },
+    ]);
+
+    await migrateGenerator(tree, { config: file });
+    expect(tree.read('apps/two/src/app/uses-one.ts', 'utf8')).toBe(
+      "export { u } from '../../../one/src/app/util';\n",
+    );
+    expect(tree.read('apps/one/src/app/uses-two.ts', 'utf8')).toBe(
+      "export { s } from '../../../two/src/app/shared';\n",
+    );
+    expect(tree.read('apps/one/src/app/outside.ts', 'utf8')).toBe(
+      "export { z } from '../../../three/src/z';\n",
+    );
+    const one = tree.read('docs/migrations/one.md', 'utf8') as string;
+    expect(one).toContain('apps/one/src/app/uses-two.ts');
+    expect(one).not.toMatch(/uses-two\.ts`: `[^`]+` \(points outside/);
+    expect(one).toMatch(
+      /outside\.ts`: `\.\.\/\.\.\/\.\.\/three\/src\/z` \(points outside the imported projects\)/,
+    );
+    expect(one).toMatch(
+      /gone\.ts`: `\.\.\/\.\.\/\.\.\/web\/two\/src\/app\/gone` \(points to a file that was not copied\)/,
+    );
+    expect(one).not.toMatch(/gone\.ts`: `[^`]+` \(points outside/);
+    const two = tree.read('docs/migrations/two.md', 'utf8') as string;
+    expect(two).toContain('Resolved in earlier entries of this `--config` batch');
+    expect(two).toContain('`apps/one/src/app/uses-two.ts`');
+
+    await migrateGenerator(tree, { rollback: 'two' });
+    expect(tree.exists('apps/two')).toBe(false);
+    const oneAfter = tree.read('docs/migrations/one.md', 'utf8') as string;
+    expect(oneAfter).toMatch(
+      /uses-two\.ts`: `\.\.\/\.\.\/\.\.\/web\/two\/src\/app\/shared` \(points outside/,
+    );
+    expect(tree.read('apps/one/src/app/uses-two.ts', 'utf8')).toBe(
+      "export { s } from '../../../web/two/src/app/shared';\n",
+    );
+    await migrateGenerator(tree, { rollback: 'one' });
+    expect(treeState(tree)).toEqual(before);
+  });
 
   it('runs every entry, each with its own report and manifest, and each can be undone', async () => {
     const before = treeState(tree);

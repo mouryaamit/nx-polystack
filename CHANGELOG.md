@@ -3,6 +3,20 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.1.0
+
+`pstack migrate` closes the gaps its import rewriting and adapter SDK listed:
+
+- Angular `templateUrl`, `styleUrl` and `styleUrls` that reach into another imported project get
+  the corrected relative path.
+- Bare Sass paths (`@use 'theme'`) are resolved like Sass does, through the source
+  `includePaths`; ones the workspace no longer reaches become relative paths, and load-path files
+  that were not imported or missing `includePaths` are listed.
+- In a `--config` batch, imports between entries are rewritten in both directions; the forward
+  ones are undone with the last entry's rollback.
+- External adapters can be ES modules (`.mjs`, `"type": "module"`, ESM-only packages; Node 20.19+
+  or 22.12+), `.mts` or `.cts` files, and TypeScript adapters resolve tsconfig `paths`.
+
 ## 1.0.3
 
 - `pstack update` accepts a plugin entry it cannot read a version from (a git tag of another repo,

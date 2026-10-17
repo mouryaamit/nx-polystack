@@ -242,6 +242,8 @@ const KIND_LABEL: Record<RewriteKind, string> = {
   'base-url': 'through the source `baseUrl`',
   nrwl: '`@nrwl/*` to `@nx/*`',
   'node-modules': 'into the root `node_modules`',
+  resource: 'Angular template or style URL into another moved project',
+  'sass-load-path': 'through the source Sass load paths',
 };
 
 /** Compares string tuples element by element (0 on ties, for a deterministic sort). */
@@ -292,6 +294,18 @@ function importsBlock(r: ImportRewriteResult): string {
             .sort((a, b) => byKeys([a.file, a.spec, a.why], [b.file, b.spec, b.why]))
             .map((x) => `${code(x.file)}: ${code(x.spec)} (${x.why})`),
           'None.',
+        ),
+    );
+  }
+  if (r.resolvedEarlier && r.resolvedEarlier.length > 0) {
+    parts.push(
+      'Resolved in earlier entries of this `--config` batch (imports into projects this entry ' +
+        'brought in; rolling this entry back restores them):\n\n' +
+        table(
+          ['File', 'Before', 'After'],
+          [...r.resolvedEarlier]
+            .sort((a, b) => byKeys([a.file, a.before], [b.file, b.before]))
+            .map((w) => [code(w.file), code(w.before), code(w.after)]),
         ),
     );
   }

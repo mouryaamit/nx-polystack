@@ -25,7 +25,7 @@ import {
   WorkspaceMigrationContext,
 } from './adapters/types';
 import { DEFAULT_MAX_FILES } from './copy';
-import { rewriteImports } from './imports/rewrite';
+import { ImportMove, LATER_RESOLVABLE, rewriteImports } from './imports/rewrite';
 import { appRoot, assertDirOutsideProjects, kebabName, parseDir } from './names';
 import { BatchDefaults, mergeEntryOptions, readBatchFile } from './batch';
 import { renderReport } from './report';
@@ -228,9 +228,15 @@ async function migrateBatch(
   if (schema.rewriteImports !== undefined) cli.rewriteImports = schema.rewriteImports;
 
   const done: MigrateOutcome[] = [];
-  for (const entry of entries) {
+  for (const [i, entry] of entries.entries()) {
+    // Imports may resolve into what earlier entries copied; the last entry also fixes earlier
+    // entries' imports into what later entries copied (NX-62).
+    const batchHooks: BatchHooks = {
+      otherMoves: done.flatMap((d) => d.moves),
+      earlier: i === entries.length - 1 ? done : undefined,
+    };
     try {
-      const outcome = await migrateOne(tree, mergeEntryOptions(entry, defaults, cli));
+      const outcome = await migrateOne(tree, mergeEntryOptions(entry, defaults, cli), batchHooks);
       if (outcome) done.push(outcome);
     } catch (err) {
       const message = (err instanceof Error ? err.message : String(err))
@@ -266,12 +272,86 @@ async function migrateBatch(
 interface MigrateOutcome {
   name: string;
   installTask?: GeneratorCallback;
+  /** What this entry copied, its source, and its import pass (for later `--config` entries). */
+  moves: ImportMove[];
+  sourceDir: string;
+  data: MigrationReportData;
+  /** Writes this entry's report again (after a later entry changed its import lists). */
+  rerender(tree: Tree): void;
+}
+
+/** What a `--config` entry knows about the other entries (NX-62). */
+interface BatchHooks {
+  /** Folders the earlier entries copied. */
+  otherMoves: ImportMove[];
+  /** Set for the last entry: the earlier entries, whose open imports it resolves. */
+  earlier?: MigrateOutcome[];
+}
+
+/**
+ * The last `--config` entry: imports of earlier entries that pointed outside the projects they
+ * brought in are resolved again with every entry's moves, in the last entry's tree (so its
+ * rollback undoes them). Only those imports are touched; earlier reports are written again.
+ */
+function resolveEarlierImports(
+  tree: Tree,
+  earlier: MigrateOutcome[],
+  ownMoves: ImportMove[],
+): ImportRewriteResultLike['rewritten'] {
+  const all = [...earlier.flatMap((e) => e.moves), ...ownMoves];
+  const out: ImportRewriteResultLike['rewritten'] = [];
+  for (const e of earlier) {
+    const imports = e.data.imports;
+    if (!imports) continue;
+    const open = imports.unresolved.filter((u) => LATER_RESOLVABLE.has(u.why));
+    if (open.length === 0) continue;
+    const r = rewriteImports(tree, {
+      sourceDir: e.sourceDir,
+      moves: e.moves,
+      otherMoves: all.filter((m) => !e.moves.includes(m)),
+      only: new Set(open.map((u) => `${u.file}\0${u.spec}`)),
+    });
+    // The second look replaces the open entries: ones it does not list again now resolve
+    // (rewritten, or already right); ones it lists again carry its reason.
+    const looked = new Set(open.map((u) => `${u.file}\0${u.spec}`));
+    const before = JSON.stringify(imports.unresolved);
+    imports.unresolved = [
+      ...imports.unresolved.filter((u) => !looked.has(`${u.file}\0${u.spec}`)),
+      ...r.unresolved,
+    ];
+    if (r.rewritten.length === 0 && JSON.stringify(imports.unresolved) === before) continue;
+    imports.rewritten.push(...r.rewritten);
+    imports.deepImports.push(...r.deepImports);
+    imports.missingPackages = [
+      ...new Set([...imports.missingPackages, ...r.missingPackages]),
+    ].sort();
+    e.rerender(tree);
+    out.push(...r.rewritten);
+  }
+  return out;
+}
+
+type ImportRewriteResultLike = NonNullable<MigrationReportData['imports']>;
+
+/** Runs the batch follow-up for the last entry and records it in its report data. */
+function applyBatchHooks(tree: Tree, data: MigrationReportData, hooks?: BatchHooks): void {
+  if (!hooks?.earlier || hooks.earlier.length === 0) return;
+  const resolved = resolveEarlierImports(tree, hooks.earlier, data.moves ?? []);
+  if (resolved.length === 0) return;
+  if (data.imports) data.imports.resolvedEarlier = resolved;
+  else {
+    data.notes.push(
+      `Rewrote ${resolved.length} import(s) in earlier \`--config\` entries that point into the ` +
+        `projects this entry brought in: ${[...new Set(resolved.map((r) => r.file))].join(', ')}.`,
+    );
+  }
 }
 
 /** One migration (the --source path). Undefined for --detect. */
 async function migrateOne(
   tree: Tree,
   schema: MigrateGeneratorSchema,
+  batch?: BatchHooks,
 ): Promise<MigrateOutcome | undefined> {
   const sourceDir = resolveSource(tree, schema.source);
   const maxFiles = schema.maxFiles ?? DEFAULT_MAX_FILES;
@@ -326,6 +406,7 @@ async function migrateOne(
       sourceDir,
       maxFiles,
       projects,
+      batch,
     );
   }
   if ((projects && projects.length > 0) || schema.noDeps || schema.prefix) {
@@ -368,8 +449,13 @@ async function migrateOne(
   adapter.preflight?.(rec.tree, ctx);
   const data = adapter.migrate(rec.tree, ctx);
   if (ctx.rewriteImports) {
-    data.imports = rewriteImports(rec.tree, { sourceDir, moves: data.moves ?? [] });
+    data.imports = rewriteImports(rec.tree, {
+      sourceDir,
+      moves: data.moves ?? [],
+      otherMoves: batch?.otherMoves,
+    });
   }
+  applyBatchHooks(rec.tree, data, batch);
   if (dir && knipMissesNestedApps(tree)) {
     data.notes.push(
       `knip.json lists \`apps/*/src/main.ts\` as an entry, which does not reach ${projectRoot}; ` +
@@ -378,20 +464,19 @@ async function migrateOne(
   }
 
   const reportPath = `docs/migrations/${name}.md`;
-  rec.tree.write(
-    reportPath,
-    renderReport({
-      name,
-      adapterId: adapter.id,
-      adapterLabel: adapter.label,
-      detection,
-      forced,
-      projectRoot,
-      minConfidence: schema.minConfidence,
-      source: schema.sourceLabel ?? (schema.source as string),
-      data,
-    }),
-  );
+  const reportArgs = {
+    name,
+    adapterId: adapter.id,
+    adapterLabel: adapter.label,
+    detection,
+    forced,
+    projectRoot,
+    minConfidence: schema.minConfidence,
+    source: schema.sourceLabel ?? (schema.source as string),
+    data,
+  };
+  const rerender = (t: Tree) => t.write(reportPath, renderReport(reportArgs));
+  rerender(rec.tree);
 
   // Copied source files are not run through Prettier: they stay as the source had them.
   refreshLlmBlocks(rec.tree);
@@ -407,7 +492,14 @@ async function migrateOne(
     `Migrated ${sourceDir} into ${projectRoot} with the ${adapter.id} adapter. ` +
       `Report: ${reportPath}. Undo with: pstack migrate --rollback=${name}`,
   );
-  return { name, installTask: data.installTask };
+  return {
+    name,
+    installTask: data.installTask,
+    moves: data.moves ?? [],
+    sourceDir,
+    data,
+    rerender,
+  };
 }
 
 async function migrateWorkspace(
@@ -419,6 +511,7 @@ async function migrateWorkspace(
   sourceDir: string,
   maxFiles: number,
   projects: string[] | undefined,
+  batch?: BatchHooks,
 ): Promise<MigrateOutcome> {
   const suggested = adapter.defaultName(sourceDir);
   const name = schema.name ?? (suggested ? kebabName(suggested) : '');
@@ -445,21 +538,25 @@ async function migrateWorkspace(
   adapter.preflight(rec.tree, ctx);
   const data = adapter.migrate(rec.tree, ctx);
   if (ctx.rewriteImports) {
-    data.imports = rewriteImports(rec.tree, { sourceDir, moves: data.moves ?? [] });
+    data.imports = rewriteImports(rec.tree, {
+      sourceDir,
+      moves: data.moves ?? [],
+      otherMoves: batch?.otherMoves,
+    });
   }
-  rec.tree.write(
-    reportPath,
-    renderReport({
-      name,
-      adapterId: adapter.id,
-      adapterLabel: adapter.label,
-      detection,
-      forced,
-      minConfidence: schema.minConfidence,
-      source: schema.sourceLabel ?? (schema.source as string),
-      data,
-    }),
-  );
+  applyBatchHooks(rec.tree, data, batch);
+  const reportArgs = {
+    name,
+    adapterId: adapter.id,
+    adapterLabel: adapter.label,
+    detection,
+    forced,
+    minConfidence: schema.minConfidence,
+    source: schema.sourceLabel ?? (schema.source as string),
+    data,
+  };
+  const rerender = (t: Tree) => t.write(reportPath, renderReport(reportArgs));
+  rerender(rec.tree);
   refreshLlmBlocks(rec.tree);
   recordManifest(
     tree,
@@ -473,5 +570,12 @@ async function migrateWorkspace(
     `Imported ${data.projects.length} project(s) from ${sourceDir} with the ${adapter.id} ` +
       `adapter. Report: ${reportPath}. Undo with: pstack migrate --rollback=${name}`,
   );
-  return { name, installTask: data.installTask };
+  return {
+    name,
+    installTask: data.installTask,
+    moves: data.moves ?? [],
+    sourceDir,
+    data,
+    rerender,
+  };
 }
