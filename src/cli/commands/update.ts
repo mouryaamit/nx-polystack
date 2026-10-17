@@ -8,7 +8,13 @@ import { installSource } from '../install-source';
 import { delegate } from '../launcher';
 import { CliError, CommandContext } from '../types';
 import { findPluginPin, resolveTarget } from '../update-plan';
-import { compareVersions, formatPluginSpec, pinInstallFlags, PLUGIN_NAME } from '../versions';
+import {
+  compareVersions,
+  formatPluginSpec,
+  normalizeVersion,
+  pinInstallFlags,
+  PLUGIN_NAME,
+} from '../versions';
 
 export interface UpdateDeps {
   exec(cmd: string, args: string[], cwd: string): void;
@@ -27,6 +33,26 @@ export interface UpdateDeps {
 /** Arguments for the child `_migrate` process. */
 export function migrateArgs(from: string, to: string, verbose = false): string[] {
   return ['_migrate', `--from=${from}`, `--to=${to}`, ...(verbose ? ['--verbose'] : [])];
+}
+
+/**
+ * The target version asked for: `pstack update 1.2.0` or `--to=1.2.0` (both may be given if they
+ * agree), or undefined for the global CLI's own version.
+ */
+export function requestedVersion(
+  positionals: string[],
+  toFlag: string | undefined,
+): string | undefined {
+  if (positionals.length > 1) {
+    throw new CliError(`pstack update takes one version, got: ${positionals.join(' ')}`);
+  }
+  const arg = positionals[0];
+  if (arg === undefined) return toFlag;
+  const version = normalizeVersion(arg);
+  if (toFlag !== undefined && normalizeVersion(toFlag) !== version) {
+    throw new CliError(`"${arg}" and --to=${toFlag} name different versions; give one.`);
+  }
+  return version;
 }
 
 const defaultDeps: UpdateDeps = {
@@ -53,6 +79,7 @@ export async function runUpdate(
   if (ctx.flags['to'] === true) {
     throw new CliError('--to requires a version, e.g. --to=0.3.0');
   }
+  const toVersion = requestedVersion(ctx.positionals, flagString(ctx.flags, 'to'));
   const pkgText = fs.readFileSync(pkgPath, 'utf8');
   const installedVersion = resolveLocalPlugin(root)?.version;
   const pin = findPluginPin(
@@ -76,12 +103,7 @@ export async function runUpdate(
       pin.version = installed;
     }
   }
-  const target = resolveTarget(
-    pin.version,
-    flagString(ctx.flags, 'to'),
-    ctx.selfVersion,
-    !!ctx.flags['force'],
-  );
+  const target = resolveTarget(pin.version, toVersion, ctx.selfVersion, !!ctx.flags['force']);
 
   // An unreadable pin on the current version is still rewritten to a normal pin.
   if (target.action === 'noop' && !pin.fromInstalled) {

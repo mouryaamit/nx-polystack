@@ -323,4 +323,36 @@ describe('pstack update', () => {
     fs.writeFileSync(p, '\uFEFF' + fs.readFileSync(p, 'utf8'));
     expect(await runUpdate(makeCtx({ cwd: ws, dryRun: true }), deps().d)).toBe(0);
   });
+
+  describe('target version as an argument (NX-65)', () => {
+    it('takes the version as a positional argument, like --to', async () => {
+      const ws = workspace();
+      const { calls, d } = deps();
+      // The global CLI is older than the workspace: without the argument this would fail.
+      const ctx = makeCtx({ cwd: ws, positionals: ['v0.3.0'], selfVersion: '0.1.0' });
+      expect(await runUpdate(ctx, d)).toBe(0);
+      expect(readPkg(ws).devDependencies['@mouryaamit/nx-polystack']).toBe(SPEC('0.3.0'));
+      expect(calls).toContain('migrate 0.2.2 0.3.0');
+    });
+
+    it('accepts the same version given both ways', async () => {
+      const ws = workspace();
+      const ctx = makeCtx({ cwd: ws, positionals: ['0.3.0'], flags: { to: 'v0.3.0' } });
+      expect(await runUpdate(ctx, deps().d)).toBe(0);
+    });
+
+    it('rejects two different versions, more than one argument, or a non-version', async () => {
+      const ws = workspace();
+      await expect(
+        runUpdate(makeCtx({ cwd: ws, positionals: ['0.3.0'], flags: { to: '0.4.0' } }), deps().d),
+      ).rejects.toThrow('"0.3.0" and --to=0.4.0 name different versions');
+      await expect(
+        runUpdate(makeCtx({ cwd: ws, positionals: ['0.3.0', '0.4.0'] }), deps().d),
+      ).rejects.toThrow('pstack update takes one version, got: 0.3.0 0.4.0');
+      await expect(
+        runUpdate(makeCtx({ cwd: ws, positionals: ['latest'] }), deps().d),
+      ).rejects.toThrow('"latest" is not a valid version');
+      expect(readPkg(ws).devDependencies['@mouryaamit/nx-polystack']).toBe(SPEC('0.2.2'));
+    });
+  });
 });

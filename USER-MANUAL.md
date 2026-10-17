@@ -143,7 +143,8 @@ OPTIONS — new / preset
   --force                      new only — allow creating inside another Nx workspace
 
 OPTIONS — update
-  --to=<version>               Target version (default: this CLI's version)
+  --to=<version>               Target version, also as "pstack update <version>"
+                               (default: this CLI's version)
   --allow-dirty                Run with uncommitted changes
   --force                      Allow downgrading
 
@@ -263,13 +264,14 @@ pstack new <dir> [--npmScope=<scope>] [--baseBranch=<branch>] [--infra=…] [--c
 ## 3b. pstack update — upgrade a workspace
 
 ```bash
-pstack update [--to=<version>] [--dry-run] [--allow-dirty] [--force]
+pstack update [<version> | --to=<version>] [--dry-run] [--allow-dirty] [--force]
 ```
 
 1. Reads the pinned version of `@mouryaamit/nx-polystack` from `package.json` (`1.2.0`, or the installed
    version for a range such as `^1.2.0`). Any other spec (a git tag, a tarball, `latest`) uses the installed
    version, and is rewritten to a normal pin.
-2. Target is `--to`, else the global CLI's version. Downgrades need `--force`. If the global CLI is older than the
+2. Target is the version argument or `--to` (`pstack update 1.2.0` is `pstack update --to=1.2.0`), else the
+   global CLI's version. Downgrades need `--force`. If the global CLI is older than the
    workspace pin, `update` tells you to upgrade the global CLI first (or pass `--force`).
 3. Needs a clean git tree unless `--allow-dirty`. The check covers only the workspace folder.
 4. Installs with `npm install @mouryaamit/nx-polystack@<to> --save-dev --save-exact` (`--save-prod` if the plugin
