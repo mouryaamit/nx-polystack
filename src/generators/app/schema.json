@@ -56,7 +56,7 @@
     },
     "baseHref": {
       "type": "string",
-      "description": "Base href of the uat and prod release configurations (Angular/Ionic release target, Flutter build-web), e.g. /portal/."
+      "description": "Base href of the uat and prod release configurations (Angular/Ionic release target, Flutter build-web), e.g. /portal/. With --from: default /<name>/ when the base app has one; \"none\" for none."
     },
     "port": {
       "type": "integer",
@@ -70,7 +70,24 @@
     },
     "appId": {
       "type": "string",
-      "description": "Ionic only \u2014 Capacitor appId in reverse-DNS form (default: com.example.<name without dashes>)."
+      "description": "Ionic only — Capacitor appId in reverse-DNS form (default: com.example.<name without dashes>). With --from it must differ from the base app's."
+    },
+    "from": {
+      "type": "string",
+      "description": "Create the app from this existing app: its files and configuration are copied under the new name, its environment values emptied. --type, --i18n, --push, --deeplink, --envLayout and --cspConnectSrc do not apply."
+    },
+    "envs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "With --from: environments to keep (default all of the base app's; dev is always kept)."
+    },
+    "csp": {
+      "type": "string",
+      "enum": ["keep", "clear"],
+      "default": "keep",
+      "description": "With --from: keep the base app's csp-allowlist.json or start from an empty one."
     }
   },
   "required": ["name"]

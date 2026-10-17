@@ -16,4 +16,10 @@ export interface AppGeneratorSchema {
   port?: number;
   /** Angular/Ionic: `per-env` gives environment.{dev,uat,prod}.ts and a shared environments/environment.ts. */
   envLayout?: 'default' | 'per-env';
+  /** Create the app from this existing app (copy, rename, empty env values). */
+  from?: string;
+  /** With `from`: environments to keep (default all; dev is always kept). */
+  envs?: string[] | string;
+  /** With `from`: keep or clear the base app's CSP allowlist. */
+  csp?: 'keep' | 'clear';
 }

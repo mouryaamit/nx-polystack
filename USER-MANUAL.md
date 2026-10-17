@@ -156,6 +156,8 @@ OPTIONS — app
   --dir=<path>                 Put the app in apps/<path>/<name> (v0.17.0+)
   --port=<n>                   Dev-server port (default: the lowest free port from 4200; v0.35.0+)
   --env-layout=<layout>        Angular/Ionic — default | per-env (v0.35.0+)
+  --from=<app>                 New app from an existing one; asks for the rest in a terminal (v1.2.0+)
+  --envs=<a,b> --csp=keep|clear --yes   With --from (see section 5)
 
 OPTIONS — shared (--app or --all required; v0.35.0+)
   --app=<a,b>                  Angular/Ionic apps to wire the shared assets and styles into
@@ -640,6 +642,53 @@ environments/<name>/
 ```
 
 Web builds (`build-web`, `serve`) need Flutter 3.22 or later. Add icons under `web/` if you want them.
+
+### A new app from an existing one (`--from`, v1.2.0)
+
+```bash
+pstack app --from=<app> [--name=<name>] [--dir=<path>] [--port=<n>] [--base-href=<path>|none]
+           [--app-id=<id>] [--envs=dev,uat,prod] [--csp=keep|clear] [--tags=a,b] [--yes] [--dry-run]
+```
+
+Duplicates an app pstack builds (Angular/Ionic with a release target, Flutter with flutter-build
+targets) under a new name. In a terminal it asks for everything not given as a flag, with the base
+app's values as defaults, shows a summary and asks to confirm; `--yes` (or a pipe, CI, or
+`nx g @mouryaamit/nx-polystack:app --from=…`) takes the flags and defaults instead, and then
+`--name` is required.
+
+| Question                | Default                                         |
+| ----------------------- | ----------------------------------------------- |
+| New app name            | —                                               |
+| Folder under apps/      | the base app's folder (`.` for apps/<name>)     |
+| Dev-server port         | the lowest free port from 4200                  |
+| Base href (uat/prod)    | `/<name>/` when the base app has one, else none |
+| Capacitor appId (Ionic) | `com.example.<name>`; never the base app's      |
+| Environments to keep    | all of the base app's (dev is always kept)      |
+| CSP allowlist           | keep (`clear` starts from an empty one)         |
+| Tags                    | the base app's                                  |
+
+- **Copied:** the app folder (source, assets, tsconfig, ESLint, `csp-allowlist.json`, server configs)
+  and its `project.json` targets with every option (hardening included). Not copied: build output,
+  caches, `node_modules`, what the `.gitignore` files ignore, and possible secrets (`.env`,
+  keystores, `google-services.json`, …), which the report lists.
+- **Renamed:** project name, paths and target references in `project.json` (relative paths follow a
+  different folder depth), `environments/<base>/` → `environments/<name>/`, the page title, the
+  Ionic `appId`/`appName`/package name, the Flutter `pubspec.yaml` name and `package:` imports,
+  the root npm scripts and the `tsconfig.base.json` alias of the app, and the listed encryption key
+  names in nx.json. `.htaccess`/`nginx.conf` written by `pstack csp` are written again.
+- **Emptied:** every value in the kept env files, by type (`''`, `0`, `false`, `[]`, nested objects
+  the same way; `null` stays), including `production`, encrypted values and secret placeholders.
+  Values that are not literals become `''` and are listed. Keys, comments and the env layout stay.
+- **Not copied from the release target:** the domain lock (`domains`, `includeWww`); the base href
+  and port are the new app's.
+- Lines that still name the base app are listed (first 50) for review; nothing is guessed.
+
+```bash
+pstack app --from=web                                    # asks
+pstack app --from=web --name=partner-portal --envs=uat,prod --csp=clear --yes
+```
+
+Needs nx-polystack 1.2.0 in the workspace.
 
 ### Examples
 
@@ -1369,7 +1418,10 @@ npx nx g @mouryaamit/nx-polystack:infra --with=docs,ci --ci=jenkins
   "name": "portal", // string — required
   "type": "angular", // "angular" | "flutter" — required
   "tags": ["platform:web"], // string[] — optional
-  "cspConnectSrc": "https://..." // string — optional, angular only
+  "cspConnectSrc": "https://...", // string — optional, angular only
+  "from": "web", // string — optional: create the app from this app (v1.2.0)
+  "envs": ["uat", "prod"], // with from — environments to keep (dev always kept)
+  "csp": "keep" // with from — "keep" | "clear"
 }
 ```
 
