@@ -82,6 +82,11 @@
       "version": "1.0.0",
       "description": "Add the web/ folder (index.html, manifest.json) that flutter build web needs to Flutter apps generated without one",
       "implementation": "./src/migrations/flutter-web-platform/flutter-web-platform"
+    },
+    "github-actions-node24": {
+      "version": "1.0.2",
+      "description": "Move GitHub workflows to the Node 24 action versions (checkout, setup-node, cache, nx-set-shas v5; create-pull-request v8)",
+      "implementation": "./src/migrations/github-actions-node24/github-actions-node24"
     }
   }
 }

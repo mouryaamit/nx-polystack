@@ -364,13 +364,13 @@ that, and `--ci`, `--ci-cache`, `--flutter`, `--upgrade-schedule` and `--upgrade
   UTC), plus a manual run. `polystack` scope: `pstack update --to=<latest release>`; `nx-minor` also
   runs `nx migrate nx@<current major>`, `npm install` and the Nx migrations. Opens or updates the
   `chore/dependency-upgrade` pull request (`chore(deps): scheduled dependency upgrade`) with
-  `peter-evans/create-pull-request@v6`, and `subosito/flutter-action@v2` when Flutter is set up. With only `--ci=jenkins` it is skipped, with a note.
+  `peter-evans/create-pull-request@v8`, and `subosito/flutter-action@v2` when Flutter is set up. With only `--ci=jenkins` it is skipped, with a note.
 
 - **Settings.** The upgrade workflow finds the latest version with `npm view` and needs "Allow GitHub
   Actions to create and approve pull requests" in the repo settings.
 
-- Actions are pinned to major tags: `actions/checkout@v4`, `actions/setup-node@v4`,
-  `nrwl/nx-set-shas@v4`, `actions/cache@v4`, `peter-evans/create-pull-request@v6`.
+- Actions are pinned to major tags: `actions/checkout@v5`, `actions/setup-node@v5`,
+  `nrwl/nx-set-shas@v5`, `actions/cache@v5`, `peter-evans/create-pull-request@v8`.
 
 The llm block is refreshed and lists the new npm scripts. Through the global CLI, `pstack infra`
 needs nx-polystack 0.9.0 or newer pinned in the workspace.
