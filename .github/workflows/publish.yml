@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: The tag is on master
@@ -41,10 +41,12 @@ jobs:
       - name: The tag matches package.json
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       # npm stage publish needs Node 22.14+ and npm 11.15+.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+          # No dependency cache in the publishing job (it holds the OIDC token).
+          package-manager-cache: false
       - run: npm install -g npm@^11.15.0
       - run: npm ci
       - run: npm test -- --ci

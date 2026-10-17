@@ -25,10 +25,10 @@ jobs:
   main:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -53,7 +53,7 @@ jobs:
       - run: npm ci
 <%_ if (ciCache) { _%>
       - name: Nx cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: <%= cacheDirectory %>
           key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
@@ -61,7 +61,7 @@ jobs:
             nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
             nx-${{ runner.os }}-
 <%_ } _%>
-      - uses: nrwl/nx-set-shas@v4
+      - uses: nrwl/nx-set-shas@v5
         with:
           main-branch-name: <%= baseBranch %>
       - run: npx nx affected -t lint typecheck test build --parallel=3

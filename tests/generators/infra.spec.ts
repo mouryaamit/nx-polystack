@@ -211,10 +211,10 @@ describe('infra generator', () => {
       expect(doc.on).toHaveProperty('pull_request');
       const s = steps(doc);
       const uses = s.map((x) => x['uses']).filter(Boolean);
-      expect(uses).toEqual(['actions/checkout@v4', 'actions/setup-node@v4', 'nrwl/nx-set-shas@v4']);
+      expect(uses).toEqual(['actions/checkout@v5', 'actions/setup-node@v5', 'nrwl/nx-set-shas@v5']);
       expect(s[0]['with']).toEqual({ 'fetch-depth': 0 });
       expect(s[1]['with']).toEqual({ 'node-version-file': '.nvmrc', cache: 'npm' });
-      const shas = s.find((x) => x['uses'] === 'nrwl/nx-set-shas@v4');
+      const shas = s.find((x) => x['uses'] === 'nrwl/nx-set-shas@v5');
       expect(shas?.['with']).toEqual({ 'main-branch-name': 'develop' });
       const runs = s.map((x) => x['run']).filter(Boolean);
       expect(runs).toContain('npm ci');
@@ -238,7 +238,7 @@ describe('infra generator', () => {
       const tree = workspace();
       applyInfra(tree, { with: 'ci', ciCache: true });
       const s = steps(yaml.load(read(tree, '.github/workflows/ci.yml')));
-      const idx = s.findIndex((x) => x['uses'] === 'actions/cache@v4');
+      const idx = s.findIndex((x) => x['uses'] === 'actions/cache@v5');
       expect(idx).toBeGreaterThan(s.findIndex((x) => x['run'] === 'npm ci'));
       expect((s[idx]['with'] as Record<string, string>)['path']).toBe('.nx/cache');
     });
@@ -248,7 +248,7 @@ describe('infra generator', () => {
       updateJson(tree, 'nx.json', (j) => ({ ...j, cacheDirectory: 'tmp/nx-cache' }));
       applyInfra(tree, { with: 'ci', ciCache: true });
       const s = steps(yaml.load(read(tree, '.github/workflows/ci.yml')));
-      const cache = s.find((x) => x['uses'] === 'actions/cache@v4');
+      const cache = s.find((x) => x['uses'] === 'actions/cache@v5');
       expect((cache?.['with'] as Record<string, string>)['path']).toBe('tmp/nx-cache');
     });
 
@@ -333,7 +333,7 @@ describe('infra generator', () => {
       applyInfra(tree, { with: 'ci' });
       expect(read(tree, '.github/workflows/ci.yml')).toContain('has Flutter projects');
       const s = ciSteps(tree);
-      const node = s.findIndex((x) => x['uses'] === 'actions/setup-node@v4');
+      const node = s.findIndex((x) => x['uses'] === 'actions/setup-node@v5');
       const idx = s.findIndex((x) => x['uses'] === 'subosito/flutter-action@v2');
       expect(idx).toBe(node + 1);
       expect(s[idx]).toEqual(FLUTTER_STEP);
@@ -538,13 +538,13 @@ describe('infra generator', () => {
       expect(runs).toContain('gh release view');
       expect(text).toContain('PSTACK_REPO_TOKEN');
       expect(runs).not.toContain('nx migrate');
-      const pr = s.find((x) => x['uses'] === 'peter-evans/create-pull-request@v6');
+      const pr = s.find((x) => x['uses'] === 'peter-evans/create-pull-request@v8');
       expect(pr?.['with']).toMatchObject({
         branch: 'chore/dependency-upgrade',
         base: 'main',
         title: 'chore(deps): scheduled dependency upgrade',
       });
-      expect(s[0]).toMatchObject({ uses: 'actions/checkout@v4', with: { ref: 'main' } });
+      expect(s[0]).toMatchObject({ uses: 'actions/checkout@v5', with: { ref: 'main' } });
       expect(workflow(tree).permissions).toEqual({
         contents: 'write',
         'pull-requests': 'write',

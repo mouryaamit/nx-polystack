@@ -3,6 +3,15 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.0.2
+
+- Generated GitHub workflows use the Node 24 action versions: `actions/checkout`,
+  `actions/setup-node`, `actions/cache` and `nrwl/nx-set-shas` v5, and
+  `peter-evans/create-pull-request` v8. `pstack update` moves existing workflows
+  (`github-actions-node24` migration); other actions and SHA pins are left alone.
+- This repository's CI and publish workflows use the same versions; the publish job does not
+  cache dependencies.
+
 ## 1.0.1
 
 - Releases are published from GitHub Actions through npm trusted publishing, with provenance,

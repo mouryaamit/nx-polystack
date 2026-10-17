@@ -106,7 +106,7 @@ describe('pstack infra', () => {
     );
     expect(exists(ws, 'Jenkinsfile')).toBe(true);
     const ci = fs.readFileSync(path.join(ws, '.github/workflows/ci.yml'), 'utf8');
-    expect(ci).toContain('actions/cache@v4');
+    expect(ci).toContain('actions/cache@v5');
     const up = fs.readFileSync(path.join(ws, '.github/workflows/dependency-upgrade.yml'), 'utf8');
     expect(up).toContain("'17 3 1 * *'");
     expect(up).toContain('nx migrate');

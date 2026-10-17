@@ -114,7 +114,7 @@ describe('preset generator', () => {
         upgradeSchedule: 'monthly',
         upgradeScope: 'nx-minor',
       });
-      expect(tree.read('.github/workflows/ci.yml', 'utf8')).toContain('actions/cache@v4');
+      expect(tree.read('.github/workflows/ci.yml', 'utf8')).toContain('actions/cache@v5');
       expect(tree.read('.github/workflows/ci.yml', 'utf8')).toContain('subosito/flutter-action@v2');
       const up = tree.read('.github/workflows/dependency-upgrade.yml', 'utf8') ?? '';
       expect(up).toContain("'17 3 1 * *'");
