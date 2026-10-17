@@ -1189,8 +1189,22 @@ The source is never changed, and `--rollback` removes the rewritten copies with 
   workspace does not declare yet.
 - **SCSS:** relative `@use`, `@import` and `@forward` paths that reach into another moved project
   are corrected; paths into the source's root `node_modules` point at the workspace's.
+- **Angular resources (1.1.0):** relative `templateUrl`, `styleUrl` and `styleUrls` entries that
+  reach into another moved project become the corrected relative path (Angular needs a path, not
+  an alias).
+- **Sass load paths (1.1.0):** a bare `@use 'theme'` is resolved the way Sass does it: next to the
+  stylesheet, then through the source `stylePreprocessorOptions.includePaths` of the project that
+  owns it (`angular.json` or its `project.json`). If the workspace project's own `includePaths` no
+  longer reach the same copied file first, it becomes a relative path. A load-path file that was
+  not imported, and an `includePaths` entry that does not exist in the workspace, are listed.
+  `sass:` modules, `~` paths, URLs, plain `.css` imports, `with (...)` values and anything found in
+  `node_modules` are left alone.
 - **Library subpaths** (npm, Yarn and pnpm imports): `@acme/utils/x` resolves through an added
   `@acme/utils/*` alias to the package folder.
+- **Between `--config` entries (1.1.0):** an import into a project an earlier entry brought in is
+  rewritten like any other. Imports into a project a later entry brings in are fixed after the
+  last entry, in its tree: its report lists them under "Resolved in earlier entries", the earlier
+  reports are updated, and `--rollback` of the last entry puts them back.
 
 Code files are `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` and `.cjs` (not `.d.ts`); the
 rewritten forms are `import`/`export … from`, `import()`, side-effect imports, `require()` and
@@ -1218,14 +1232,20 @@ with a Jest spec and `tools/migrate/jest.config.js`, and lists it in `nx.json`:
 }
 ```
 
-Entries are workspace-relative `.js`/`.ts` files or installed package names. A module exports one
-adapter or a list (`default`, `adapters`, `adapter`, or `module.exports`).
+Entries are workspace-relative `.js`/`.mjs`/`.cjs`/`.ts`/`.mts`/`.cts` files or installed package
+names. A module exports one adapter or a list (`default`, `adapters`, `adapter`, or
+`module.exports`).
 
-- **TypeScript:** `.ts` files are transpiled with the workspace's `typescript` and its
-  `tsconfig.base.json` options (no ts-node needed). `paths` aliases are not resolved, and
-  `.mts`/`.cts` files are not supported.
-- **Adapter packages:** must be CommonJS, and should list nx-polystack as a peer dependency so
-  they use the workspace's copy.
+- **TypeScript:** `.ts`, `.mts` and `.cts` files are transpiled to CommonJS with the workspace's
+  `typescript` and its `tsconfig.base.json` options (no ts-node needed). `paths` aliases resolve
+  while the adapter runs (1.1.0). `import.meta` and top-level `await` are not supported in
+  TypeScript adapters.
+- **ES modules (1.1.0):** `.mjs` files, `.js` files in a `"type": "module"` package and ESM-only
+  packages (resolved through their `exports`) load through Node's own `require`, which needs Node
+  20.19+ or 22.12+. An ES module with top-level `await` cannot be loaded (adapters load
+  synchronously).
+- **Adapter packages:** CommonJS or ESM; list nx-polystack as a peer dependency so they use the
+  workspace's copy.
 - **Trust:** listed adapters run as code on `pstack migrate`, `--detect` included. List only
   adapters you trust, as with Nx plugins.
 
