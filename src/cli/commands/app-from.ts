@@ -162,21 +162,34 @@ async function ask(tree: FsTree, base: BaseApp, given: Answers, p: Prompter): Pr
   }
   const name = a.name;
   if (given.dir === undefined) {
+    // The app's own folder under apps/ (default apps/[<base folder>/]<name>); it ends with the name.
+    const dirOf = (v: string) =>
+      v
+        .replace(/^apps\//, '')
+        .replace(/\/+$/, '')
+        .split('/')
+        .slice(0, -1)
+        .join('/');
     const answer = await askValid(
       p,
-      "Folder under apps/ ('.' for apps/<name>)",
-      base.dir ?? '.',
+      'App folder under apps/',
+      base.dir ? `${base.dir}/${name}` : name,
       (v) => {
-        if (v === '.') return folderProblem(name, undefined);
-        try {
-          parseDir(v, 'app');
-        } catch (err) {
-          return (err as Error).message.replace(/^app: /, '');
+        const path = v.replace(/^apps\//, '').replace(/\/+$/, '');
+        if (path.split('/').pop() !== name) {
+          return `the folder must end with the app name (${name}), e.g. ${name} or legacy/${name}`;
         }
-        return folderProblem(name, v);
+        const d = dirOf(v);
+        if (d === '') return folderProblem(name, undefined);
+        try {
+          parseDir(d, 'app');
+        } catch (err) {
+          return (err as Error).message.replace(/^app: /, '').replace('--dir=', 'folder ');
+        }
+        return folderProblem(name, d);
       },
     );
-    a.dir = answer;
+    a.dir = dirOf(answer) || '.';
   }
   if (given.port === undefined) {
     const used = usedServePorts(tree);
@@ -195,7 +208,7 @@ async function ask(tree: FsTree, base: BaseApp, given: Answers, p: Prompter): Pr
     const answer = await askValid(
       p,
       'Base href of the release builds (none for none)',
-      base.baseHref ? `/${name}/` : 'none',
+      base.baseHref ? `/${name}/` : '/',
       (v) => {
         if (v === 'none') return undefined;
         try {

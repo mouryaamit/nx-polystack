@@ -9,6 +9,13 @@ export interface Prompter {
   close(): void;
 }
 
+/** An answer trimmed, without quotes around it ('/' or "/" is /). */
+export function cleanAnswer(answer: string): string {
+  const a = answer.trim();
+  const m = /^(['"])(.*)\1$/.exec(a);
+  return m ? m[2].trim() : a;
+}
+
 /** Questions are asked only when both ends are a terminal. */
 export function isInteractive(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -22,7 +29,7 @@ export function terminalPrompter(): Prompter {
       new Promise((resolve) => {
         const hint = defaultValue !== undefined && defaultValue !== '' ? ` [${defaultValue}]` : '';
         rl.question(`${question}${hint}: `, (answer) => {
-          const a = answer.trim();
+          const a = cleanAnswer(answer);
           resolve(a === '' ? defaultValue ?? '' : a);
         });
       }),
@@ -37,7 +44,7 @@ export function scriptedPrompter(answers: string[], asked: string[] = []): Promp
     ask: async (question, defaultValue) => {
       asked.push(question);
       if (queue.length === 0) throw new Error(`no scripted answer for "${question}"`);
-      const a = (queue.shift() ?? '').trim();
+      const a = cleanAnswer(queue.shift() ?? '');
       return a === '' ? defaultValue ?? '' : a;
     },
     close: () => undefined,

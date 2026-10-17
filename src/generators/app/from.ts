@@ -603,7 +603,7 @@ export function appFrom(tree: Tree, o: AppFromOptions): AppFromResult {
   copyEncryptionKeys(tree, base, name);
   copyTsPaths(tree, base, name, root);
   result.scripts = copyNpmScripts(tree, base, name, leftOut);
-  result.leftovers = findLeftovers(tree, base.name, [...result.copied, ...result.envFiles]);
+  result.leftovers = findLeftovers(tree, base.name, name, [...result.copied, ...result.envFiles]);
   refreshLlmBlocks(tree);
   return result;
 }
@@ -814,8 +814,10 @@ function copyNpmScripts(tree: Tree, base: BaseApp, name: string, leftOut: string
 const MAX_LEFTOVERS = 50;
 
 /** Lines of the written text files that still name the base app. */
-function findLeftovers(tree: Tree, base: string, files: string[]): Leftover[] {
+function findLeftovers(tree: Tree, base: string, name: string, files: string[]): Leftover[] {
   const forms = nameForms(base);
+  // The new name can contain the base name (web → test-web-duplicate): ignore it there.
+  const own = new RegExp(nameForms(name).map(escapeRe).join('|'), 'g');
   const re = new RegExp(`(?<![A-Za-z0-9_-])(${forms.map(escapeRe).join('|')})(?![A-Za-z0-9_-])`);
   const out: Leftover[] = [];
   for (const file of files) {
@@ -823,7 +825,7 @@ function findLeftovers(tree: Tree, base: string, files: string[]): Leftover[] {
     if (!buf || isBinary(buf)) continue;
     const lines = buf.toString('utf-8').split('\n');
     for (let i = 0; i < lines.length; i++) {
-      if (re.test(lines[i])) {
+      if (re.test(lines[i].replace(own, ' '))) {
         out.push({ file, line: i + 1, text: lines[i].trim().slice(0, 120) });
         if (out.length >= MAX_LEFTOVERS) return out;
       }
