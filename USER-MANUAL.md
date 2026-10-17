@@ -677,7 +677,8 @@ app's values as defaults, shows a summary and asks to confirm; `--yes` (or a pip
   the root npm scripts and the `tsconfig.base.json` alias of the app, and the listed encryption key
   names in nx.json. `.htaccess`/`nginx.conf` written by `pstack csp` are written again.
 - **Emptied:** every value in the kept env files, by type (`''`, `0`, `false`, `[]`, nested objects
-  the same way; `null` stays), including `production`, encrypted values and secret placeholders.
+  the same way; `null` stays), including encrypted values and secret placeholders. `production`
+  keeps its value (it says which build the file is for: `true` in the prod file).
   Values that are not literals become `''` and are listed. Keys, comments and the env layout stay.
 - **Not copied from the release target:** the domain lock (`domains`, `includeWww`); the base href
   and port are the new app's.

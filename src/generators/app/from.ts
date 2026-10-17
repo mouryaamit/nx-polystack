@@ -881,7 +881,7 @@ export function appFromReport(r: AppFromResult): string {
   }
   lines.push('Next:');
   lines.push(
-    `  - fill in the env files (every value is empty, production is false): ${
+    `  - fill in the env files (every value is empty except production): ${
       r.base.type === 'flutter' ? `${r.root}/env/*.json` : `environments/${r.name}/`
     }`,
   );
