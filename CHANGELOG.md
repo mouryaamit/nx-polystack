@@ -3,6 +3,11 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.2.2
+
+- `pstack app --from` keeps `production` in the copied env files (`true` in the prod file); every
+  other value is still emptied.
+
 ## 1.2.1
 
 - `pstack app --from` asks for the app's folder under apps/ with the new name as the default

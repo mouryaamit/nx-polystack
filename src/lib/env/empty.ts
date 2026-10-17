@@ -21,13 +21,20 @@ interface Edit {
   text: string;
 }
 
+/** Top-level keys whose value is kept: they say which build this is, not where it points. */
+export const KEPT_ENV_KEYS = ['production'];
+
 /**
- * The env file with every value of the `environment` object emptied by type: strings `''` (the
+ * The env file with every value of the `environment` object emptied by type (except the
+ * top-level `keep` keys, `production` by default): strings `''` (the
  * quote kept), numbers `0`, booleans `false`, arrays `[]`, objects emptied the same way (nested);
  * `null` and `undefined` stay. A value that is not a literal (a call, a variable, a template with
  * `${…}`, `ENC(…)`) becomes `''` and is listed. Keys, comments and the rest of the file stay.
  */
-export function emptyEnvironmentText(text: string): EmptiedEnvironment {
+export function emptyEnvironmentText(
+  text: string,
+  keep: readonly string[] = KEPT_ENV_KEYS,
+): EmptiedEnvironment {
   const open = environmentObjectStart(text);
   if (open < 0) {
     throw new Error('no `export const environment = { … }` object found');
@@ -35,7 +42,7 @@ export function emptyEnvironmentText(text: string): EmptiedEnvironment {
   const edits: Edit[] = [];
   const expressions: string[] = [];
   const unkeyed: string[] = [];
-  emptyObject(text, open, '', edits, expressions, unkeyed);
+  emptyObject(text, open, '', edits, expressions, unkeyed, new Set(keep));
   let out = text;
   for (const e of edits.sort((a, b) => b.start - a.start)) {
     out = out.slice(0, e.start) + e.text + out.slice(e.end);
@@ -50,11 +57,13 @@ function emptyObject(
   edits: Edit[],
   expressions: string[],
   unkeyed: string[],
+  keep: ReadonlySet<string> = new Set(),
 ): void {
   const scan = scanObjectLiteral(text, open);
   unkeyed.push(...scan.unkeyed.map((u) => (prefix ? `${prefix}.${u}` : u)));
   for (const f of scan.fields) {
     const keyPath = prefix ? `${prefix}.${f.key}` : f.key;
+    if (!prefix && keep.has(f.key)) continue;
     if (f.kind === 'string') {
       const quote = text[f.start];
       edits.push({ start: f.start, end: f.end, text: quote + quote });

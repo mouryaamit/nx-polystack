@@ -33,7 +33,7 @@ describe('emptyEnvironmentText', () => {
         '',
         '// UAT settings',
         'export const environment: Env = {',
-        '  production: false,',
+        '  production: true,',
         "  envName: '', // shown in the footer",
         '  apiBaseUrl: "",',
         '  retries: 0,',
@@ -55,6 +55,11 @@ describe('emptyEnvironmentText', () => {
     );
     expect(r.expressions).toEqual(['password', 'computed', 'fromVar']);
     expect(r.unkeyed).toEqual([]);
+  });
+
+  it('can empty production too (no kept keys)', () => {
+    const r = emptyEnvironmentText('export const environment = { production: true };\n', []);
+    expect(r.text).toBe('export const environment = { production: false };\n');
   });
 
   it('lists spread and shorthand entries it leaves alone', () => {

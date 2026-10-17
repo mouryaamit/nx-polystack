@@ -94,7 +94,11 @@ describe('pstack app --from (NX-66)', () => {
           '',
         ].join('\n'),
       );
+      // production says which build this is: kept (prod true, the others false).
       expect(read(tree, 'environments/partner-portal/environment.prod.ts')).toContain(
+        'production: true',
+      );
+      expect(read(tree, 'environments/partner-portal/environment.ts')).toContain(
         'production: false',
       );
       expect(r.envFiles.sort()).toEqual([
