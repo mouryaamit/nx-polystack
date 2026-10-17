@@ -3,6 +3,12 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.0.1
+
+- Releases are published from GitHub Actions through npm trusted publishing, with provenance,
+  and each version is approved by the maintainer before it goes live.
+- `package.json` `bin` path normalised (no npm warning on publish).
+
 ## 1.0.0
 
 First public release on npm: `npm i -g @mouryaamit/nx-polystack`, then `pstack new my-workspace`.
