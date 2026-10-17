@@ -16,8 +16,13 @@ import {
 
 import { put, snapshot, tmpSource } from './helpers';
 
+/**
+ * git in a test repo. Background maintenance and auto gc are off: after a commit they can add and
+ * remove `.git/objects/maintenance.lock` while a test compares snapshots of the folder.
+ */
 function git(dir: string, ...args: string[]): void {
-  const r = spawnSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', ...args], {
+  const config = ['user.email=t@example.com', 'user.name=t', 'maintenance.auto=false', 'gc.auto=0'];
+  const r = spawnSync('git', [...config.flatMap((c) => ['-c', c]), ...args], {
     cwd: dir,
     encoding: 'utf8',
   });

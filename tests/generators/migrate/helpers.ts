@@ -39,13 +39,17 @@ export function readJsonFile<T = Record<string, unknown>>(dir: string, rel: stri
   return JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8'));
 }
 
-/** Every file under `dir` (relative, sorted), for "the source was not modified" checks. */
+/**
+ * Every file under `dir` (relative, sorted), for "the source was not modified" checks. Git's own
+ * lock files are left out: git can create and remove them in the background.
+ */
 export function snapshot(dir: string): Record<string, string> {
   const out: Record<string, string> = {};
   const visit = (rel: string) => {
     for (const e of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
       const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) visit(r);
+      else if (/^\.git\/.*\.lock$/.test(r)) continue;
       else out[r] = fs.readFileSync(path.join(dir, r)).toString('base64');
     }
   };

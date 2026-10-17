@@ -3,6 +3,12 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.1.1
+
+- `pstack update 1.2.0` updates to that version, like `pstack update --to=1.2.0`. Before, the version
+  argument was ignored and the global CLI's version was used. Two different versions, or more than
+  one argument, are an error.
+
 ## 1.1.0
 
 `pstack migrate` closes the gaps its import rewriting and adapter SDK listed:

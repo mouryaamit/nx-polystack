@@ -57,7 +57,8 @@ OPTIONS — new / preset
   --force                      new only — allow creating inside another Nx workspace
 
 OPTIONS — update
-  --to=<version>               Target version (default: this CLI's version)
+  --to=<version>               Target version, also as "pstack update <version>"
+                               (default: this CLI's version)
   --allow-dirty                Run with uncommitted changes
   --force                      Allow downgrading
 
@@ -284,6 +285,6 @@ EXAMPLES
   pstack hardening --app=portal
   pstack hardening --app=portal --configuration=uat --obfuscate=light --sri
   pstack update
-  pstack update --to=0.3.0 --dry-run
+  pstack update 0.3.0 --dry-run
 `.trimStart();
 }
