@@ -25,6 +25,11 @@ export interface PluginPin {
   spec: string;
   /** An npm range (^x.y.z, ~x.y.z): the installed version may be newer than `version`. */
   range: boolean;
+  /**
+   * The spec names no version pstack recognises (a git tag of another repo, a tarball, a tag such
+   * as "latest"); `version` is the installed plugin's version.
+   */
+  fromInstalled?: boolean;
 }
 
 export interface UpdateTarget {
@@ -32,16 +37,28 @@ export interface UpdateTarget {
   to: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function findPluginPin(pkg: any, example = '0.3.0'): PluginPin {
+/**
+ * The plugin entry of package.json. A spec pstack cannot read a version from falls back to
+ * `installed` (the version in node_modules), so `pstack update` can move such a workspace to a
+ * normal pin; without an installed copy it is an error.
+ */
+export function findPluginPin(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pkg: any,
+  example = '0.3.0',
+  installed?: string,
+): PluginPin {
   for (const field of ['devDependencies', 'dependencies'] as DepField[]) {
     const spec: string | undefined = pkg?.[field]?.[PLUGIN_NAME];
     if (spec === undefined) continue;
     const version = parsePluginSpec(spec);
+    if (!version && installed && /^\d+\.\d+\.\d+$/.test(installed)) {
+      return { field, version: installed, spec, range: false, fromInstalled: true };
+    }
     if (!version) {
       throw new CliError(
-        `${PLUGIN_NAME} is "${spec}" in ${field}. pstack update needs a pinned version — ` +
-          `pin one first: ${pinCommand(example)}`,
+        `${PLUGIN_NAME} is "${spec}" in ${field} and no installed copy was found. ` +
+          `pstack update needs a pinned version — pin one first: ${pinCommand(example)}`,
       );
     }
     return { field, version, spec, range: /^\s*[\^~]/.test(spec) };

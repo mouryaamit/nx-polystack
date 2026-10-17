@@ -3,6 +3,12 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.0.3
+
+- `pstack update` accepts a plugin entry it cannot read a version from (a git tag of another repo,
+  a tarball, `latest`): it migrates from the installed version and rewrites the entry to a normal
+  pin. Without an installed copy it still asks you to pin a version first.
+
 ## 1.0.2
 
 - Generated GitHub workflows use the Node 24 action versions: `actions/checkout`,
