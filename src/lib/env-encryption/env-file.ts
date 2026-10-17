@@ -171,7 +171,7 @@ const OTHER_LITERAL =
 const TYPE_SUFFIX = /^(as|satisfies)\s+[\w$.<>[\]|&,\s'"]+$/;
 
 /** Index of the first character of `text` that is not whitespace or inside a comment. */
-function firstCodeIndex(text: string): number {
+export function firstCodeIndex(text: string): number {
   let i = 0;
   while (i < text.length) {
     if (/\s/.test(text[i])) {
@@ -217,6 +217,11 @@ function classify(value: string): {
 export function scanEnvironment(text: string): EnvironmentScan {
   const open = environmentObjectStart(text);
   if (open < 0) return { found: false, fields: [], unkeyed: [] };
+  return scanObjectLiteral(text, open);
+}
+
+/** Fields and unkeyed entries of the object literal whose `{` is at `open`. */
+export function scanObjectLiteral(text: string, open: number): EnvironmentScan {
   const fields: EnvField[] = [];
   const unkeyed: string[] = [];
   let depth = 0;

@@ -1,8 +1,16 @@
 import { parseDir } from '../../lib/utils/app-dir';
 import { flagString } from '../args';
 import { findWorkspaceRoot } from '../context';
+import { Prompter } from '../prompt';
 import { runInTree } from '../run-tree';
 import { CliError, CommandContext } from '../types';
+
+export interface AppDeps {
+  /** Answers the --from questions (default: the terminal). */
+  prompter?: Prompter;
+  /** Ask the --from questions (default: when stdin/stdout are a terminal and --yes is not set). */
+  interactive?: boolean;
+}
 
 export function requireWorkspace(cwd: string, command: string): string {
   const root = findWorkspaceRoot(cwd);
@@ -15,7 +23,11 @@ export function requireWorkspace(cwd: string, command: string): string {
   return root;
 }
 
-export async function runApp(ctx: CommandContext): Promise<number> {
+export async function runApp(ctx: CommandContext, deps: AppDeps = {}): Promise<number> {
+  if (ctx.flags['from'] !== undefined) {
+    const { runAppFrom } = await import('./app-from');
+    return runAppFrom(ctx, deps);
+  }
   const name = flagString(ctx.flags, 'name');
   const type = flagString(ctx.flags, 'type');
   if (!name) {

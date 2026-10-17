@@ -16,6 +16,7 @@ cd my-workspace
 pstack app --type=angular --name=portal
 pstack app --type=ionic --name=field-app --appId=com.acme.fieldapp
 pstack app --type=flutter --name=mobile
+pstack app --from=portal --name=partner-portal   # a copy of portal, env values emptied
 ```
 
 `pstack new` pins the plugin in the workspace. Inside a workspace, `pstack` hands commands to that

@@ -39,12 +39,34 @@ import { nextFreePort, portProblem, usedServePorts } from '../../lib/utils/serve
 import { ensureSharedLibs, wireSharedLibs } from '../../lib/utils/shared-libs';
 import { addTsPath } from '../../lib/utils/ts-paths';
 
+import { appFrom, appFromReport, defaultAppId } from './from';
 import { AppGeneratorSchema } from './schema.d';
+
+const splitList = (v: string): string[] =>
+  v
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
 export default async function appGenerator(
   tree: Tree,
   options: AppGeneratorSchema,
 ): Promise<GeneratorCallback | undefined> {
+  if (options.from !== undefined) {
+    const result = appFrom(tree, {
+      from: options.from,
+      name: options.name,
+      dir: options.dir,
+      port: options.port,
+      baseHref: options.baseHref === 'none' ? null : options.baseHref,
+      appId: options.appId,
+      envs: typeof options.envs === 'string' ? splitList(options.envs) : options.envs,
+      csp: options.csp,
+      tags: options.tags && options.tags.length > 0 ? options.tags : undefined,
+    });
+    logger.info(appFromReport(result));
+    return undefined;
+  }
   const {
     name,
     type = 'flutter',
@@ -371,13 +393,6 @@ function rootProjectName(tree: Tree): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** com.example.<name, alphanumerics only>; prefixed with "app" when it would start with a digit. */
-function defaultAppId(name: string): string {
-  let segment = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-  if (!/^[a-z]/.test(segment)) segment = `app${segment}`;
-  return `com.example.${segment}`;
 }
 
 function buildIonicNpmScripts(name: string): Record<string, string> {

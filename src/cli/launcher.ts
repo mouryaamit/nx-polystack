@@ -42,7 +42,13 @@ export const MIN_LOCAL_VERSION: Readonly<Record<string, string>> = {
 
 /** First plugin version that understands a flag of a command (checked when the flag is given). */
 export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  app: { dir: '0.17.0', baseHref: '0.32.0', port: '0.35.0', envLayout: '0.35.0' },
+  app: {
+    dir: '0.17.0',
+    baseHref: '0.32.0',
+    port: '0.35.0',
+    envLayout: '0.35.0',
+    from: '1.2.0',
+  },
   env: { app: '0.34.0', all: '0.34.0', from: '0.34.0', baseHref: '0.34.0', domains: '0.34.0' },
   lib: { dir: '0.19.0' },
   csp: { import: '0.38.0' },

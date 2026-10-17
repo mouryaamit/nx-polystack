@@ -73,6 +73,13 @@ OPTIONS — app
   --port=<n>                   Dev-server port (default: the lowest free port from 4200)
   --env-layout=<layout>        Angular/Ionic — default (environment.ts for dev) | per-env
                                (environment.dev|uat|prod.ts replacing environments/environment.ts)
+  --from=<app>                 Create the app from an existing one: copy, rename, every env value
+                               emptied; asks for name, folder, port, base href, appId, envs, CSP
+                               and tags in a terminal (v1.2.0+)
+  --envs=<a,b>                 With --from: environments to keep (dev is always kept)
+  --csp=keep|clear             With --from: the base app's CSP allowlist
+  --base-href=none             With --from: no base href
+  --yes                        With --from: no questions (flags and defaults)
 
 OPTIONS — shared (--app or --all required)
   --app=<a,b>                  Angular/Ionic apps to wire
@@ -278,6 +285,8 @@ EXAMPLES
   pstack release --app=portal --base-href=/portal/
   pstack app --type=angular --name=portal --base-href=/portal/
   pstack app --type=angular --name=admin --port=4300 --env-layout=per-env
+  pstack app --from=web
+  pstack app --from=web --name=partner-portal --envs=uat,prod --yes
   pstack shared --all
   nx run portal:clean
   pstack csp --app=portal --add=connect-src:https://api.example.com

@@ -3,6 +3,15 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.2.0
+
+- `pstack app --from=<app>` creates a new app from an existing Angular, Ionic or Flutter app: the
+  app is copied under the new name with its build, release and hardening configuration, every
+  environment value is emptied, and the settings that must differ (folder, port, base href,
+  Capacitor appId, environments to keep, CSP allowlist, tags) are asked for in a terminal or given
+  as flags (`--yes` for no questions). Secrets, build output, ignored files and the release domain
+  lock are not copied; lines that still name the base app are listed.
+
 ## 1.1.1
 
 - `pstack update 1.2.0` updates to that version, like `pstack update --to=1.2.0`. Before, the version
