@@ -119,6 +119,55 @@ describe('pstack update', () => {
     }
   });
 
+  it('an npm build migrates a pin it cannot read from the installed version (NX-59)', async () => {
+    setInstallSourceForTests({ kind: 'npm' });
+    try {
+      const ws = workspace();
+      writeJson(path.join(ws, 'package.json'), {
+        name: 'ws',
+        devDependencies: { '@mouryaamit/nx-polystack': 'github:someone/private-fork#v0.2.2' },
+      });
+      fakeLocalPlugin(ws, '0.2.5');
+      const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+      const { calls, d } = deps();
+      expect(await runUpdate(makeCtx({ cwd: ws }), d)).toBe(0);
+      expect(log.mock.calls.flat().join('\n')).toContain(
+        '"github:someone/private-fork#v0.2.2" is not a version pin; migrating from the installed v0.2.5',
+      );
+      expect(calls).toEqual([
+        'npm install @mouryaamit/nx-polystack@0.3.0 --save-dev --save-exact',
+        'migrate 0.2.5 0.3.0',
+      ]);
+      expect(readPkg(ws).devDependencies['@mouryaamit/nx-polystack']).toBe('0.3.0');
+    } finally {
+      setInstallSourceForTests(DEV);
+    }
+  });
+
+  it('rewrites an unreadable pin already on the target, without migrations (NX-59)', async () => {
+    const ws = workspace();
+    writeJson(path.join(ws, 'package.json'), {
+      name: 'ws',
+      devDependencies: { '@mouryaamit/nx-polystack': 'latest' },
+    });
+    fakeLocalPlugin(ws, '0.3.0');
+    const { calls, d } = deps();
+    expect(await runUpdate(makeCtx({ cwd: ws }), d)).toBe(0);
+    expect(calls).toEqual([`npm install @mouryaamit/nx-polystack@${SPEC('0.3.0')} --save-dev`]);
+    expect(readPkg(ws).devDependencies['@mouryaamit/nx-polystack']).toBe(SPEC('0.3.0'));
+  });
+
+  it('refuses an unreadable pin when the plugin is not installed', async () => {
+    const ws = workspace();
+    writeJson(path.join(ws, 'package.json'), {
+      name: 'ws',
+      devDependencies: { '@mouryaamit/nx-polystack': 'github:someone/private-fork#v0.2.2' },
+    });
+    await expect(runUpdate(makeCtx({ cwd: ws }), deps().d)).rejects.toThrow(
+      /no installed copy was found/,
+    );
+  });
+
   it('uses --save-prod when the plugin is in dependencies', async () => {
     const ws = workspace();
     writeJson(path.join(ws, 'package.json'), {

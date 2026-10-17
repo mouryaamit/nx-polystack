@@ -267,7 +267,8 @@ pstack update [--to=<version>] [--dry-run] [--allow-dirty] [--force]
 ```
 
 1. Reads the pinned version of `@mouryaamit/nx-polystack` from `package.json` (`1.2.0`, or the installed
-   version for a range such as `^1.2.0`).
+   version for a range such as `^1.2.0`). Any other spec (a git tag, a tarball, `latest`) uses the installed
+   version, and is rewritten to a normal pin.
 2. Target is `--to`, else the global CLI's version. Downgrades need `--force`. If the global CLI is older than the
    workspace pin, `update` tells you to upgrade the global CLI first (or pass `--force`).
 3. Needs a clean git tree unless `--allow-dirty`. The check covers only the workspace folder.

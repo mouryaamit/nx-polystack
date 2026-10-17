@@ -54,10 +54,20 @@ export async function runUpdate(
     throw new CliError('--to requires a version, e.g. --to=0.3.0');
   }
   const pkgText = fs.readFileSync(pkgPath, 'utf8');
-  const pin = findPluginPin(JSON.parse(pkgText.replace(/^\uFEFF/, '')), ctx.selfVersion);
+  const installedVersion = resolveLocalPlugin(root)?.version;
+  const pin = findPluginPin(
+    JSON.parse(pkgText.replace(/^\uFEFF/, '')),
+    ctx.selfVersion,
+    installedVersion,
+  );
+  if (pin.fromInstalled) {
+    console.log(
+      `${pin.field}: "${pin.spec}" is not a version pin; migrating from the installed v${pin.version}.`,
+    );
+  }
   if (pin.range) {
     // ^x.y.z may have installed a newer version: migrate from what is installed.
-    const installed = resolveLocalPlugin(root)?.version;
+    const installed = installedVersion;
     if (
       installed &&
       /^\d+\.\d+\.\d+$/.test(installed) &&
@@ -73,7 +83,8 @@ export async function runUpdate(
     !!ctx.flags['force'],
   );
 
-  if (target.action === 'noop') {
+  // An unreadable pin on the current version is still rewritten to a normal pin.
+  if (target.action === 'noop' && !pin.fromInstalled) {
     console.log(`Already on nx-polystack v${target.to}.`);
     return 0;
   }
@@ -133,6 +144,11 @@ export async function runUpdate(
         }. package.json and package-lock.json were restored; ` +
         'node_modules may now hold another version — run npm install to resync.',
     );
+  }
+
+  if (target.action === 'noop') {
+    console.log(`\nPinned nx-polystack v${target.to}. Review with "git diff".`);
+    return 0;
   }
 
   const code = deps.runLocalMigrate(local.cliPath, pin.version, target.to, root, ctx.verbose);
