@@ -33,6 +33,7 @@ import {
 import { generateAngularEnvFiles, generateFlutterEnvFiles } from '../../lib/utils/env-files';
 import { refreshLlmBlocks, workspaceProjectNames } from '../../lib/utils/llm-block';
 import { addNpmScripts } from '../../lib/utils/npm-scripts';
+import { flutterWebFiles } from '../../lib/utils/flutter-web';
 import { setProjectTags } from '../../lib/utils/nx-targets';
 import { nextFreePort, portProblem, usedServePorts } from '../../lib/utils/serve-port';
 import { ensureSharedLibs, wireSharedLibs } from '../../lib/utils/shared-libs';
@@ -222,6 +223,10 @@ export default async function appGenerator(
       template: '',
       offsetFromRoot: offsetFromRoot(projectPath),
     });
+
+    for (const [file, content] of Object.entries(flutterWebFiles(projectName))) {
+      tree.write(`${projectPath}/${file}`, content);
+    }
 
     generateFlutterEnvFiles(tree, projectName, { root: projectPath });
 
