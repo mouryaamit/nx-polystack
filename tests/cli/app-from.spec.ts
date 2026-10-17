@@ -81,7 +81,7 @@ describe('pstack app --from (NX-66)', () => {
     expect(asked).toEqual([
       'New app name',
       'New app name',
-      "Folder under apps/ ('.' for apps/<name>)",
+      'App folder under apps/',
       'Base href of the release builds (none for none)',
       'Environments to keep (dev is always kept)',
       'CSP allowlist: keep or clear',
@@ -94,6 +94,44 @@ describe('pstack app --from (NX-66)', () => {
     expect(Object.keys(pj.targets.release.configurations)).toEqual(['dev', 'uat']);
     expect(pj.targets.release.configurations.uat.baseHref).toBe('/partner/');
     expect(pj.tags).toEqual(readJson(ws, 'apps/web/project.json').tags);
+  });
+
+  it('folder answer ends with the app name; base href defaults to / without one; quotes dropped', async () => {
+    const ws = await withWeb();
+    const pj = readJson(ws, 'apps/web/project.json');
+    for (const c of Object.values(pj.targets.release.configurations) as Record<string, unknown>[]) {
+      delete c['baseHref'];
+    }
+    fs.writeFileSync(path.join(ws, 'apps/web/project.json'), JSON.stringify(pj, null, 2));
+    const asked: string[] = [];
+    const defaults: (string | undefined)[] = [];
+    const scripted = scriptedPrompter(
+      ['legacy/other', 'legacy/partner', '', "'/'", '', '', '', 'y'],
+      asked,
+    );
+    await runApp(makeCtx({ cwd: ws, flags: { from: 'web', name: 'partner' } }), {
+      interactive: true,
+      prompter: {
+        ask: (q, d) => {
+          defaults.push(d);
+          return scripted.ask(q, d);
+        },
+        close: () => undefined,
+      },
+    });
+    expect(asked.slice(0, 4)).toEqual([
+      'App folder under apps/',
+      'App folder under apps/',
+      'Dev-server port',
+      'Base href of the release builds (none for none)',
+    ]);
+    expect(defaults[0]).toBe('partner');
+    expect(defaults[3]).toBe('/');
+    expect(out).toContain(
+      '  the folder must end with the app name (partner), e.g. partner or legacy/partner',
+    );
+    const created = readJson(ws, 'apps/legacy/partner/project.json');
+    expect(created.targets.release.configurations.prod.baseHref).toBe('/');
   });
 
   it('writes nothing when the confirmation is declined', async () => {

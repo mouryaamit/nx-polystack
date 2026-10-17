@@ -152,6 +152,7 @@ describe('pstack app --from (NX-66)', () => {
       expect(scripts['serve:partner-portal']).toBe('nx serve partner-portal');
       expect(scripts['build:partner-portal:uat']).toBe('nx run partner-portal:release:uat');
       expect(r.scripts).toContain('build:partner-portal:prod:secure');
+      expect(r.leftovers.map((l) => l.file)).not.toContain('apps/partner-portal/src/index.html');
       expect(r.leftovers).toContainEqual({
         file: 'apps/partner-portal/src/app/app.component.ts',
         line: 1,
@@ -295,6 +296,14 @@ describe('pstack app --from (NX-66)', () => {
       const allowlist = read(tree, 'apps/b/csp-allowlist.json');
       expect(allowlist).not.toContain('api.example.com');
       expect(allowlist).toContain('camera=(self)');
+    });
+
+    it('does not report the base name inside the new name (web → test-web-copy)', () => {
+      const r = appFrom(tree, { from: 'web', name: 'test-web-copy' });
+      expect(read(tree, 'apps/test-web-copy/src/index.html')).toContain(
+        '<title>Test Web Copy</title>',
+      );
+      expect(r.leftovers.map((l) => l.file)).not.toContain('apps/test-web-copy/src/index.html');
     });
 
     it('report names the next steps', () => {

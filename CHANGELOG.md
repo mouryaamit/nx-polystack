@@ -3,6 +3,12 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.2.1
+
+- `pstack app --from` asks for the app's folder under apps/ with the new name as the default
+  (it must end with the name), defaults the base href to `/` when the base app has none, accepts
+  quoted answers, and no longer lists the new title as still naming the base app.
+
 ## 1.2.0
 
 - `pstack app --from=<app>` creates a new app from an existing Angular, Ionic or Flutter app: the

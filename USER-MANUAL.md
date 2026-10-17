@@ -656,16 +656,16 @@ app's values as defaults, shows a summary and asks to confirm; `--yes` (or a pip
 `nx g @mouryaamit/nx-polystack:app --from=…`) takes the flags and defaults instead, and then
 `--name` is required.
 
-| Question                | Default                                         |
-| ----------------------- | ----------------------------------------------- |
-| New app name            | —                                               |
-| Folder under apps/      | the base app's folder (`.` for apps/<name>)     |
-| Dev-server port         | the lowest free port from 4200                  |
-| Base href (uat/prod)    | `/<name>/` when the base app has one, else none |
-| Capacitor appId (Ionic) | `com.example.<name>`; never the base app's      |
-| Environments to keep    | all of the base app's (dev is always kept)      |
-| CSP allowlist           | keep (`clear` starts from an empty one)         |
-| Tags                    | the base app's                                  |
+| Question                | Default                                                          |
+| ----------------------- | ---------------------------------------------------------------- |
+| New app name            | —                                                                |
+| App folder under apps/  | `<name>`, or `<base folder>/<name>`; must end with the name      |
+| Dev-server port         | the lowest free port from 4200                                   |
+| Base href (uat/prod)    | `/<name>/` when the base app has one, else `/` (`none` for none) |
+| Capacitor appId (Ionic) | `com.example.<name>`; never the base app's                       |
+| Environments to keep    | all of the base app's (dev is always kept)                       |
+| CSP allowlist           | keep (`clear` starts from an empty one)                          |
+| Tags                    | the base app's                                                   |
 
 - **Copied:** the app folder (source, assets, tsconfig, ESLint, `csp-allowlist.json`, server configs)
   and its `project.json` targets with every option (hardening included). Not copied: build output,
