@@ -1,0 +1,6 @@
+import { InjectionToken } from '@angular/core';
+
+import { PiiMaskOptions } from './pii-mask';
+
+/** Mask character and custom formats; provide it with PiiMaskModule.forRoot(…). */
+export const PII_MASK_OPTIONS = new InjectionToken<PiiMaskOptions>('PII_MASK_OPTIONS');

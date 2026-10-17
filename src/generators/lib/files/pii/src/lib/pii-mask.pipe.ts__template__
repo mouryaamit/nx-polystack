@@ -1,0 +1,14 @@
+import { Inject, Optional, Pipe, PipeTransform } from '@angular/core';
+
+import { maskPii, PiiMaskOptions } from './pii-mask';
+import { PII_MASK_OPTIONS } from './pii-mask.options';
+
+/** {{ customer.pan | piiMask: 'pan' }} → XXXXX1234F */
+@Pipe({ name: 'piiMask' })
+export class PiiMaskPipe implements PipeTransform {
+  constructor(@Optional() @Inject(PII_MASK_OPTIONS) private readonly options: PiiMaskOptions | null) {}
+
+  transform(value: unknown, format: string): string {
+    return maskPii(value, format, this.options ?? {});
+  }
+}

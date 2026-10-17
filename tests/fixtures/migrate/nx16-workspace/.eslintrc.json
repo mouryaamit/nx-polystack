@@ -1,0 +1,20 @@
+{
+  "root": true,
+  "ignorePatterns": ["**/*"],
+  "plugins": ["@nrwl/nx"],
+  "overrides": [
+    {
+      "files": ["*.ts"],
+      "rules": {
+        "@nrwl/nx/enforce-module-boundaries": [
+          "error",
+          {
+            "depConstraints": [
+              { "sourceTag": "scope:portal", "onlyDependOnLibsWithTags": ["scope:shared"] }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

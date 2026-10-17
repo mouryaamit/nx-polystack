@@ -1,0 +1,26 @@
+name: <%= projectSnake %>
+description: Flutter application managed by @mouryaamit/nx-polystack.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6<% if (push === 'fcm') { %>
+  firebase_core: ^2.0.0
+  firebase_messaging: ^14.0.0<% } %><% if (i18n && i18n.length > 0) { %>
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.18.0<% } %>
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true<% if (i18n && i18n.length > 0) { %>
+  generate: true<% } %>

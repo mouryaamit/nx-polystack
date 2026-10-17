@@ -1,0 +1,289 @@
+import { DOCUMENT, isPlatformBrowser } from '@angular/common';
+import { Inject, Injectable, NgZone, OnDestroy, Optional, PLATFORM_ID } from '@angular/core';
+import {
+  BehaviorSubject,
+  distinctUntilChanged,
+  filter,
+  fromEvent,
+  interval,
+  map,
+  merge,
+  Observable,
+  Subject,
+  Subscription,
+} from 'rxjs';
+
+import {
+  channelKey,
+  DEFAULT_SESSION_TIMEOUT,
+  SessionState,
+  sessionConfigProblems,
+  sessionState,
+  SessionTimeoutConfig,
+  startedAtProblem,
+  TimeoutReason,
+  validActivityTime,
+} from './session-clock';
+import { SESSION_TIMEOUT_CONFIG } from './session-timeout.config';
+
+type TabMessage =
+  | { type: 'activity'; at: number }
+  | { type: 'timeout'; reason: TimeoutReason }
+  | { type: 'stop' };
+
+/** Activity is recorded (and shared with other tabs) at most this often. */
+const ACTIVITY_THROTTLE_MS = 1000;
+
+/**
+ * Watches user activity and reports when the session is about to time out and when it has.
+ * It never signs anyone out: the app does that on `timeout$` and `stoppedElsewhere$`.
+ *
+ *   session.start(loginTime);              // after login
+ *   session.timeout$.subscribe(() => auth.logout());
+ *   session.stoppedElsewhere$.subscribe(() => auth.logout()); // logout in another tab
+ *   session.stop();                        // in auth.logout()
+ *
+ * Any user activity counts, also while the warning is shown (moving the mouse dismisses it).
+ * Without a persisted login time, the absolute limit restarts with every page load.
+ * Configure it once, in the root module: forRoot() in a lazy module is not seen.
+ */
+@Injectable({ providedIn: 'root' })
+export class SessionTimeoutService implements OnDestroy {
+  readonly config: SessionTimeoutConfig;
+
+  private readonly stateSubject = new BehaviorSubject<SessionState>({
+    status: 'stopped',
+    remainingMs: 0,
+  });
+  /** Current state; emitted on status changes, and every tick during the warning. */
+  readonly state$: Observable<SessionState> = this.stateSubject.asObservable();
+  /** Seconds left, while the warning is shown (restarts with every warning). */
+  readonly warning$: Observable<number> = this.state$.pipe(
+    map((s) => (s.status === 'warning' ? Math.ceil(s.remainingMs / 1000) : null)),
+    distinctUntilChanged(),
+    filter((s): s is number => s !== null),
+  );
+  private readonly timeoutSubject = new Subject<TimeoutReason>();
+  /** Emits once per session when it times out (here or in another tab). Sign out on it. */
+  readonly timeout$: Observable<TimeoutReason> = this.timeoutSubject.asObservable();
+  private readonly stoppedElsewhereSubject = new Subject<void>();
+  /** Another tab stopped the session (its user signed out): sign this tab out too. */
+  readonly stoppedElsewhere$: Observable<void> = this.stoppedElsewhereSubject.asObservable();
+
+  private readonly browser: boolean;
+  private readonly key: string;
+  private current: SessionState = { status: 'stopped', remainingMs: 0 };
+  private queue: SessionState[] = [];
+  private emitting = false;
+  private startedAt = 0;
+  private lastActivity = 0;
+  private timers = new Subscription();
+  private channel?: BroadcastChannel;
+  private storageListener?: (e: StorageEvent) => void;
+
+  constructor(
+    private readonly zone: NgZone,
+    @Inject(DOCUMENT) private readonly document: Document,
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    @Inject(PLATFORM_ID) platformId: Object,
+    @Optional() @Inject(SESSION_TIMEOUT_CONFIG) config: Partial<SessionTimeoutConfig> | null,
+  ) {
+    this.config = { ...DEFAULT_SESSION_TIMEOUT, ...(config ?? {}) };
+    const problems = sessionConfigProblems(this.config);
+    if (problems.length > 0) {
+      throw new Error(`SessionTimeoutService: ${problems.join('; ')}.`);
+    }
+    this.browser = isPlatformBrowser(platformId);
+    this.key = channelKey(this.config.channelName, this.document.baseURI);
+  }
+
+  get state(): SessionState {
+    return this.current;
+  }
+
+  /**
+   * Starts watching. `startedAt` (the login time, in milliseconds) is where the absolute limit
+   * counts from. Does nothing during server-side rendering.
+   */
+  start(startedAt = Date.now()): void {
+    const problem = startedAtProblem(startedAt, Date.now());
+    if (problem) throw new Error(`SessionTimeoutService.start: ${problem}.`);
+    this.stop(false);
+    if (!this.browser) return;
+    this.startedAt = startedAt;
+    this.lastActivity = Date.now();
+    this.zone.runOutsideAngular(() => {
+      const activity = merge(
+        ...this.config.activityEvents.map((name) =>
+          fromEvent(this.document, name, { passive: true, capture: true }),
+        ),
+      );
+      this.timers.add(activity.subscribe(() => this.recordActivity(Date.now(), true)));
+      // Timers are slowed down in background tabs: check again when the tab is shown.
+      this.timers.add(fromEvent(this.document, 'visibilitychange').subscribe(() => this.tick()));
+      this.timers.add(interval(this.config.tickMs).subscribe(() => this.tick()));
+      // Messages from other tabs arrive outside the zone (no change detection per message).
+      this.openChannel();
+    });
+    this.writeSharedActivity(this.lastActivity);
+    this.tick(true);
+  }
+
+  /** Stops watching (after logout); other tabs are told unless `broadcast` is false. */
+  stop(broadcast = true): void {
+    this.timers.unsubscribe();
+    this.timers = new Subscription();
+    const status = this.current.status;
+    if (broadcast && (status === 'active' || status === 'warning')) this.post({ type: 'stop' });
+    this.closeChannel();
+    if (status !== 'stopped') this.emit({ status: 'stopped', remainingMs: 0 });
+  }
+
+  /** Counts as activity (e.g. "Stay signed in"); does not lift the absolute limit. */
+  extend(): void {
+    if (this.current.status !== 'active' && this.current.status !== 'warning') return;
+    this.recordActivity(Date.now(), true, true);
+    this.tick(true);
+  }
+
+  ngOnDestroy(): void {
+    this.stop(false);
+    this.timeoutSubject.complete();
+    this.stoppedElsewhereSubject.complete();
+    this.stateSubject.complete();
+  }
+
+  /** States are delivered in order, also when a subscriber calls stop() while one is emitted. */
+  private emit(state: SessionState): void {
+    this.current = state;
+    this.queue.push(state);
+    if (this.emitting) return;
+    this.emitting = true;
+    try {
+      while (this.queue.length > 0) {
+        const next = this.queue.shift() as SessionState;
+        this.zone.run(() => this.stateSubject.next(next));
+      }
+    } finally {
+      this.emitting = false;
+    }
+  }
+
+  private recordActivity(at: number, share: boolean, force = false): void {
+    if (this.current.status !== 'active' && this.current.status !== 'warning') return;
+    if (!force && at - this.lastActivity < ACTIVITY_THROTTLE_MS) return;
+    this.lastActivity = Math.max(this.lastActivity, Math.min(at, Date.now()));
+    if (share) {
+      this.writeSharedActivity(this.lastActivity);
+      this.post({ type: 'activity', at: this.lastActivity });
+    }
+  }
+
+  private tick(force = false): void {
+    // start() forces the first tick while still stopped; afterwards a stopped session stays so.
+    if (this.current.status === 'timedOut') return;
+    if (this.current.status === 'stopped' && !force) return;
+    // A tab that slept missed the other tabs' messages: their last activity is in storage.
+    const shared = this.readSharedActivity();
+    if (shared !== undefined && shared > this.lastActivity) this.lastActivity = shared;
+    const next = sessionState(Date.now(), this.startedAt, this.lastActivity, this.config);
+    if (next.status === 'timedOut') {
+      if (this.current.status === 'stopped') this.emit({ ...next, status: 'active' });
+      this.timeOut(next.reason ?? 'idle', true);
+      return;
+    }
+    if (force || next.status !== this.current.status || next.status === 'warning') {
+      this.emit(next);
+    }
+  }
+
+  private timeOut(reason: TimeoutReason, share: boolean): void {
+    if (this.current.status !== 'active' && this.current.status !== 'warning') return;
+    this.timers.unsubscribe();
+    this.timers = new Subscription();
+    if (share) this.post({ type: 'timeout', reason });
+    this.closeChannel();
+    this.emit({ status: 'timedOut', remainingMs: 0, reason });
+    this.zone.run(() => this.timeoutSubject.next(reason));
+  }
+
+  private onMessage(message: TabMessage): void {
+    if (!message || typeof message !== 'object') return;
+    if (message.type === 'activity') {
+      if (validActivityTime(message.at, Date.now())) this.recordActivity(message.at, false, true);
+    } else if (message.type === 'timeout') {
+      // The absolute limit is the same everywhere; inactivity is checked against this tab's
+      // own activity too, so a tab waking from sleep cannot sign out the one in use.
+      if (message.reason === 'absolute') this.timeOut('absolute', false);
+      else this.tick();
+    } else if (message.type === 'stop') {
+      if (this.current.status !== 'active' && this.current.status !== 'warning') return;
+      this.stop(false);
+      this.zone.run(() => this.stoppedElsewhereSubject.next());
+    }
+  }
+
+  // ── tabs: BroadcastChannel, or storage events where it is missing ──────────────
+
+  private openChannel(): void {
+    const view = this.document.defaultView;
+    if (typeof BroadcastChannel !== 'undefined') {
+      this.channel = new BroadcastChannel(this.key);
+      this.channel.onmessage = (e: MessageEvent<TabMessage>) => this.onMessage(e.data);
+    } else if (view) {
+      this.storageListener = (e: StorageEvent) => {
+        if (e.key !== this.key || !e.newValue) return;
+        try {
+          this.onMessage(JSON.parse(e.newValue) as TabMessage);
+        } catch {
+          // not one of ours
+        }
+      };
+      view.addEventListener('storage', this.storageListener);
+    }
+  }
+
+  private closeChannel(): void {
+    this.channel?.close();
+    this.channel = undefined;
+    if (this.storageListener) {
+      this.document.defaultView?.removeEventListener('storage', this.storageListener);
+      this.storageListener = undefined;
+    }
+  }
+
+  private post(message: TabMessage): void {
+    if (this.channel) {
+      this.channel.postMessage(message);
+      return;
+    }
+    if (!this.storageListener) return; // no channel open: nobody to tell
+    try {
+      // A changing value makes the storage event fire in the other tabs.
+      this.document.defaultView?.localStorage.setItem(
+        this.key,
+        JSON.stringify({ ...message, n: Math.random() }),
+      );
+    } catch {
+      // storage blocked (private mode): this tab only
+    }
+  }
+
+  private writeSharedActivity(at: number): void {
+    try {
+      this.document.defaultView?.localStorage.setItem(`${this.key}:last`, String(at));
+    } catch {
+      // storage blocked: messages only
+    }
+  }
+
+  private readSharedActivity(): number | undefined {
+    try {
+      const raw = this.document.defaultView?.localStorage.getItem(`${this.key}:last`);
+      const at = raw === null || raw === undefined ? NaN : Number(raw);
+      return validActivityTime(at, Date.now()) ? at : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+}

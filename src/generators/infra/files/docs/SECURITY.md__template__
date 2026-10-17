@@ -1,0 +1,25 @@
+# Security Policy
+
+## Reporting a vulnerability
+
+Do not open a public issue for a security problem. Report it privately to <security-contact>
+with:
+
+- what is affected (app, library, version or commit),
+- how to reproduce it,
+- the impact you expect.
+
+You will get an acknowledgement, and updates until the issue is resolved.
+
+## Supported versions
+
+Only the latest release of each app, built from `<%= baseBranch %>`, receives security fixes.
+
+## Secrets
+
+- Environment files are encrypted at build time; never commit plaintext secrets, keys or
+  tokens.
+- `.env` files are never committed.
+- The pre-push hook (`npm run check:prepush`) runs a secret scan, which blocks the push, and a
+  warn-only `npm audit`. Do not skip it. `npm run check:audit` is the strict audit.
+- If a secret is committed, treat it as leaked: revoke and rotate it, then remove it from history.

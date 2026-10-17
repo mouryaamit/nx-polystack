@@ -1,0 +1,6 @@
+node_modules
+dist
+coverage
+.nx
+.angular
+package-lock.json

@@ -1,0 +1,289 @@
+import { installSource } from './install-source';
+import { globalInstallCommand } from './versions';
+
+export function helpText(version: string): string {
+  return `
+pstack — @mouryaamit/nx-polystack CLI v${version}
+
+USAGE
+  pstack <command> [options]
+
+COMMANDS
+  new <dir>   Create a new polystack workspace in <dir> (installs deps, initialises git)
+  update      Upgrade this workspace's nx-polystack version and run its migrations
+  preset      Bootstrap a workspace root skeleton in the current directory
+  app         Scaffold a new application into an existing workspace
+  lib         Scaffold a shared library (ts, angular, ionic, flutter, assets, styles,
+              state, design-tokens, session, pii)
+  env         Add an environment to some or all apps later, copied from an existing one
+              (env file, build/serve/release configurations, Flutter env, npm scripts)
+  llm         Write or refresh the generated workspace block in CLAUDE.md, AGENTS.md and
+              .github/copilot-instructions.md (app/lib/env refresh it automatically)
+  migrate     Copy an existing project into the workspace, source never modified: a standalone
+              Angular CLI, Ionic/Capacitor or Flutter app (apps/<name>), the apps and libraries
+              of a multi-project Angular CLI repo (apps/, libs/), the Angular, Ionic and
+              Flutter projects of an Nx 15-17 workspace (same paths, names and aliases), or the
+              app and TypeScript library packages of an npm, Yarn or pnpm workspaces repo
+              (apps/, libs/)
+  encryption  Show or change the env encryption settings of release builds (nx.json
+              pstack.envEncryption)
+  build       Build every app (or some) for one environment: release targets of Angular/Ionic
+              apps and Flutter build targets, one at a time or --parallel, with a summary
+  release     Show or change an app's base href per release configuration
+  csp         Edit an app's csp-allowlist.json and write its .htaccess and nginx.conf from it
+              (strict CSP with a per-request nonce)
+  shared      Wire the shared assets and styles folders (libs/shared/assets, libs/shared/styles)
+              into existing Angular/Ionic apps; new apps get them automatically
+  hardening   Show or change an app's release hardening (leak check, source maps, comment and
+              console stripping, obfuscation, SRI for every chunk)
+  infra       Add repo docs, CI gates (affected lint/test/build, dependency cycles), quality
+              checks (knip, pre-push audit + secret scan) and a dependency-upgrade workflow
+
+OPTIONS — new / preset
+  --npmScope=<scope>           npm scope for the workspace (default: mouryaamit)
+  --baseBranch=<branch>        Default git branch (default: master)
+  --infra=<parts>              Run pstack infra with these parts: docs,ci,quality,upgrades | all |
+                               none (default: all)
+  --ci=<providers>             CI for the infra ci part: github-actions | jenkins (comma-separated;
+                               default: github-actions)
+  --ci-cache, --flutter=<mode>, --upgrade-schedule=<s>, --upgrade-scope=<s>
+                               passed to pstack infra
+  --llm=<tools>                AI-assistant files, as pstack llm: claude | agents | copilot
+                               (codex, openai-gpt → agents; comma-separated)
+  --projectDescription=<text>  Short project description
+  --skipFormat                 Skip Prettier format pass
+  --skip-install               new only — do not run npm install
+  --skip-git                   new only — do not initialise git
+  --force                      new only — allow creating inside another Nx workspace
+
+OPTIONS — update
+  --to=<version>               Target version (default: this CLI's version)
+  --allow-dirty                Run with uncommitted changes
+  --force                      Allow downgrading
+
+OPTIONS — app
+  --type=<type>                App type: angular | ionic | flutter  (required)
+  --name=<name>                Application name (required)
+  --dir=<path>                 Put the app in apps/<path>/<name> (v0.17.0+)
+  --tags=<tags>                Comma-separated Nx tags
+  --cspConnectSrc=<url>        Angular/Ionic — pre-fill CSP connect-src in csp-allowlist.json
+  --appId=<id>                 Ionic only — Capacitor appId (default: com.example.<name>)
+  --base-href=<path>           Base href of the uat and prod release configurations, e.g. /portal/
+  --port=<n>                   Dev-server port (default: the lowest free port from 4200)
+  --env-layout=<layout>        Angular/Ionic — default (environment.ts for dev) | per-env
+                               (environment.dev|uat|prod.ts replacing environments/environment.ts)
+
+OPTIONS — shared (--app or --all required)
+  --app=<a,b>                  Angular/Ionic apps to wire
+  --all                        Every Angular/Ionic app
+
+OPTIONS — lib
+  --type=<type>                Lib type (required): ts | angular | ionic | flutter | assets | styles |
+                               state | design-tokens | session (idle/session timeout) |
+                               pii (masking pipe and directive)
+  --name=<name>                Library name, kebab-case (required)
+  --scope=<scope>              Folder under libs/ and project-name prefix
+                               (default: shared; ionic → ionic; flutter → flutter)
+  --dir=<path>                 Put the lib in libs/<scope>/<path>/<name> (at most 2 folders; v0.19.0+)
+  --variant=<variant>          angular/ionic: internal | buildable | publishable
+                               (default: buildable)
+                               state: simple-service | ngrx (default: simple-service; always buildable)
+  --prefix=<prefix>            angular/ionic: component selector prefix (default: lib)
+  --tags=<tags>                Comma-separated extra Nx tags
+
+OPTIONS — env
+  --name=<name>                Environment slug, e.g. qa, sit, staging (required)
+  --app=<a,b> | --all          Apps to add it to (one of them is required)
+  --from=<env>                 Environment to copy (default uat); secret values become
+                               \${APP_ENV_KEY} placeholders filled at build time
+  --api-url=<url>              API base URL of the new environment
+  --production[=false]         production flag of the new Angular env file (default: as --from)
+  --base-href=<path>           Base href of the new configuration (default: as --from)
+  --domains=<hosts>            aes-gcm domain lock of the new release configuration
+
+OPTIONS — encryption (no options: show the settings)
+  --mode=<mode>                listed (encrypt the listed keys) | all (every field except publicKeys)
+  --add-key=<keys>             Add keys to encrypt in listed mode (comma-separated)
+  --remove-key=<keys>          Remove keys
+  --project=<env project>      Keys of this env project (default: default)
+  --add-public=<keys>          Keys kept in plain text in mode all
+  --remove-public=<keys>       Remove public keys
+  --format=<format>            raw | enc (values written as ENC(…), read by runtime/env-secret)
+  --profile-files=<files>      Files next to the env file whose sensitive fields are encrypted
+                               (e.g. app.profile.ts; empty value clears)
+  --meta-name=<name>           Meta tag carrying the build info and key (default: x-build)
+  --timezone=<tz>              Build stamp time zone, e.g. Asia/Kolkata (default: UTC)
+  --stamp-format=<format>      Build stamp format (default: DD MMM YYYY hh:mm:ss A z)
+  --cipher=<cipher>            cryptojs (default) | aes-gcm (Web Crypto; main.ts awaits envReady)
+  --key-sources=<list>         aes-gcm key factors besides the internal per-build key: commit,
+                               salt, env (PSTACK_ENV_KEY), custom (PSTACK_CUSTOM_KEY + getKey).
+                               salt and env values ship in the bundle like the commit: use a
+                               dedicated random value, never a real secret; only custom stays out
+  --rotate-salt                New tools/config/env-salt
+  --app=<project>              App whose release target gets the options below
+  --key-split=<split>          meta-bundle (default) | meta-bundle-asset
+  --domains=<conf>=<hosts>     Hosts the build may run on, per configuration, separated by ;
+                               e.g. uat=a.com,b.in;prod=a.com (uat= removes the list)
+  --include-www=<bool>         example.com also allows www.example.com (default: true)
+  --on-mismatch=<mode>         block (default) | warn
+
+OPTIONS — llm
+  --providers=<list>           claude | agents | copilot, comma-separated (default: all three;
+                               codex, openai-gpt → agents). Only the text between the
+                               nx-polystack markers is managed; the rest of each file is kept.
+
+OPTIONS — migrate
+  --source=<path>              Project to migrate: its repo root (required unless --rollback;
+                               read only)
+  --name=<name>                App name, kebab-case (default: the Angular project name or
+                               the pubspec name); for workspace sources the report name
+  --adapter=<id>               Skip detection: angular-cli | flutter | nx-workspace | angular-workspace | ionic |
+                               npm-workspaces, or an adapter listed in nx.json
+  --min-confidence=<n>         Use the best adapter when it reaches n (0.50 to 1.00; default 0.80; v0.15.0+)
+  --dir=<path>                 Single-app sources: put the app in apps/<path>/<name> (v0.16.0+)
+  --detect                     Print the detection table (adapter, confidence, reasons) and
+                               exit; writes nothing, works outside a workspace
+  --projects=<a,b>             Workspace sources: projects to migrate (default: every supported one)
+  --no-deps                    Workspace sources: only the --projects named, not the libs they import
+  --prefix=<p>                 Workspace sources: rename projects to <p>-<name> (aliases kept)
+  --force-angular              Migrate even when the workspace and the source use different
+                               Angular majors (the report flags it)
+  --max-files=<n>              Fail when more than n files would be copied (default: 20000)
+  --no-rewrite-imports         Keep the copied imports as they were (v0.21.0+). By default,
+                               relative imports into another moved project, imports through the
+                               source baseUrl, @nrwl/* packages and relative SCSS paths are
+                               rewritten in the copies; the report lists each one
+  --new-adapter=<id>           Write a starter adapter tools/migrate/<id>.adapter.ts (with a
+                               spec) and list it in nx.json "pstack.migrateAdapters" (v0.22.0+).
+                               Listed adapters join detection, --adapter and --config; write
+                               them with @mouryaamit/nx-polystack/migrate
+  --rollback=<name>            Undo migration <name> (v0.13.0+): removes the files it created and
+                               reverts its package.json/tsconfig/nx.json changes; anything edited
+                               since is kept and listed in docs/migrations/<name>.rollback.md
+  --force                      With --rollback: remove or restore the edited items too
+  --config=<file>              Run the migrations listed in a JSON batch file (v0.14.0+), all or
+                               nothing: { "defaults": {...}, "migrations": [ { "source": ... } ] };
+                               relative sources are resolved from the file's folder; values in
+                               the file win over --force-angular / --max-files
+  Writes docs/migrations/<name>.md and <name>.manifest.json (for --rollback). Without
+  --adapter the most confident adapter is used if its confidence is at least 0.80.
+
+OPTIONS — infra
+  --with=<parts>               docs | ci | quality | upgrades, comma-separated, or all | none
+                               (default: all)
+  --ci=<providers>             github-actions | jenkins, comma-separated (default: github-actions);
+                               the upgrade workflow is GitHub Actions only
+  --ci-cache                   GitHub Actions: cache the Nx cache directory between runs
+  --flutter=<mode>             Set up Flutter in CI: auto (when a pubspec.yaml is under apps/ or
+                               libs/) | on | off; default auto
+  --upgrade-schedule=<when>    weekly (Monday 03:17 UTC) | monthly (1st, 03:17 UTC); default weekly
+  --upgrade-scope=<scope>      polystack (pstack update) | nx-minor (also nx migrate within the
+                               current Nx major); default polystack
+  --lint-staged=warn|block     ESLint on commit: report without blocking (warn, the default of new
+                               workspaces) or block on errors
+  --force                      Overwrite files that already exist (.husky/pre-push is always
+                               appended to, never replaced)
+  The quality part also adds typecheck targets (tsc --noEmit) and the import/no-unresolved and
+  unused-imports ESLint rules (warnings).
+  Existing files are kept and listed; npm scripts and dependencies are only added when missing.
+
+OPTIONS — build
+  --env=<env>                  Environment, e.g. uat (configuration name or its env option)
+  --all | --projects=<a,b>     Every app, or these
+  --exclude=<a,b>              Leave these out
+  --parallel=<n>               Builds at once, 1-8 (default 1)
+  --continue                   Keep going after a failed build (default: stop)
+  --flutter-platforms=<list>   web,android,ios (default web)
+  --report=<file.json>         Also write the summary as JSON
+  --dry-run                    Show the plan only
+
+OPTIONS — release (--app required; no other options: show the base hrefs)
+  --app=<project>              App whose release configurations are shown or changed
+  --configuration=<name>       Only this configuration (default: every non-DEV configuration)
+  --base-href=<path>|none      Base href, starting and ending with / (none: remove)
+
+OPTIONS — csp (--app required; writes the server files that are missing or were written by it)
+  --app=<project>              Angular/Ionic app
+  --add=<dir>:<src>[,…]        Add sources, e.g. script-src:https://www.googletagmanager.com
+  --remove=<dir>:<src>[,…]     Remove sources
+  --import=<file|policy>       Merge an existing policy into csp-allowlist.json: a CSP header value,
+                               .htaccess / nginx.conf, or JSON (directive → sources); refused
+                               sources ('unsafe-inline', 'unsafe-eval', http:, …) are listed, not
+                               imported; paths covered by a host entry are dropped
+  --force                      Also replace hand-written .htaccess / nginx.conf
+  --dry-run                    Show what would change
+
+OPTIONS — hardening (--app required; no other options: show the settings)
+  --app=<project>              App whose release target is shown or changed
+  --configuration=<name>       Only this configuration (default: every non-DEV configuration)
+  --obfuscate=<level>          off | light (≈ +20% gzip) | medium (≈ +67%) | strong (also rc4
+                               and control-flow flattening on the decrypt chunk); adds
+                               javascript-obfuscator
+  --obfuscate-options=<json>   javascript-obfuscator overrides on top of the level, e.g.
+                               '{"stringArrayThreshold":0.3}' (none: clear)
+  --sri[=false]                Integrity for every chunk; aes-gcm decrypts nothing without it
+  --leak-check=fail|warn|off   Plaintext of encrypted env values in the output
+  --source-maps=fail|warn|off  .map files or sourceMappingURL comments in the output
+  --strip-comments[=false]     Remove comments from the built JS, CSS and index.html
+  --drop-console=<methods>     Console calls removed, e.g. log,debug,warn (none: keep all)
+
+GLOBAL FLAGS
+  --dry-run, -d                Preview changes without writing files
+  --verbose                    Verbose output
+  --help,    -h                Show this help
+  --version, -v                Print version
+  Flag values must use --flag=value (a space-separated value is read as an argument).
+
+Inside a workspace that has its own nx-polystack installed, pstack hands app/lib/env/llm/encryption/hardening/build/release/csp/shared/preset/migrate/infra
+to that pinned copy so generated files always match the workspace's plugin version.
+
+INSTALL${
+    installSource().kind === 'github' ? ' (needs the GitHub CLI, signed in: gh auth login)' : ''
+  }
+  ${globalInstallCommand(version)}
+
+EXAMPLES
+  pstack new my-workspace --npmScope=acme --ci=github-actions --llm=claude
+  pstack app --type=angular --name=portal
+  pstack app --type=ionic --name=field-ops --appId=com.acme.fieldops
+  pstack app --type=flutter --name=mobile-app --tags=platform:mobile
+  pstack app --type=angular --name=portal --dir=legacy
+  pstack lib --type=angular --name=ui --variant=publishable
+  pstack lib --type=flutter --name=shared-core
+  pstack lib --type=state --name=orders --variant=ngrx
+  pstack lib --type=design-tokens --name=brand
+  pstack lib --type=session --name=session
+  pstack lib --type=pii --name=pii-mask
+  pstack lib --type=angular --name=ui --dir=forms
+  pstack env --name=qa --app=portal --api-url=https://qa.example.com/api
+  pstack env --name=sit --all --from=prod --production=false
+  pstack llm
+  pstack llm --providers=claude,agents
+  pstack migrate --source=../legacy-portal --detect
+  pstack migrate --source=../legacy-portal --min-confidence=0.6
+  pstack migrate --source=../legacy-portal --name=portal --dir=legacy
+  pstack migrate --source=../legacy-portal --name=portal
+  pstack migrate --source=../field_notes --adapter=flutter --dry-run
+  pstack migrate --source=../nx-repo --projects=portal --prefix=legacy
+  pstack migrate --rollback=portal --dry-run
+  pstack migrate --config=tools/migrations.json --dry-run
+  pstack infra
+  pstack infra --with=docs,ci --ci=jenkins
+  pstack infra --with=upgrades --upgrade-schedule=monthly --upgrade-scope=nx-minor
+  pstack infra --with=none --lint-staged=block
+  pstack new my-workspace --infra=docs,ci
+  pstack build --env=uat --all
+  pstack build --env=prod --projects=portal,admin --parallel=2 --continue --report=dist/build.json
+  pstack release --app=portal --base-href=/portal/
+  pstack app --type=angular --name=portal --base-href=/portal/
+  pstack app --type=angular --name=admin --port=4300 --env-layout=per-env
+  pstack shared --all
+  nx run portal:clean
+  pstack csp --app=portal --add=connect-src:https://api.example.com
+  pstack csp --app=portal --import=apps/portal/src/.htaccess --dry-run
+  pstack hardening --app=portal
+  pstack hardening --app=portal --configuration=uat --obfuscate=light --sri
+  pstack update
+  pstack update --to=0.3.0 --dry-run
+`.trimStart();
+}

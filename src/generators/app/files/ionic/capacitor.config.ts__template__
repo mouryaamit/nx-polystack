@@ -1,0 +1,19 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+/**
+ * `webDir` is relative to this file (<%= root %>/): the Angular build writes to
+ * <workspace root>/dist/<%= root %>.
+ */
+const config: CapacitorConfig = {
+  appId: '<%= appId %>',
+  appName: '<%= title %>',
+  webDir: '<%= up %>dist/<%= root %>',
+  android: {
+    allowMixedContent: false,
+  },
+  ios: {
+    contentInset: 'automatic',
+  },
+};
+
+export default config;

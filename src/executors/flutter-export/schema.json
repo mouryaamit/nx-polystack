@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "title": "Flutter Export",
+  "description": "Exports a FlutterFlow project into the local app directory.",
+  "type": "object",
+  "properties": {
+    "flutterfowProject": {
+      "type": "string",
+      "description": "FlutterFlow project ID to export."
+    },
+    "dest": {
+      "type": "string",
+      "description": "Destination path (e.g. apps/flutter-app). Relative to repo root."
+    },
+    "branch": {
+      "type": "string",
+      "description": "FlutterFlow branch name to export from."
+    },
+    "flutterfowEnv": {
+      "type": "string",
+      "enum": ["Production", "Development"],
+      "default": "Production",
+      "description": "FlutterFlow environment to export."
+    }
+  },
+  "required": ["flutterfowProject", "dest"]
+}

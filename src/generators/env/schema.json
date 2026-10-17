@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "env",
+  "title": "Add Environment",
+  "description": "Add a named environment to some or all apps, copied from an existing one: env file (secret values become ${APP_ENV_KEY} placeholders), Angular build/serve configurations, release configuration (hardening, base href), Flutter env json and build configurations, npm scripts.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Environment name (lowercase kebab-case, e.g. qa, sit, staging). dev, uat, prod and production are reserved.",
+      "$default": { "$source": "argv", "index": 0 }
+    },
+    "projects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Apps to add the environment to. Either this or all."
+    },
+    "all": {
+      "type": "boolean",
+      "description": "Add the environment to every app with environments.",
+      "default": false
+    },
+    "from": {
+      "type": "string",
+      "description": "Existing environment the new one is copied from (default: uat, else prod for apps without uat)."
+    },
+    "apiUrl": {
+      "type": "string",
+      "description": "API base URL for the new environment (fields whose key mentions api)."
+    },
+    "production": {
+      "type": "boolean",
+      "description": "Set production: true|false in the new Angular env file (default: as in --from)."
+    },
+    "baseHref": {
+      "type": "string",
+      "description": "Base href of the new release / Flutter build-web configuration (default: as in --from)."
+    },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Hosts the new aes-gcm release configuration may run on (default: none)."
+    }
+  },
+  "required": ["name"]
+}

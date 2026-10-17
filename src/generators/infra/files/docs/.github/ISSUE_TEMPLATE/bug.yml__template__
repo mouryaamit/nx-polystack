@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as expected.
+title: 'bug: '
+labels: ['bug']
+body:
+  - type: input
+    id: affected
+    attributes:
+      label: Affected app or library
+      description: The Nx project name, for example the app or lib folder name.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Environment, browser or device, and version or commit.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove any secrets or personal data first.

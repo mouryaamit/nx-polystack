@@ -1,0 +1,23 @@
+## Summary
+
+<!-- What does this change and why? -->
+
+## Ticket
+
+<!-- Ticket ID or link -->
+
+## Type
+
+- [ ] Feature
+- [ ] Fix
+- [ ] Refactor
+- [ ] Docs
+- [ ] Chore / CI
+
+## Checklist
+
+- [ ] The title follows Conventional Commits, with the ticket as the scope (`feat(<ticket>): …`)
+- [ ] `npx nx affected -t lint typecheck test build` passes
+- [ ] No secrets, keys or plaintext environment values are committed
+- [ ] Docs are updated
+- [ ] Screenshots attached for UI changes

@@ -1,0 +1,21 @@
+<ng-container *ngIf="{ view: view$ | async } as ctx">
+  <!-- Always present, so the first announcement is read. -->
+  <p class="session-warning__live" aria-live="assertive">{{ ctx.view?.announce }}</p>
+  <div
+    *ngIf="ctx.view as view"
+    class="session-warning"
+    role="dialog"
+    [attr.aria-labelledby]="id + '-title'"
+    [attr.aria-describedby]="id + '-text'"
+  >
+    <h2 class="session-warning__title" [id]="id + '-title'">{{ view.title }}</h2>
+    <p class="session-warning__text" [id]="id + '-text'">{{ view.message }}</p>
+    <div class="session-warning__actions">
+      <button *ngIf="view.idle" #firstButton type="button" (click)="stay()">{{ view.stay }}</button>
+      <button *ngIf="!view.idle" #firstButton type="button" (click)="signOut.emit()">
+        {{ view.signOut }}
+      </button>
+      <button *ngIf="view.idle" type="button" (click)="signOut.emit()">{{ view.signOut }}</button>
+    </div>
+  </div>
+</ng-container>

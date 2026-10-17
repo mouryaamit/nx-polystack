@@ -1,0 +1,23 @@
+import { CommonModule } from '@angular/common';
+import { ModuleWithProviders, NgModule } from '@angular/core';
+
+import { SessionTimeoutConfig } from './session-clock';
+import { SESSION_TIMEOUT_CONFIG } from './session-timeout.config';
+import { SessionWarningComponent } from './session-warning/session-warning.component';
+
+@NgModule({
+  imports: [CommonModule],
+  declarations: [SessionWarningComponent],
+  exports: [SessionWarningComponent],
+})
+export class SessionTimeoutModule {
+  /** In the root module: SessionTimeoutModule.forRoot({ idleMs: 10 * 60_000 }). */
+  static forRoot(
+    config: Partial<SessionTimeoutConfig> = {},
+  ): ModuleWithProviders<SessionTimeoutModule> {
+    return {
+      ngModule: SessionTimeoutModule,
+      providers: [{ provide: SESSION_TIMEOUT_CONFIG, useValue: config }],
+    };
+  }
+}

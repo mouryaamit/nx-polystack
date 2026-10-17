@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+.nx
+.angular
+package-lock.json
+apps/flutter-app/build
+apps/flutter-app/.dart_tool
+apps/*/android
+apps/*/ios
+tests/fixtures

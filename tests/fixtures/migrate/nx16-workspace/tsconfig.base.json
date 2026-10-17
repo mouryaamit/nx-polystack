@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "target": "es2020",
+    "strict": true,
+    "paths": {
+      "@acme/shared-ui": ["libs/shared/ui/src/index.ts"],
+      "@acme/shared-util": ["libs/shared/util/src/index.ts"],
+      "@acme/field-kit": ["apps/field/src/kit.ts"]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { catchError, map, of, switchMap } from 'rxjs';
+
+import { <%= className %>Actions } from './<%= fileName %>.actions';
+import { <%= className %>Item } from './<%= fileName %>.models';
+
+@Injectable()
+export class <%= className %>Effects {
+  readonly load$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(<%= className %>Actions.load),
+      switchMap(() =>
+        // Placeholder: replace of([]) with a call to your API service.
+        of<<%= className %>Item[]>([]).pipe(
+          map((items) => <%= className %>Actions.loadSuccess({ items })),
+          catchError((error: unknown) =>
+            of(<%= className %>Actions.loadFailure({ error: String(error) })),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  constructor(private readonly actions$: Actions) {}
+}

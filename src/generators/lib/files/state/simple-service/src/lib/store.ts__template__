@@ -1,0 +1,34 @@
+import { BehaviorSubject, distinctUntilChanged, map, Observable } from 'rxjs';
+
+/**
+ * Minimal reactive store: state lives in a BehaviorSubject, is read through `state$`, `select`
+ * or `snapshot`, and is replaced immutably by `setState`.
+ */
+export class Store<T extends object> {
+  protected readonly state: BehaviorSubject<T>;
+  readonly state$: Observable<T>;
+
+  constructor(initialState: T) {
+    this.state = new BehaviorSubject<T>(initialState);
+    this.state$ = this.state.asObservable();
+  }
+
+  /** Current state, for imperative reads. Prefer `select` in templates. */
+  get snapshot(): T {
+    return this.state.getValue();
+  }
+
+  /** Emits the selected slice whenever it changes (by reference). */
+  select<R>(selector: (state: T) => R): Observable<R> {
+    return this.state$.pipe(map(selector), distinctUntilChanged());
+  }
+
+  /** Merges a partial state, or the partial returned by `fn(currentState)`. */
+  setState(update: Partial<T> | ((state: T) => Partial<T>)): void {
+    const patch =
+      typeof update === 'function'
+        ? (update as (state: T) => Partial<T>)(this.snapshot)
+        : update;
+    this.state.next({ ...this.snapshot, ...patch });
+  }
+}

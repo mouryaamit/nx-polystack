@@ -1,0 +1,4 @@
+// Stub for tests: a real project has the full Gradle build here.
+android {
+    namespace "com.example.field_notes"
+}

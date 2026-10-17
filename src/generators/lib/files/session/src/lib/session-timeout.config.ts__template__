@@ -1,0 +1,8 @@
+import { InjectionToken } from '@angular/core';
+
+import { SessionTimeoutConfig } from './session-clock';
+
+/** Overrides of DEFAULT_SESSION_TIMEOUT; provide it with SessionTimeoutModule.forRoot(…). */
+export const SESSION_TIMEOUT_CONFIG = new InjectionToken<Partial<SessionTimeoutConfig>>(
+  'SESSION_TIMEOUT_CONFIG',
+);

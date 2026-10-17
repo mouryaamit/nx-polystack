@@ -1,0 +1,49 @@
+# Publishes a version tag (vX.Y.Z) to npm with provenance, using npm trusted publishing (OIDC):
+# on npmjs.com, the package's Settings → Trusted publishing names this repository, this workflow
+# file (publish.yml) and the environment "npm". No npm token is stored here.
+#
+# Guards — all must hold, or nothing is published:
+# - the repository variable NPM_PUBLISH_ENABLED is "true" (Settings → Secrets and variables →
+#   Actions → Variables); it is not set until the first release is approved;
+# - the tagged commit is on master (tags on other branches never publish);
+# - the tag equals the package.json version, and the tests pass.
+# The very first version is published by hand (npm publish), because trusted publishing can only
+# be set up for a package that already exists on npm.
+name: Publish
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: vars.NPM_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The tag is on master
+        run: |
+          git fetch origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master
+      - name: The tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5 or newer.
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm test -- --ci
+      - run: npm publish --access public

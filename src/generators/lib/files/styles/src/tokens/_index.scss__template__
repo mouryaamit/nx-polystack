@@ -1,0 +1,27 @@
+// Design tokens — the single source for colours, spacing and breakpoints.
+
+$color-primary: #3b5bdb;
+$color-secondary: #868e96;
+$color-success: #2f9e44;
+$color-warning: #f08c00;
+$color-danger: #e03131;
+$color-surface-light: #ffffff;
+$color-surface-dark: #1a1b1e;
+$color-text-light: #212529;
+$color-text-dark: #f1f3f5;
+
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 16px;
+$spacing-lg: 24px;
+$spacing-xl: 32px;
+
+$radius-sm: 4px;
+$radius-md: 8px;
+
+$breakpoints: (
+  sm: 576px,
+  md: 768px,
+  lg: 992px,
+  xl: 1200px,
+);

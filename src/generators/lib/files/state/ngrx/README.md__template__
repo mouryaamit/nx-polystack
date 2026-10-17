@@ -1,0 +1,33 @@
+# <%= projectName %>
+
+Feature state for Angular apps with NgRx (`--variant=ngrx`): actions (`<%= className %>Actions`),
+reducer (feature key `'<%= propertyName %>'`), selectors, effects and `<%= className %>StateModule`.
+
+## Use it in an app
+
+The app must register the root store and effects **once**, then import the feature module:
+
+```ts
+import { EffectsModule } from '@ngrx/effects';
+import { StoreModule } from '@ngrx/store';
+import { <%= className %>StateModule } from '<%= importPath %>';
+
+@NgModule({
+  imports: [StoreModule.forRoot({}), EffectsModule.forRoot([]), <%= className %>StateModule],
+})
+export class AppModule {}
+```
+
+```ts
+constructor(private readonly store: Store) {}
+
+readonly items$ = this.store.select(select<%= className %>Items);
+
+ngOnInit(): void {
+  this.store.dispatch(<%= className %>Actions.load());
+}
+```
+
+`<%= className %>Effects.load$` returns an empty list as a placeholder — call your API there.
+
+Built as a buildable lib (`nx build <%= projectName %>`).

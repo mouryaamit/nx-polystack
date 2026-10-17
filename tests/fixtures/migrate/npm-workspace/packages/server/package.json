@@ -1,0 +1,12 @@
+{
+  "name": "@acme/server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@acme/utils": "*",
+    "express": "^4.18.2"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "shared-styles",
+  "projectType": "library",
+  "targets": {
+    "check": {
+      "executor": "@nrwl/workspace:run-commands",
+      "options": {
+        "command": "echo shared-styles"
+      }
+    }
+  }
+}

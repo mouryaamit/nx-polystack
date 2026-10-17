@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "lib",
+  "title": "Add Library",
+  "description": "Scaffold a shared library under libs/<scope>/<name>.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Library name (kebab-case). Nx project name is <scope>-<name>.",
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "What name would you like to use for the library?"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "ts",
+        "angular",
+        "ionic",
+        "flutter",
+        "assets",
+        "styles",
+        "state",
+        "design-tokens",
+        "session",
+        "pii",
+        "android-native",
+        "ios-native"
+      ],
+      "description": "Library type."
+    },
+    "scope": {
+      "type": "string",
+      "description": "Folder under libs/ and project-name prefix (default: shared; ionic for ionic libs; flutter for flutter libs)."
+    },
+    "dir": {
+      "type": "string",
+      "description": "Folders under libs/<scope>/ for the library (kebab-case names separated by \"/\", at most 2, e.g. forms): the lib goes to libs/<scope>/<dir>/<name>."
+    },
+    "variant": {
+      "type": "string",
+      "description": "angular/ionic: internal | buildable | publishable (default: buildable). state: simple-service | ngrx (default: simple-service); state libs are always buildable."
+    },
+    "prefix": {
+      "type": "string",
+      "description": "angular/ionic: component selector prefix (default: lib).",
+      "default": "lib"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Extra Nx project tags.",
+      "default": []
+    }
+  },
+  "required": ["name", "type"]
+}

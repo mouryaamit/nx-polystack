@@ -1,0 +1,39 @@
+# <%= projectName %>
+
+Shared SCSS: design tokens, light/dark themes and mixins.
+
+| File                        | Contents                                         |
+| --------------------------- | ------------------------------------------------ |
+| `src/tokens/_index.scss`    | `$color-*`, `$spacing-*`, `$radius-*`, `$breakpoints` |
+| `src/themes/_index.scss`    | `theme-light` / `theme-dark` mixins (CSS custom properties) |
+| `src/mixins/_index.scss`    | `breakpoint-up($name)`                           |
+| `src/_index.scss`           | forwards all of the above                        |
+
+## Use it in an app
+
+Add the lib's `src` folder to the app's Sass include paths in `project.json` →
+`targets.build.options`:
+
+```json
+"stylePreprocessorOptions": { "includePaths": ["<%= projectRoot %>/src"] }
+```
+
+Then, in any SCSS file of the app:
+
+```scss
+@use 'index' as <%= propertyName %>;
+
+:root {
+  @include <%= propertyName %>.theme-light;
+}
+
+.card {
+  padding: <%= propertyName %>.$spacing-md;
+
+  @include <%= propertyName %>.breakpoint-up(md) {
+    padding: <%= propertyName %>.$spacing-lg;
+  }
+}
+```
+
+Single parts can be loaded too: `@use 'tokens';`, `@use 'mixins';`.

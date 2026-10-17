@@ -1,0 +1,13 @@
+# <%= projectName %>
+
+Shared static files (images, icons, fonts, JSON). Put them under `assets/`.
+
+## Use it in an app
+
+Add this entry to the app's `project.json` → `targets.build.options.assets`:
+
+```json
+{ "glob": "**/*", "input": "<%= projectRoot %>/assets", "output": "assets/<%= dir %>" }
+```
+
+The files are then served from `assets/<%= dir %>/…`, e.g. `<img src="assets/<%= dir %>/logo.svg" />`.

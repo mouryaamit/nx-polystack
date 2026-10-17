@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "title": "Flutter Build",
+  "description": "Builds or serves a Flutter application (web, APK, or iOS).",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "string",
+      "enum": ["web", "apk", "ios"],
+      "default": "web",
+      "description": "Build target platform."
+    },
+    "env": {
+      "type": "string",
+      "default": "dev",
+      "description": "Environment tier — selects <project root>/env/<env>.json for --dart-define-from-file."
+    },
+    "dist": {
+      "type": "string",
+      "description": "Output directory (relative to repo root). Required for non-serve builds."
+    },
+    "baseHref": {
+      "type": "string",
+      "description": "URL base href for Flutter web (e.g. /flutter-app/)."
+    },
+    "serve": {
+      "type": "boolean",
+      "default": false,
+      "description": "Run flutter run in web-server mode instead of building."
+    },
+    "port": {
+      "type": "integer",
+      "default": 4200,
+      "description": "Port of the web server when serving."
+    },
+    "obfuscate": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable Dart obfuscation for APK / iOS builds (ignored for web)."
+    }
+  },
+  "required": []
+}

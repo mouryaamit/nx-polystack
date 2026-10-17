@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-devkit-executors.json",
+  "name": "@mouryaamit/nx-polystack",
+  "version": "0.1.0",
+  "executors": {
+    "build": {
+      "implementation": "./src/executors/build/executor",
+      "schema": "./src/executors/build/schema.json",
+      "description": "Full build pipeline for Angular/Ionic apps: encrypt-env \u2192 nx build \u2192 strip-exif \u2192 inject-meta, with optional CSP nonce, SRI hash, and hardening steps."
+    },
+    "flutter-build": {
+      "implementation": "./src/executors/flutter-build/executor",
+      "schema": "./src/executors/flutter-build/schema.json",
+      "description": "Build or serve a Flutter application (web, APK, iOS). Wraps the Flutter CLI with --dart-define-from-file env wiring and optional --obfuscate support."
+    },
+    "flutter-export": {
+      "implementation": "./src/executors/flutter-export/executor",
+      "schema": "./src/executors/flutter-export/schema.json",
+      "description": "Export a FlutterFlow project into the local app directory via the FlutterFlow CLI."
+    },
+    "capacitor": {
+      "implementation": "./src/executors/capacitor/executor",
+      "schema": "./src/executors/capacitor/schema.json",
+      "description": "Run a Capacitor command (sync, open, add, copy) for android or ios inside an Ionic app folder."
+    },
+    "clean": {
+      "implementation": "./src/executors/clean/executor",
+      "schema": "./src/executors/clean/schema.json",
+      "description": "Remove a project's build outputs (dist, coverage) and, for Flutter apps, run flutter clean."
+    }
+  }
+}

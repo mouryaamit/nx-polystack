@@ -1,0 +1,6 @@
+export * from './lib/<%= fileName %>.models';
+export * from './lib/<%= fileName %>.actions';
+export * from './lib/<%= fileName %>.reducer';
+export * from './lib/<%= fileName %>.selectors';
+export * from './lib/<%= fileName %>.effects';
+export * from './lib/<%= fileName %>-state.module';

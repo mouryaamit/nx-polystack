@@ -1,0 +1,61 @@
+# Contributing
+
+Thanks for helping. This workspace is an Nx monorepo built with nx-polystack; the steps below keep
+every app and library consistent.
+
+## Branches and pull requests
+
+1. Branch from `<%= baseBranch %>`: `feature-<ticket>` (for example `feature-ABC-123`).
+2. Keep each pull request small and focused on one ticket.
+3. Open the pull request against `<%= baseBranch %>`. CI must pass and a reviewer must approve
+   before it is merged.
+
+## Commit messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) with the ticket as the scope:
+
+```text
+feat(<ticket>): add the order summary page
+fix(<ticket>): keep the session after a token refresh
+docs(<ticket>): explain the release steps
+```
+
+Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `perf`. Commit messages
+are checked by commitlint on commit, and pull request titles are checked in CI.
+
+## Adding apps, libraries and environments
+
+Use the generators so tags, tsconfig paths and npm scripts stay consistent:
+
+```bash
+pstack app --type=<angular|ionic|flutter> --name=<name>
+pstack lib --type=<type> --name=<name>
+pstack env --name=<env>
+pstack llm      # refresh the generated block in the AI-assistant files
+```
+
+## Before you push
+
+```bash
+npm run lint                               # lint the workspace
+npx nx affected -t lint typecheck test build   # lint, type-check, test and build what changed
+npm run check:cycles                       # fail on new project dependency cycles
+npm run stale-code                         # report unused files, exports and dependencies
+```
+
+The pre-push hook runs `npm run check:prepush`: a secret scan that blocks the push, then a
+dependency audit that only warns. Run `npm run check:audit` for the strict audit (it fails on
+high or critical advisories).
+
+## Pull request checklist
+
+- [ ] The title follows Conventional Commits, with the ticket as the scope.
+- [ ] Lint, tests and build pass.
+- [ ] No secrets, keys or plaintext environment values are committed.
+- [ ] Docs are updated when behaviour changes.
+- [ ] UI changes include screenshots.
+
+## Code of conduct and security
+
+Read the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities as described in
+[SECURITY.md](SECURITY.md), never in a public issue.

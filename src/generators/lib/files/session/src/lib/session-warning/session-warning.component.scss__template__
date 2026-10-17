@@ -1,0 +1,40 @@
+:host {
+  display: contents;
+}
+
+.session-warning {
+  position: fixed;
+  inset: auto 1rem 1rem auto;
+  z-index: 1000;
+  max-width: 24rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #1f2937;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 20%);
+}
+
+.session-warning__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.session-warning__text {
+  margin: 0 0 1rem;
+}
+
+.session-warning__actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* Read by screen readers, not shown. */
+.session-warning__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

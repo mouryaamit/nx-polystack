@@ -1,0 +1,8 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:<%= snakeName %>/<%= snakeName %>.dart';
+
+void main() {
+  test('exposes its name', () {
+    expect(const <%= className %>().name, '<%= snakeName %>');
+  });
+}

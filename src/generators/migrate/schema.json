@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "migrate",
+  "title": "Migrate a standalone project",
+  "description": "Copy an existing project into the workspace, the source never modified: a standalone Angular CLI, Ionic/Capacitor or Flutter app as apps/<name>, or the Angular, Ionic and Flutter projects of an Nx 15-17 workspace at their own paths. With rollback=<name>, undo a migration.",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "description": "Path to the source repo root (absolute, or relative to the current directory). Read only."
+    },
+    "name": {
+      "type": "string",
+      "description": "App name for single-app sources, report name (docs/migrations/<name>.md) for Nx sources; kebab-case.",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "adapter": {
+      "type": "string",
+      "description": "Skip detection and use this adapter: a built-in id (angular-cli, flutter, nx-workspace, angular-workspace, ionic, npm-workspaces) or an adapter listed in nx.json pstack.migrateAdapters."
+    },
+    "detect": {
+      "type": "boolean",
+      "description": "Print the detection table (adapter, confidence, reasons) and exit without writing anything.",
+      "default": false
+    },
+    "projects": {
+      "type": "string",
+      "description": "Nx sources: comma-separated project names to migrate (default: every supported project). The libs they need are added unless noDeps."
+    },
+    "noDeps": {
+      "type": "boolean",
+      "description": "Nx sources: copy only the projects named in projects, not the libs they need.",
+      "default": false
+    },
+    "prefix": {
+      "type": "string",
+      "description": "Nx sources: rename migrated projects to <prefix>-<name> (paths and import aliases are kept).",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "maxFiles": {
+      "type": "number",
+      "description": "Fail when more files than this would be copied (after the skip lists).",
+      "default": 20000
+    },
+    "forceAngular": {
+      "type": "boolean",
+      "description": "Proceed when the workspace and the source use different Angular major versions (the report flags the mismatch).",
+      "default": false
+    },
+    "rollback": {
+      "type": "string",
+      "description": "Undo the migration recorded in docs/migrations/<name>.manifest.json (v0.13.0+). Use instead of source."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "With rollback: also remove or restore files and settings that changed after the migration.",
+      "default": false
+    },
+    "config": {
+      "type": "string",
+      "description": "Run the migrations listed in this JSON batch file, all or nothing (v0.14.0+). Use instead of source."
+    },
+    "minConfidence": {
+      "type": "number",
+      "description": "Use the best adapter when its confidence reaches this value (0.5 to 1; default 0.8). Not with adapter.",
+      "minimum": 0.5,
+      "maximum": 1
+    },
+    "dir": {
+      "type": "string",
+      "description": "Single-app sources: put the app in apps/<dir>/<name>, e.g. legacy or legacy/web (v0.16.0+)."
+    },
+    "rewriteImports": {
+      "type": "boolean",
+      "description": "Rewrite imports in the copied code: relative imports into another moved project, imports through the source baseUrl, @nrwl/* packages and SCSS paths (v0.21.0+). The source is never changed.",
+      "default": true
+    },
+    "newAdapter": {
+      "type": "string",
+      "description": "Write a starter adapter tools/migrate/<name>.adapter.ts (with a spec), and list it in nx.json pstack.migrateAdapters (v0.22.0+). Takes no other option.",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    }
+  }
+}

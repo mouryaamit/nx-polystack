@@ -1,0 +1,7 @@
+node_modules
+android/build
+android/.gradle
+android/app/build
+ios/Pods
+ios/build
+ios/DerivedData

@@ -1,0 +1,56 @@
+{
+  "name": "@acme/multi",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "ng": "nx",
+    "lint": "eslint 'apps/**/*.ts' 'libs/**/*.ts'",
+    "test": "nx test shared",
+    "serve:portal": "nx serve portal --port 9201",
+    "build:portal:dev": "node tools/scripts/build.js --project=portal --env=dev",
+    "build:portal:uat": "node tools/scripts/build.js --project=portal --env=uat",
+    "build:portal:prod": "node tools/scripts/build.js --project=portal --env=prod",
+    "build:admin:prod": "node tools/scripts/build.js --project=admin --env=prod",
+    "build:all:prod": "node tools/scripts/build-all.js prod",
+    "validate:types": "node tools/scripts/validate-types.js"
+  },
+  "dependencies": {
+    "@angular/common": "^15.2.10",
+    "@angular/compiler": "^15.2.10",
+    "@angular/core": "^15.2.10",
+    "@angular/platform-browser": "^15.2.10",
+    "@angular/platform-browser-dynamic": "^15.2.10",
+    "@angular/router": "^15.2.10",
+    "bootstrap": "^5.3.6",
+    "legacy-idle": "^1.0.0",
+    "rxjs": "^7.4.0",
+    "tslib": "^2.0.0",
+    "zone.js": "~0.12.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^15.2.11",
+    "@angular/compiler-cli": "^15.2.10",
+    "@nrwl/angular": "15.9.7",
+    "@nrwl/eslint-plugin-nx": "15.9.7",
+    "@nrwl/jest": "15.9.7",
+    "@nrwl/linter": "15.9.7",
+    "@nrwl/workspace": "15.9.7",
+    "jest": "^28.1.3",
+    "jest-preset-angular": "^12.2.6",
+    "nx": "15.9.7",
+    "typescript": "~4.8.4"
+  },
+  "overrides": {
+    "legacy-idle": {
+      "@angular/common": "$@angular/common",
+      "@angular/core": "$@angular/core"
+    }
+  },
+  "browser": {
+    "path": false
+  },
+  "engines": {
+    "node": "18.x",
+    "npm": ">=8.0.0"
+  }
+}

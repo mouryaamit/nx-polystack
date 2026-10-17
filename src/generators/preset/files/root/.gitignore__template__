@@ -1,0 +1,9 @@
+node_modules
+dist
+tmp
+out-tsc
+coverage
+.nx
+.angular
+*.bak
+.env.local

@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-devkit-generators.json",
+  "name": "@mouryaamit/nx-polystack",
+  "version": "0.1.0",
+  "generators": {
+    "app": {
+      "factory": "./src/generators/app/generator",
+      "schema": "./src/generators/app/schema.json",
+      "description": "Scaffold a new application. --type=flutter supported in Phase 2; angular/ionic/native in later phases."
+    },
+    "preset": {
+      "factory": "./src/generators/preset/generator",
+      "schema": "./src/generators/preset/schema.json",
+      "description": "Generate the root workspace skeleton: config files, repo infrastructure (via :infra), AI-assistant instructions (via :llm)."
+    },
+    "lib": {
+      "factory": "./src/generators/lib/generator",
+      "schema": "./src/generators/lib/schema.json",
+      "description": "Scaffold a shared library under libs/<scope>/<name>: ts, angular, ionic, flutter, assets, styles, state or design-tokens."
+    },
+    "env": {
+      "factory": "./src/generators/env/generator",
+      "schema": "./src/generators/env/schema.json",
+      "description": "Provision a named environment (e.g. qa, sit, staging) across all workspace apps: env files, project.json configurations, npm scripts."
+    },
+    "llm": {
+      "factory": "./src/generators/llm/generator",
+      "schema": "./src/generators/llm/schema.json",
+      "description": "Write a generated description of the workspace (apps, environments, libs, commands, rules) into CLAUDE.md, AGENTS.md and .github/copilot-instructions.md, between nx-polystack markers."
+    },
+    "infra": {
+      "factory": "./src/generators/infra/generator",
+      "schema": "./src/generators/infra/schema.json",
+      "description": "Add repo docs (CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, PR and issue templates), CI gates (GitHub Actions / Jenkins, dependency-cycle check), quality checks (knip, pre-push audit + secretlint) and a scheduled dependency-upgrade workflow. Existing files are kept unless --force."
+    },
+    "migrate": {
+      "factory": "./src/generators/migrate/generator",
+      "schema": "./src/generators/migrate/schema.json",
+      "description": "Bring existing code into the workspace, the source never modified: a standalone Angular CLI or Flutter app as apps/<name>, or the Angular and Flutter projects of an Nx 15-17 workspace at their own paths."
+    },
+    "shared-libs": {
+      "factory": "./src/generators/shared-libs/generator",
+      "schema": "./src/generators/shared-libs/schema.json",
+      "description": "Create the shared assets and styles folders and wire them into Angular/Ionic apps."
+    }
+  }
+}

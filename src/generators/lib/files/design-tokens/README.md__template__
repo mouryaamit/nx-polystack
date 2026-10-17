@@ -1,0 +1,90 @@
+# <%= projectName %>
+
+Design tokens kept in [Style Dictionary v3](https://v3.styledictionary.com/) format and built for
+web (SCSS, CSS, TypeScript) and Flutter (Dart).
+
+```
+tokens/color.json        colors        (color.<type>.<item>)
+tokens/spacing.json      spacing       (size.spacing.<item>, rem)
+tokens/typography.json   font sizes (size.font.*), families (font.family.*),
+                         weights (fontWeight.*) and line heights (lineHeight.*)
+```
+
+Edit the JSON, then rebuild:
+
+```bash
+nx build <%= projectName %>
+# = npx style-dictionary build --config <%= projectRoot %>/style-dictionary.config.js
+```
+
+The outputs are committed, so apps work before the first build:
+
+| Output | Path                                       |
+| ------ | ------------------------------------------ |
+| SCSS   | `<%= projectRoot %>/<%= outputs.scss %>`   |
+| CSS    | `<%= projectRoot %>/<%= outputs.css %>`    |
+| TS     | `<%= projectRoot %>/<%= outputs.ts %>`     |
+| Dart   | `<%= projectRoot %>/<%= outputs.dart %>`   |
+
+They are listed in the workspace `.prettierignore` so formatting never fights the generator.
+
+## SCSS
+
+Add the folder to the app's `stylePreprocessorOptions` in `project.json`:
+
+```json
+"stylePreprocessorOptions": { "includePaths": ["<%= projectRoot %>/generated/scss"] }
+```
+
+```scss
+@use 'tokens' as t;
+
+.button {
+  background: t.$color-brand-primary;
+  padding: t.$size-spacing-sm t.$size-spacing-md;
+}
+```
+
+## CSS custom properties
+
+Add the file to the app's `styles` in `project.json` (before the app's own stylesheet):
+
+```json
+"styles": ["<%= projectRoot %>/<%= outputs.css %>", "apps/<app>/src/styles.scss"]
+```
+
+```css
+.card {
+  color: var(--color-neutral-dark);
+  gap: var(--size-spacing-md);
+}
+```
+
+## TypeScript
+
+```ts
+import { ColorBrandPrimary, SizeSpacingMd } from '<%= importPath %>';
+```
+
+## Flutter (Dart)
+
+`<%= projectRoot %>/generated/dart` is a Dart package (`<%= snakeName %>_tokens`). Depend on it by path
+from the app's `pubspec.yaml`:
+
+```yaml
+dependencies:
+  <%= snakeName %>_tokens:
+    path: ../../<%= projectRoot %>/generated/dart
+```
+
+```dart
+import 'package:<%= snakeName %>_tokens/tokens.dart';
+
+final color = <%= dartClassName %>.colorBrandPrimary;
+final padding = <%= dartClassName %>.sizeSpacingMd; // logical pixels (rem × 16)
+final family = <%= dartClassName %>.fontFamilyBase; // a String
+```
+
+Font families are strings; the font files themselves still go in the app's `pubspec.yaml`. Keep
+only families under `font` — Style Dictionary's Flutter transforms quote every `font` token, which
+is why weights and line heights have their own `fontWeight` and `lineHeight` categories.

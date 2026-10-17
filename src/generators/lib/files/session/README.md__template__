@@ -1,0 +1,39 @@
+# <%= importPath %>
+
+Session and idle timeout for Angular apps. It reports; it never signs anyone out — logout, tokens
+and server calls stay in the app.
+
+```ts
+// app.module.ts (root module only)
+imports: [SessionTimeoutModule.forRoot({ idleMs: 15 * 60_000, warningMs: 60_000, absoluteMs: 8 * 60 * 60_000 })]
+
+// after login (loginTime in milliseconds, persisted so a reload keeps the absolute limit)
+this.session.start(loginTime);
+this.session.timeout$.subscribe((reason) => this.auth.logout(reason));
+this.session.stoppedElsewhere$.subscribe(() => this.auth.logout('elsewhere'));
+// in auth.logout()
+this.session.stop();
+```
+
+```html
+<<%= prefix %>-session-warning (signOut)="auth.logout()"></<%= prefix %>-session-warning>
+```
+
+- **Idle**: mouse, keys, touch, wheel and scroll on the document count as activity
+  (`activityEvents`), also while the warning is shown; `idleMs` without activity times the
+  session out. Activity inside iframes is not seen.
+- **Warning**: `warningMs` before the timeout `state$` turns to `warning` and `warning$` counts
+  down the seconds; `extend()` (the component's "Stay signed in") counts as activity.
+- **Absolute limit** (`absoluteMs`, optional): the session ends that long after the `start()`
+  time, whatever the activity; "Stay signed in" is not offered then.
+- **States**: `stopped`, `active`, `warning`, `timedOut`. Sign out on `timeout$` (once per
+  session); `state$` is for the UI.
+- **Tabs**: activity, timeouts and logouts are shared between the app's tabs (BroadcastChannel,
+  or localStorage events where it is missing; the key includes the app's base path, so two apps
+  on one domain stay apart). A tab that slept checks the others' last activity before timing out.
+  `stoppedElsewhere$` fires when another tab signs out: sign this one out too.
+- **Warning component**: non-modal, moves focus to its first button, announces the time left to
+  screen readers when it opens and at 30, 10 and 5 seconds; `[texts]` replaces the English texts.
+- Timers and messages from other tabs run outside Angular's zone; the state is emitted only when
+  it changes (every second during the warning). Nothing runs during server-side rendering.
+- `sessionState()` in `session-clock.ts` is the timing logic without Angular, for tests.

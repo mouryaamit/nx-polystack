@@ -1,0 +1,20 @@
+@use '../tokens' as t;
+
+// Emits the theme as CSS custom properties; include under :root or a theme class.
+@mixin theme-vars($surface, $text) {
+  --color-primary: #{t.$color-primary};
+  --color-secondary: #{t.$color-secondary};
+  --color-success: #{t.$color-success};
+  --color-warning: #{t.$color-warning};
+  --color-danger: #{t.$color-danger};
+  --color-surface: #{$surface};
+  --color-text: #{$text};
+}
+
+@mixin theme-light {
+  @include theme-vars(t.$color-surface-light, t.$color-text-light);
+}
+
+@mixin theme-dark {
+  @include theme-vars(t.$color-surface-dark, t.$color-text-dark);
+}

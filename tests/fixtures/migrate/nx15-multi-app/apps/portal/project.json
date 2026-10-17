@@ -1,0 +1,90 @@
+{
+  "name": "portal",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/portal/src",
+  "prefix": "acme",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@angular-devkit/build-angular:browser",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "options": {
+        "outputPath": "dist/apps/portal",
+        "index": "apps/portal/src/index.html",
+        "main": "apps/portal/src/main.ts",
+        "polyfills": "apps/portal/src/polyfills.ts",
+        "tsConfig": "apps/portal/tsconfig.app.json",
+        "assets": [
+          "apps/portal/src/favicon.ico",
+          {
+            "input": "libs/assets",
+            "glob": "**/*",
+            "output": "assets/"
+          }
+        ],
+        "styles": [
+          "node_modules/bootstrap/dist/css/bootstrap.min.css",
+          "libs/styles/css/common.css",
+          "apps/portal/src/styles.scss"
+        ],
+        "scripts": []
+      },
+      "configurations": {
+        "production": {
+          "fileReplacements": [
+            {
+              "replace": "environments/environment.ts",
+              "with": "environments/portal/environment.prod.ts"
+            }
+          ]
+        },
+        "uat": {
+          "fileReplacements": [
+            {
+              "replace": "environments/environment.ts",
+              "with": "environments/portal/environment.uat.ts"
+            }
+          ]
+        },
+        "development": {
+          "fileReplacements": [
+            {
+              "replace": "environments/environment.ts",
+              "with": "environments/portal/environment.dev.ts"
+            }
+          ],
+          "buildOptimizer": false,
+          "optimization": false,
+          "sourceMap": true
+        }
+      },
+      "defaultConfiguration": "production"
+    },
+    "serve": {
+      "executor": "@angular-devkit/build-angular:dev-server",
+      "configurations": {
+        "production": {
+          "browserTarget": "portal:build:production"
+        },
+        "development": {
+          "browserTarget": "portal:build:development"
+        }
+      },
+      "defaultConfiguration": "development"
+    },
+    "lint": {
+      "executor": "@nrwl/linter:eslint",
+      "outputs": [
+        "{options.outputFile}"
+      ],
+      "options": {
+        "lintFilePatterns": [
+          "apps/portal/**/*.ts"
+        ]
+      }
+    }
+  }
+}

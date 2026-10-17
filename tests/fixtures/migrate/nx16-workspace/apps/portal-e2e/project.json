@@ -1,0 +1,15 @@
+{
+  "name": "portal-e2e",
+  "projectType": "application",
+  "implicitDependencies": ["portal"],
+  "targets": {
+    "e2e": {
+      "executor": "@nrwl/cypress:cypress",
+      "options": { "devServerTarget": "portal:serve" }
+    },
+    "lint": {
+      "executor": "@nrwl/linter:eslint",
+      "options": { "lintFilePatterns": ["apps/portal-e2e/**/*.ts"] }
+    }
+  }
+}

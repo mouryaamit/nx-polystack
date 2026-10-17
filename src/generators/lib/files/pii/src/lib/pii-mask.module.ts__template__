@@ -1,0 +1,17 @@
+import { ModuleWithProviders, NgModule } from '@angular/core';
+
+import { PiiMaskOptions } from './pii-mask';
+import { PiiMaskDirective } from './pii-mask.directive';
+import { PII_MASK_OPTIONS } from './pii-mask.options';
+import { PiiMaskPipe } from './pii-mask.pipe';
+
+@NgModule({
+  declarations: [PiiMaskPipe, PiiMaskDirective],
+  exports: [PiiMaskPipe, PiiMaskDirective],
+})
+export class PiiMaskModule {
+  /** Once, in the root module, to set the mask character or add formats. */
+  static forRoot(options: PiiMaskOptions = {}): ModuleWithProviders<PiiMaskModule> {
+    return { ngModule: PiiMaskModule, providers: [{ provide: PII_MASK_OPTIONS, useValue: options }] };
+  }
+}

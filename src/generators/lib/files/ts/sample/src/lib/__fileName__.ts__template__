@@ -1,0 +1,4 @@
+/** Placeholder export of the <%= importPath %> library — replace with real code. */
+export function <%= propertyName %>(): string {
+  return '<%= name %>';
+}

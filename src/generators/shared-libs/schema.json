@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "shared-libs",
+  "title": "Shared assets and styles",
+  "description": "Create libs/shared/assets and libs/shared/styles when missing (a workspace's libs/assets and libs/styles are used when present) and wire them into Angular/Ionic apps: build assets under assets/shared/, the Sass include path, implicitDependencies.",
+  "type": "object",
+  "properties": {
+    "projects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Angular/Ionic apps to wire. Either this or all."
+    },
+    "all": {
+      "type": "boolean",
+      "default": false,
+      "description": "Wire every Angular/Ionic app."
+    }
+  },
+  "required": []
+}

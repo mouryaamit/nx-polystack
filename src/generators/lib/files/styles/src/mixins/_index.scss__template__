@@ -1,0 +1,13 @@
+@use 'sass:map';
+@use '../tokens' as t;
+
+// Applies the content from the named breakpoint (sm | md | lg | xl) upwards.
+@mixin breakpoint-up($name) {
+  $min: map.get(t.$breakpoints, $name);
+  @if not $min {
+    @error 'Unknown breakpoint "#{$name}". Use one of: #{map.keys(t.$breakpoints)}.';
+  }
+  @media (min-width: $min) {
+    @content;
+  }
+}

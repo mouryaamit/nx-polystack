@@ -1,0 +1,33 @@
+import { createReducer, on } from '@ngrx/store';
+
+import { <%= className %>Actions } from './<%= fileName %>.actions';
+import { <%= className %>Item } from './<%= fileName %>.models';
+
+export const <%= constantName %>_FEATURE_KEY = '<%= propertyName %>';
+
+export interface <%= className %>State {
+  items: <%= className %>Item[];
+  loading: boolean;
+  error: string | null;
+}
+
+export const initial<%= className %>State: <%= className %>State = {
+  items: [],
+  loading: false,
+  error: null,
+};
+
+export const <%= propertyName %>Reducer = createReducer(
+  initial<%= className %>State,
+  on(<%= className %>Actions.load, (state): <%= className %>State => ({ ...state, loading: true, error: null })),
+  on(<%= className %>Actions.loadSuccess, (state, { items }): <%= className %>State => ({
+    ...state,
+    items,
+    loading: false,
+  })),
+  on(<%= className %>Actions.loadFailure, (state, { error }): <%= className %>State => ({
+    ...state,
+    loading: false,
+    error,
+  })),
+);

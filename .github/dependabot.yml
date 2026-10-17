@@ -1,0 +1,17 @@
+# The plugin targets Nx 17 and Angular 15, so npm version bumps are not proposed: only security
+# updates (Settings → Advanced Security → Dependabot security updates). GitHub Actions get
+# minor and patch bumps; major versions are reviewed by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0

@@ -1,0 +1,6 @@
+/// Placeholder API of the <%= snakeName %> package — replace with real code.
+class <%= className %> {
+  const <%= className %>();
+
+  String get name => '<%= snakeName %>';
+}

@@ -1,0 +1,2 @@
+<%= prepushMarker %>
+npm run check:prepush

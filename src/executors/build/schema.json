@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "title": "Angular / Ionic Build",
+  "description": "Full build pipeline for Angular and Ionic apps: encrypt-env → nx build → strip-exif → inject-meta, with optional leak check, source-map guard, comment and console stripping, CSP nonce and SRI hash.",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["angular", "ionic"],
+      "description": "Application type."
+    },
+    "outputPath": {
+      "type": "string",
+      "description": "Output directory relative to repo root (e.g. dist/apps/web)."
+    },
+    "envProject": {
+      "type": "string",
+      "description": "Folder name under environments/ that contains this project's env files."
+    },
+    "env": {
+      "type": "string",
+      "description": "Pipeline env (DEV, UAT, PROD or custom, e.g. QA). Always set via Nx configurations."
+    },
+    "buildTarget": {
+      "type": "string",
+      "description": "Angular build target to run, \"<project>:<target>\". Default: \"<this project>:build\"."
+    },
+    "buildConfiguration": {
+      "type": "string",
+      "description": "Configuration of buildTarget. Default: PROD → production, UAT → uat, otherwise development."
+    },
+    "secure": {
+      "type": "boolean",
+      "default": false,
+      "description": "Inject CSP nonce SSI placeholders into all HTML files in the dist output."
+    },
+    "sri": {
+      "type": "boolean",
+      "default": false,
+      "description": "Integrity (SHA-384) for every chunk: passed to the Angular build as --subresource-integrity, and the hashes are refreshed after strip/obfuscate. With cipher aes-gcm the runtime refuses to decrypt when a script has no integrity attribute."
+    },
+    "harden": {
+      "type": "boolean",
+      "default": false,
+      "description": "Replaced: read as stripComments: true and dropConsole: [log, debug, warn] when those are unset. Runs no script."
+    },
+    "leakCheck": {
+      "type": "string",
+      "enum": ["fail", "warn", "off"],
+      "description": "non-DEV: plaintext of encrypted env values in the output fails the build, is listed, or is not checked. LEAK_CHECK overrides it for one run. Default: off."
+    },
+    "sourceMaps": {
+      "type": "string",
+      "enum": ["fail", "warn", "off"],
+      "description": "non-DEV: .map files or sourceMappingURL comments in the output fail the build, are listed, or are not checked. Default: off."
+    },
+    "stripComments": {
+      "type": "boolean",
+      "description": "non-DEV: remove comments from the built JS, CSS and served HTML (assets/ untouched). Needs terser in the workspace for JS."
+    },
+    "dropConsole": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["log", "debug", "warn", "info", "error", "trace"] },
+      "description": "non-DEV: console methods whose calls are removed from the built JS (needs terser in the workspace)."
+    },
+    "obfuscate": {
+      "type": "string",
+      "enum": ["off", "light", "medium", "strong"],
+      "description": "non-DEV: obfuscate the app's own JS (main and lazy chunks; runtime, polyfills, vendor, scripts and styles are skipped). light ≈ +20% gzip, medium ≈ +67%, strong also encodes the strings of the chunk holding the decrypt code and flattens its control flow. Needs javascript-obfuscator in the workspace. Default: off."
+    },
+    "obfuscateOptions": {
+      "type": "object",
+      "description": "non-DEV: javascript-obfuscator options on top of the obfuscate preset, e.g. { \"stringArrayThreshold\": 0.3 }. Options that need eval, lock domains, rename globals or properties, or change the target cannot be set."
+    },
+    "baseHref": {
+      "type": "string",
+      "description": "URL base href forwarded to the Angular builder (e.g. /my-app/)."
+    },
+    "keySplit": {
+      "type": "string",
+      "enum": ["meta-bundle", "meta-bundle-asset"],
+      "default": "meta-bundle",
+      "description": "aes-gcm: random key shares in the meta tag and bundle, or also in a fetched asset."
+    },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "aes-gcm: hosts this build may run on (set per configuration). Empty: no lock."
+    },
+    "includeWww": {
+      "type": "boolean",
+      "default": true,
+      "description": "Listing example.com also allows www.example.com."
+    },
+    "onMismatch": {
+      "type": "string",
+      "enum": ["block", "warn"],
+      "default": "block",
+      "description": "On a host not in domains: decrypt nothing (block) or only warn."
+    }
+  },
+  "required": ["type", "outputPath", "envProject"]
+}

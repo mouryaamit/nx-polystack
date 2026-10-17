@@ -1,0 +1,15 @@
+{
+  "name": "mobile",
+  "projectType": "application",
+  "tags": ["scope:mobile"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "flutter build web", "cwd": "apps/mobile" }
+    },
+    "analyze": {
+      "executor": "nx:run-commands",
+      "options": { "command": "flutter analyze", "cwd": "apps/mobile" }
+    }
+  }
+}

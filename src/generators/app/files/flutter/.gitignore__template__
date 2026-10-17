@@ -1,0 +1,10 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.g.dart
+*.freezed.dart
+
+# Env files (committed deliberately for this monorepo — do NOT gitignore env/*.json)
+# If you want to gitignore them, remove the line above.

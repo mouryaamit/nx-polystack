@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "infra",
+  "title": "Repo Infrastructure",
+  "description": "Add repo docs, CI gates (GitHub Actions / Jenkins, dependency-cycle check), quality checks (knip, pre-push audit + secretlint) and a scheduled dependency-upgrade workflow. Existing files are kept unless --force.",
+  "type": "object",
+  "properties": {
+    "with": {
+      "type": "string",
+      "default": "all",
+      "description": "Comma-separated parts: docs, ci, quality, upgrades; or all, none."
+    },
+    "ci": {
+      "type": "string",
+      "default": "github-actions",
+      "description": "Comma-separated CI providers: github-actions, jenkins. The upgrade workflow is GitHub Actions only."
+    },
+    "ciCache": {
+      "type": "boolean",
+      "default": false,
+      "description": "GitHub Actions: cache the Nx cache directory (actions/cache)."
+    },
+    "flutter": {
+      "type": "string",
+      "enum": ["auto", "on", "off"],
+      "default": "auto",
+      "description": "Set up Flutter in CI (subosito/flutter-action on GitHub, a flutter --version check on Jenkins): auto when a pubspec.yaml is under apps/ or libs/, on, or off."
+    },
+    "upgradeSchedule": {
+      "type": "string",
+      "enum": ["weekly", "monthly"],
+      "default": "weekly",
+      "description": "When the dependency-upgrade workflow runs: weekly (Monday 03:17 UTC) or monthly (1st, 03:17 UTC)."
+    },
+    "upgradeScope": {
+      "type": "string",
+      "enum": ["polystack", "nx-minor"],
+      "default": "polystack",
+      "description": "polystack: pstack update to the latest release. nx-minor: also nx migrate within the current Nx major."
+    },
+    "force": {
+      "type": "boolean",
+      "default": false,
+      "description": "Overwrite files that already exist. .husky/pre-push is always appended to, never replaced."
+    },
+    "skipFormat": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip formatFiles."
+    },
+    "lintStaged": {
+      "type": "string",
+      "enum": ["warn", "block"],
+      "description": "lint-staged ESLint step: warn (report problems, never block the commit) or block. Unset: unchanged."
+    }
+  },
+  "required": []
+}

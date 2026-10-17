@@ -1,0 +1,35 @@
+# <%= importPath %>
+
+Masks personal data for display. It changes what is shown, not what is stored or sent.
+
+```html
+{{ customer.pan | piiMask: 'pan' }}                              <!-- XXXXX1234F -->
+<span [<%= prefixCamel %>PiiMask]="customer.aadhaar" piiFormat="aadhaar"></span>  <!-- XXXX XXXX 9012 -->
+```
+
+| Format    | Example in → out                                   |
+| --------- | -------------------------------------------------- |
+| `pan`     | `ABCDE1234F` → `XXXXX1234F`                        |
+| `aadhaar` | `1234 5678 9012` → `XXXX XXXX 9012`                |
+| `mobile`  | `+91 98765 43210` → `+91 XXXXX X3210`              |
+| `mobile`  | `+919876543210` → `+91XXXXXX3210`                  |
+| `email`   | `asha.k@example.com` → `aXXX@example.com`          |
+| `account` | `00123456789` → `XXXXXXX6789`                      |
+| `card`    | `4111 1111 1111 1111` → `XXXX XXXX XXXX 1111`      |
+| `ifsc`    | `SBIN0001234` → shown as it is (not personal)      |
+
+A value that does not look like its format, or an unknown format, is masked completely, in any
+script (Devanagari digits, regional-script names, full-width characters). At most half of a
+value's letters and digits are ever shown. The directive replaces its element's content: use it on
+an empty element; `[piiReveal]="true"` shows the value.
+
+Custom formats and the mask character:
+
+```ts
+PiiMaskModule.forRoot({
+  maskChar: '•',
+  rules: { passport: { valid: /^[A-Z]\d{7}$/, visibleEnd: 3 } },
+});
+```
+
+`maskPii(value, format, options)` in `pii-mask.ts` is the same logic without Angular.

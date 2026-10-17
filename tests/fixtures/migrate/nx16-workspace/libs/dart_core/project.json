@@ -1,0 +1,10 @@
+{
+  "name": "dart-core",
+  "projectType": "library",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "dart test", "cwd": "libs/dart_core" }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "field",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/field/src",
+  "tags": ["scope:mobile"],
+  "targets": {
+    "build": {
+      "executor": "@nrwl/angular:webpack-browser",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/field",
+        "index": "apps/field/src/index.html",
+        "main": "apps/field/src/main.ts",
+        "tsConfig": "apps/field/tsconfig.app.json",
+        "assets": [],
+        "styles": []
+      },
+      "configurations": { "production": {}, "development": { "optimization": false } },
+      "defaultConfiguration": "production"
+    },
+    "cap": {
+      "executor": "@nxext/capacitor:cap",
+      "options": { "cmd": "--help" }
+    }
+  }
+}

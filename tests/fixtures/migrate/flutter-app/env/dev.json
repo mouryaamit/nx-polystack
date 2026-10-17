@@ -1,0 +1,4 @@
+{
+  "FLUTTER_ENV": "dev",
+  "API_BASE_URL": "https://dev.internal.test"
+}

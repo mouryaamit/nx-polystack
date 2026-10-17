@@ -1,0 +1,41 @@
+// Style Dictionary v3 config for <%= projectName %>.
+// Run from the workspace root (`nx build <%= projectName %>` does), so paths start at the root.
+const LIB = '<%= projectRoot %>';
+
+// Fixed header without a timestamp, so the committed outputs only change when tokens do.
+const fileHeader = () => <%- fileHeader %>;
+
+// The flutter transform group quotes every `font` token (font/flutter/literal), so only font
+// families live under `font`; weights and line heights have their own categories.
+module.exports = {
+  source: [`${LIB}/tokens/**/*.json`],
+  platforms: {
+    scss: {
+      transformGroup: 'scss',
+      buildPath: `${LIB}/generated/scss/`,
+      files: [{ destination: '_tokens.scss', format: 'scss/variables', options: { fileHeader } }],
+    },
+    css: {
+      transformGroup: 'css',
+      buildPath: `${LIB}/generated/css/`,
+      files: [{ destination: 'tokens.css', format: 'css/variables', options: { fileHeader } }],
+    },
+    ts: {
+      transformGroup: 'js',
+      buildPath: `${LIB}/src/lib/`,
+      files: [{ destination: 'tokens.ts', format: 'javascript/es6', options: { fileHeader } }],
+    },
+    dart: {
+      transformGroup: 'flutter',
+      buildPath: `${LIB}/generated/dart/lib/`,
+      files: [
+        {
+          destination: 'tokens.dart',
+          format: 'flutter/class.dart',
+          className: '<%= dartClassName %>',
+          options: { fileHeader },
+        },
+      ],
+    },
+  },
+};

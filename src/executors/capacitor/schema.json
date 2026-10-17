@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "title": "Capacitor",
+  "description": "Run a Capacitor CLI command (sync, open, add, copy) for one platform inside the app folder. Installs the app's own packages first if needed.",
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string",
+      "enum": ["sync", "open", "add", "copy"],
+      "description": "Capacitor command."
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["android", "ios"],
+      "description": "Native platform, e.g. --platform=android."
+    },
+    "webDir": {
+      "type": "string",
+      "description": "Web build output relative to the workspace root (default: dist/apps/<project>). Only used to check that the build exists before sync/copy; Capacitor itself copies from webDir in capacitor.config.ts."
+    }
+  },
+  "required": ["command", "platform"]
+}

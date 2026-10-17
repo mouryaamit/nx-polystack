@@ -1,0 +1,113 @@
+/**
+ * Session timing without Angular or RxJS: what the session looks like at a given moment.
+ * Kept separate so it can be unit-tested with plain numbers.
+ */
+export interface SessionTimeoutConfig {
+  /** Time without user activity before the session times out (ms). */
+  idleMs: number;
+  /** How long before the timeout the warning starts (ms). */
+  warningMs: number;
+  /** Maximum session length since start, whatever the activity (ms); unset: no limit. */
+  absoluteMs?: number;
+  /** DOM events on the document that count as activity. */
+  activityEvents: string[];
+  /**
+   * BroadcastChannel / localStorage key shared by the app's tabs. The app's base path is added,
+   * so two apps on one domain (/retail/, /corporate/) do not share sessions.
+   */
+  channelName: string;
+  /** How often the state is checked (ms). */
+  tickMs: number;
+}
+
+export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutConfig = {
+  idleMs: 15 * 60 * 1000,
+  warningMs: 60 * 1000,
+  activityEvents: ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel', 'scroll'],
+  channelName: 'session-timeout',
+  tickMs: 1000,
+};
+
+export type SessionStatus = 'stopped' | 'active' | 'warning' | 'timedOut';
+export type TimeoutReason = 'idle' | 'absolute';
+
+export interface SessionState {
+  status: SessionStatus;
+  /** Time left before the timeout (ms); 0 when stopped or timed out. */
+  remainingMs: number;
+  /** Which limit comes first: inactivity, or the absolute session length. */
+  reason?: TimeoutReason;
+}
+
+/** The session at `now`, given when it started and when the user was last active. */
+export function sessionState(
+  now: number,
+  startedAt: number,
+  lastActivity: number,
+  config: SessionTimeoutConfig,
+): SessionState {
+  // A clock that went back must not extend the session: times in the future count as now.
+  const last = Math.min(lastActivity, now);
+  const started = Math.min(startedAt, now);
+  const idleLeft = last + config.idleMs - now;
+  const absoluteLeft =
+    config.absoluteMs === undefined ? Infinity : started + config.absoluteMs - now;
+  const reason: TimeoutReason = absoluteLeft <= idleLeft ? 'absolute' : 'idle';
+  const remainingMs = Math.min(idleLeft, absoluteLeft);
+  // Fail closed: a timestamp that is not a number ends the session instead of keeping it alive.
+  if (!(remainingMs > 0)) return { status: 'timedOut', remainingMs: 0, reason };
+  if (remainingMs <= config.warningMs) return { status: 'warning', remainingMs, reason };
+  return { status: 'active', remainingMs, reason };
+}
+
+/** Problems with a configuration, empty when it is usable. */
+export function sessionConfigProblems(config: SessionTimeoutConfig): string[] {
+  const problems: string[] = [];
+  const positive = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n > 0;
+  if (!positive(config.idleMs)) problems.push('idleMs must be a positive number of milliseconds');
+  if (!(typeof config.warningMs === 'number' && config.warningMs >= 0)) {
+    problems.push('warningMs must be zero or more milliseconds');
+  } else if (positive(config.idleMs) && config.warningMs >= config.idleMs) {
+    problems.push('warningMs must be shorter than idleMs');
+  }
+  if (config.absoluteMs !== undefined && !positive(config.absoluteMs)) {
+    problems.push('absoluteMs must be a positive number of milliseconds when set');
+  }
+  if (!positive(config.tickMs)) problems.push('tickMs must be a positive number of milliseconds');
+  if (!Array.isArray(config.activityEvents) || config.activityEvents.length === 0) {
+    problems.push('activityEvents must list at least one event');
+  }
+  if (!config.channelName) problems.push('channelName must not be empty');
+  return problems;
+}
+
+/** Earliest accepted session start (catches seconds passed instead of milliseconds). */
+const EARLIEST = Date.UTC(2000, 0, 1);
+/** Clock difference between tabs that is tolerated for messages. */
+const MAX_SKEW_MS = 5000;
+
+/** Why `startedAt` cannot start a session, or null. */
+export function startedAtProblem(startedAt: unknown, now: number): string | null {
+  if (typeof startedAt !== 'number' || !Number.isFinite(startedAt)) {
+    return 'startedAt must be a time in milliseconds (e.g. Date.now())';
+  }
+  if (startedAt < EARLIEST) return 'startedAt is before 2000: pass milliseconds, not seconds';
+  if (startedAt > now + MAX_SKEW_MS) return 'startedAt is in the future';
+  return null;
+}
+
+/** An activity time from another tab: a finite number, not ahead of this tab's clock. */
+export function validActivityTime(at: unknown, now: number): at is number {
+  return typeof at === 'number' && Number.isFinite(at) && at >= EARLIEST && at <= now + MAX_SKEW_MS;
+}
+
+/** The channel / storage key for an app: the configured name plus the app's base path. */
+export function channelKey(channelName: string, baseURI: string | undefined): string {
+  let base = '/';
+  try {
+    base = baseURI ? new URL(baseURI).pathname : '/';
+  } catch {
+    // keep /
+  }
+  return `${channelName}:${base}`;
+}

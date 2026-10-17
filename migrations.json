@@ -1,0 +1,82 @@
+{
+  "$schema": "./node_modules/nx/schemas/migrations.json",
+  "name": "@mouryaamit/nx-polystack migrations",
+  "version": "0.1.0",
+  "generators": {
+    "add-executor-peers": {
+      "version": "0.3.0",
+      "description": "Add sharp and crypto-js to devDependencies (no longer auto-installed peers)",
+      "implementation": "./src/migrations/add-executor-peers/add-executor-peers"
+    },
+    "angular-release-target": {
+      "version": "0.4.0",
+      "description": "Give generated Angular apps a real Angular build target and move the pipeline to release",
+      "implementation": "./src/migrations/angular-release-target/angular-release-target"
+    },
+    "add-lint-dependencies": {
+      "version": "0.4.1",
+      "description": "Add the ESLint packages (and Angular lint packages for Angular 15 workspaces) that are missing",
+      "implementation": "./src/migrations/add-lint-dependencies/add-lint-dependencies"
+    },
+    "add-lib-build-dependencies": {
+      "version": "0.6.1",
+      "description": "Add the PostCSS packages (and ng-packagr) that buildable/publishable Angular libs need to build",
+      "implementation": "./src/migrations/add-lib-build-dependencies/add-lib-build-dependencies"
+    },
+    "fix-lint-script": {
+      "version": "0.8.0",
+      "description": "Replace the self-calling \"lint\": \"npm run lint\" script written by earlier pstack new with nx run-many -t lint",
+      "implementation": "./src/migrations/fix-lint-script/fix-lint-script"
+    },
+    "prepush-audit-warn-only": {
+      "version": "0.9.1",
+      "description": "Make the pre-push dependency audit warn-only (secret scan first and still blocking) and add a strict check:audit script",
+      "implementation": "./src/migrations/prepush-audit-warn-only/prepush-audit-warn-only"
+    },
+    "add-lint-staged-config": {
+      "version": "0.18.1",
+      "description": "Add the lint-staged config that the pre-commit hook of pstack new workspaces runs (it was missing, so commits failed)",
+      "implementation": "./src/migrations/add-lint-staged-config/add-lint-staged-config"
+    },
+    "add-csp-nonce-import": {
+      "version": "0.24.0",
+      "description": "Import the library's CSP nonce patch first in main.ts of Angular and Ionic apps (local nonce patch imports are kept)",
+      "implementation": "./src/migrations/add-csp-nonce-import/add-csp-nonce-import"
+    },
+    "env-encryption-config": {
+      "version": "0.25.0",
+      "description": "Move env encryption settings into nx.json (pstack.envEncryption, mode listed with the keys of tools/config/encrypt-keys.json) and ignore .env.local",
+      "implementation": "./src/migrations/env-encryption-config/env-encryption-config"
+    },
+    "env-encryption-key-sources": {
+      "version": "0.28.0",
+      "description": "Rename nx.json pstack.envEncryption.keySource to keySources (aes-gcm key factors)",
+      "implementation": "./src/migrations/env-encryption-key-sources/env-encryption-key-sources"
+    },
+    "release-hardening": {
+      "version": "0.29.0",
+      "description": "Turn on the leak check, source-map guard, comment stripping and console removal for UAT/PROD release configurations, remove the replaced harden option, add terser",
+      "implementation": "./src/migrations/release-hardening/release-hardening"
+    },
+    "app-clean-and-port": {
+      "version": "0.35.0",
+      "description": "Add a clean target to apps without one and give apps that all served on port 4200 distinct dev-server ports",
+      "implementation": "./src/migrations/app-clean-and-port/app-clean-and-port"
+    },
+    "quality-checks": {
+      "version": "0.36.0",
+      "description": "Add typecheck targets (tsc --noEmit) and the CI typecheck step, and the import/no-unresolved and unused-imports ESLint rules as warnings",
+      "implementation": "./src/migrations/quality-checks/quality-checks"
+    },
+    "plugin-repo-dev": {
+      "version": "0.38.2",
+      "description": "Point GitHub workflows that name the plugin's earlier repo at its current repo",
+      "implementation": "./src/migrations/plugin-repo-dev/plugin-repo-dev"
+    },
+    "sharp-security-update": {
+      "version": "0.39.3",
+      "description": "Move sharp to ^0.35.5, the first version without the bundled libvips, libheif and librsvg vulnerabilities",
+      "implementation": "./src/migrations/sharp-security-update/sharp-security-update"
+    }
+  }
+}

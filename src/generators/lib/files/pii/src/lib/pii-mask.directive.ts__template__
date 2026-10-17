@@ -1,0 +1,30 @@
+import { Directive, ElementRef, Inject, Input, OnChanges, Optional } from '@angular/core';
+
+import { maskPii, PiiMaskOptions } from './pii-mask';
+import { PII_MASK_OPTIONS } from './pii-mask.options';
+
+/**
+ * <span [<%= prefixCamel %>PiiMask]="customer.aadhaar" piiFormat="aadhaar"></span>
+ * Writes the masked value as the element's text (never HTML), replacing its content: use it on
+ * an empty element. `[piiReveal]="true"` (a real boolean) shows the value unmasked.
+ */
+@Directive({ selector: '[<%= prefixCamel %>PiiMask]' })
+export class PiiMaskDirective implements OnChanges {
+  @Input('<%= prefixCamel %>PiiMask') value: unknown;
+  @Input() piiFormat = '';
+  @Input() piiReveal = false;
+
+  constructor(
+    private readonly element: ElementRef<HTMLElement>,
+    @Optional() @Inject(PII_MASK_OPTIONS) private readonly options: PiiMaskOptions | null,
+  ) {}
+
+  ngOnChanges(): void {
+    const plain = this.value === null || this.value === undefined ? '' : String(this.value);
+    // Only a real true reveals: a string attribute such as piiReveal="false" keeps it masked.
+    this.element.nativeElement.textContent =
+      this.piiReveal === true
+        ? plain
+      : maskPii(this.value, this.piiFormat, this.options ?? {});
+  }
+}

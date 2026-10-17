@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/out-tsc",
+    "types": ["jest", "node"],
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["jest.config.ts", "src/**/*.d.ts", "src/**/*.spec.ts", "tests/**/*.spec.ts", "tests/**/*.test.ts"],
+  "exclude": ["tests/fixtures/**"]
+}

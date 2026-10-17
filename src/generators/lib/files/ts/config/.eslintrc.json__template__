@@ -1,0 +1,10 @@
+{
+  "extends": ["<%= offset %>.eslintrc.json"],
+  "ignorePatterns": ["!**/*"],
+  "overrides": [
+    {
+      "files": ["*.ts"],
+      "rules": {}
+    }
+  ]
+}

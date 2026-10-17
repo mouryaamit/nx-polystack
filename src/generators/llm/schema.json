@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "llm",
+  "title": "AI Assistant Instructions",
+  "description": "Write a generated description of the workspace into AI-assistant instruction files, inside nx-polystack markers.",
+  "type": "object",
+  "properties": {
+    "providers": {
+      "type": "string",
+      "description": "Comma-separated providers: claude (CLAUDE.md), agents (AGENTS.md), copilot (.github/copilot-instructions.md). codex and openai-gpt are accepted as aliases for agents.",
+      "default": "claude,agents,copilot"
+    }
+  },
+  "required": []
+}

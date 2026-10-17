@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["apps/**/src/main.ts", "libs/**/src/index.ts", "tools/**/*.js"],
+  "project": ["apps/**/*.{js,ts}", "libs/**/*.{js,ts}", "tools/**/*.js"],
+<%_ if (flutter) { _%>
+  "ignoreBinaries": ["flutter", "dart"],
+<%_ } _%>
+  "ignoreDependencies": ["<%= pluginName %>"]
+}

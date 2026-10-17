@@ -1,0 +1,12 @@
+import { createActionGroup, emptyProps, props } from '@ngrx/store';
+
+import { <%= className %>Item } from './<%= fileName %>.models';
+
+export const <%= className %>Actions = createActionGroup({
+  source: '<%= title %>',
+  events: {
+    Load: emptyProps(),
+    'Load Success': props<{ items: <%= className %>Item[] }>(),
+    'Load Failure': props<{ error: string }>(),
+  },
+});

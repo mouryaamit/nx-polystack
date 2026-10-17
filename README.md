@@ -1,0 +1,78 @@
+# @mouryaamit/nx-polystack
+
+An Nx 17 plugin and the `pstack` CLI for monorepos that mix **Angular**, **Ionic + Capacitor** and
+**Flutter** apps. It scaffolds workspaces, apps and shared libraries, and wires a hardened release
+pipeline into every app, so they are all built the same way.
+
+[![npm](https://img.shields.io/npm/v/@mouryaamit/nx-polystack)](https://www.npmjs.com/package/@mouryaamit/nx-polystack)
+[![license](https://img.shields.io/npm/l/@mouryaamit/nx-polystack)](LICENSE)
+
+## Install
+
+```bash
+npm i -g @mouryaamit/nx-polystack
+pstack new my-workspace --npmScope=acme --ci=github-actions
+cd my-workspace
+pstack app --type=angular --name=portal
+pstack app --type=ionic --name=field-app --appId=com.acme.fieldapp
+pstack app --type=flutter --name=mobile
+```
+
+`pstack new` pins the plugin in the workspace. Inside a workspace, `pstack` hands commands to that
+pinned copy, so output always matches the workspace's version. Move a workspace to a new release
+with `pstack update`, which installs it and runs its migrations.
+
+Requires Node 20 and npm 10+. Workspaces use Nx 17.
+
+## What you get
+
+- **Generators** for apps (Angular, Ionic, Flutter), shared libraries (TypeScript, Angular, Ionic,
+  Flutter, assets, styles, state, design tokens, session timeout, PII masking) and environments.
+- **Release builds** per environment with:
+  - env value encryption (AES-GCM),
+  - a strict Content Security Policy with per-request nonces, plus `.htaccess` and `nginx.conf`
+    written from an allowlist,
+  - Subresource Integrity for every chunk,
+  - build-provenance meta, EXIF stripping, leak checks, source-map control, comment and console
+    stripping, and optional obfuscation.
+- **Migration** of existing projects into the workspace: standalone Angular CLI, Ionic/Capacitor and
+  Flutter apps, multi-project Angular CLI repos, Nx 15–17 workspaces and npm/Yarn/pnpm workspaces —
+  with rollback.
+- **Repo infrastructure**: docs, CI gates (affected lint/test/build, dependency cycles, type checks),
+  quality checks and a scheduled dependency-upgrade workflow.
+- **AI assistant context**: a generated workspace summary in `CLAUDE.md`, `AGENTS.md` and
+  `.github/copilot-instructions.md`, refreshed as apps and libraries are added.
+
+## Commands
+
+| Command                                  | What it does                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------------- |
+| `pstack new <dir>`                       | Create a workspace (installs dependencies, initialises git)                |
+| `pstack update`                          | Upgrade the workspace's plugin and run its migrations                      |
+| `pstack app` / `pstack lib`              | Add an application or a shared library                                     |
+| `pstack env`                             | Add an environment to some or all apps                                     |
+| `pstack migrate`                         | Copy an existing project into the workspace (the source is never modified) |
+| `pstack build`                           | Build every app (or some) for one environment                              |
+| `pstack csp`                             | Edit an app's CSP allowlist and write its server config                    |
+| `pstack hardening` / `pstack encryption` | Show or change release hardening and env encryption                        |
+| `pstack infra`                           | Add repo docs, CI gates, quality checks and the upgrade workflow           |
+| `pstack llm`                             | Refresh the AI assistant context files                                     |
+
+Run `pstack --help` for every option. The full guide is the **[user manual](USER-MANUAL.md)**.
+
+## Using it as an Nx plugin
+
+```bash
+npm i -D --save-exact @mouryaamit/nx-polystack
+npx nx list @mouryaamit/nx-polystack
+npx nx g @mouryaamit/nx-polystack:app --type=angular --name=portal
+```
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+release-packages/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

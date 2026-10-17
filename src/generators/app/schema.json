@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "app",
+  "title": "Add Application",
+  "description": "Scaffold a new application. Supported types: flutter, angular, ionic.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Application name (kebab-case). Used as the directory name under apps/ and Nx project name.",
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      }
+    },
+    "type": {
+      "type": "string",
+      "enum": ["flutter", "angular", "ionic"],
+      "description": "Application type.",
+      "default": "flutter"
+    },
+    "dir": {
+      "type": "string",
+      "description": "Folder under apps/ for the app (kebab-case names separated by \"/\", at most 3, e.g. legacy or legacy/web): the app goes to apps/<dir>/<name>."
+    },
+    "cspConnectSrc": {
+      "type": "string",
+      "description": "URL to pre-populate csp-allowlist.json connect-src (Angular only, e.g. https://api.example.com)."
+    },
+    "i18n": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Locale codes to scaffold L10n ARB files for (e.g. [\"en\", \"hi\"]). Omit to skip L10n.",
+      "default": []
+    },
+    "push": {
+      "type": "string",
+      "enum": ["none", "fcm"],
+      "default": "none",
+      "description": "Push notification provider. 'fcm' scaffolds firebase_messaging dependency and init code."
+    },
+    "deeplink": {
+      "type": "string",
+      "description": "HTTPS domain for deep link scaffold (e.g. https://example.com). Omit to skip."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Nx project tags.",
+      "default": []
+    },
+    "baseHref": {
+      "type": "string",
+      "description": "Base href of the uat and prod release configurations (Angular/Ionic release target, Flutter build-web), e.g. /portal/."
+    },
+    "port": {
+      "type": "integer",
+      "description": "Dev-server port (1024-65535). Default: the lowest free port from 4200 among the workspace's apps."
+    },
+    "envLayout": {
+      "type": "string",
+      "enum": ["default", "per-env"],
+      "default": "default",
+      "description": "Angular/Ionic env files: default (environment.ts for dev) or per-env (environment.dev|uat|prod.ts replacing a shared environments/environment.ts)."
+    },
+    "appId": {
+      "type": "string",
+      "description": "Ionic only \u2014 Capacitor appId in reverse-DNS form (default: com.example.<name without dashes>)."
+    }
+  },
+  "required": ["name"]
+}

@@ -1,0 +1,122 @@
+{
+  "name": "@mouryaamit/nx-polystack",
+  "version": "0.39.7",
+  "description": "Nx plugin and pstack CLI that scaffold and build multi-tech monorepos (Angular, Ionic, Flutter) with a hardened release pipeline.",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./migrate": {
+      "types": "./dist/src/migrate-sdk.d.ts",
+      "default": "./dist/src/migrate-sdk.js"
+    },
+    "./runtime/csp-nonce": "./runtime/csp-nonce.js",
+    "./runtime/env-secret": {
+      "types": "./runtime/env-secret.d.ts",
+      "import": "./runtime/env-secret.mjs",
+      "require": "./dist/runtime/env-secret.cjs",
+      "default": "./runtime/env-secret.mjs"
+    },
+    "./package.json": "./package.json",
+    "./*": "./*"
+  },
+  "typesVersions": {
+    "*": {
+      "migrate": [
+        "dist/src/migrate-sdk.d.ts"
+      ]
+    }
+  },
+  "bin": {
+    "pstack": "./dist/bin/cli.js"
+  },
+  "generators": "./dist/generators.json",
+  "executors": "./dist/executors.json",
+  "pstack": {
+    "installSource": "npm"
+  },
+  "nx-migrations": {
+    "migrations": "./dist/migrations.json"
+  },
+  "files": [
+    "dist",
+    "migrate",
+    "runtime",
+    "README.md",
+    "USER-MANUAL.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "prepare": "npm run build",
+    "test": "jest",
+    "test:ci": "jest --ci --coverage",
+    "lint": "eslint \"src/**/*.ts\" \"bin/**/*.ts\" \"tests/**/*.ts\"",
+    "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,md}\""
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=7.0.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": "^17.0.0",
+    "crypto-js": "^4.2.0",
+    "nx": "^17.0.0",
+    "sharp": "^0.33.0 || ^0.34.0 || ^0.35.0"
+  },
+  "peerDependenciesMeta": {
+    "crypto-js": {
+      "optional": true
+    },
+    "sharp": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "tslib": "^2.6.0"
+  },
+  "devDependencies": {
+    "@nx/devkit": "17.0.6",
+    "@types/crypto-js": "^4.2.2",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "crypto-js": "^4.2.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-unused-imports": "^3.2.0",
+    "javascript-obfuscator": "^4.2.2",
+    "jest": "^29.7.0",
+    "nx": "17.0.6",
+    "prettier": "^2.8.8",
+    "sharp": "^0.35.5",
+    "terser": "^5.51.2",
+    "ts-jest": "^29.1.0",
+    "ts-node": "10.9.1",
+    "typescript": "~4.9.5"
+  },
+  "overrides": {
+    "minimatch@^3": "^3.1.4",
+    "js-yaml@^4": "^4.3.2"
+  },
+  "author": "mouryaamit",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mouryaamit/nx-polystack.git"
+  },
+  "homepage": "https://github.com/mouryaamit/nx-polystack#readme",
+  "bugs": {
+    "url": "https://github.com/mouryaamit/nx-polystack/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

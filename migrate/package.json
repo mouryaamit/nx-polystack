@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "main": "../dist/src/migrate-sdk.js",
+  "types": "../dist/src/migrate-sdk.d.ts"
+}

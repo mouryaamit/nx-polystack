@@ -1,0 +1,105 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  Output,
+  ViewChild,
+} from '@angular/core';
+import { map } from 'rxjs';
+
+import { SessionState } from '../session-clock';
+import { SessionTimeoutService } from '../session-timeout.service';
+
+/** Texts of the warning; `{seconds}` is replaced by the time left. */
+export interface SessionWarningTexts {
+  title: string;
+  idle: string;
+  absolute: string;
+  stay: string;
+  signOut: string;
+  /** Read by screen readers when the warning opens and at 30, 10 and 5 seconds. */
+  announce: string;
+}
+
+export const DEFAULT_SESSION_WARNING_TEXTS: SessionWarningTexts = {
+  title: 'Your session is about to end',
+  idle: 'You will be signed out in {seconds} because of inactivity.',
+  absolute: 'Your session ends in {seconds}. Please save your work.',
+  stay: 'Stay signed in',
+  signOut: 'Sign out',
+  announce: 'Your session ends in {seconds}.',
+};
+
+const ANNOUNCE_AT = [30, 10, 5];
+let nextId = 0;
+
+/**
+ * A non-modal warning while the session is about to time out: countdown, "Stay signed in"
+ * (inactivity only) and "Sign out". Focus moves to its first button when it opens. Replace it
+ * with your own UI on SessionTimeoutService if you prefer.
+ */
+@Component({
+  selector: '<%= prefix %>-session-warning',
+  templateUrl: './session-warning.component.html',
+  styleUrls: ['./session-warning.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class SessionWarningComponent {
+  /** Overrides of the default (English) texts. */
+  @Input() texts: Partial<SessionWarningTexts> = {};
+  /** The user chose to stay signed in (the session was extended). */
+  @Output() readonly staySignedIn = new EventEmitter<void>();
+  /** The user chose to sign out now. */
+  @Output() readonly signOut = new EventEmitter<void>();
+
+  readonly id = `session-warning-${nextId++}`;
+  private announced = '';
+  private focused = false;
+
+  readonly view$ = this.session.state$.pipe(map((state) => this.toView(state)));
+
+  /** Focus the first button once per warning (the element appears with the warning). */
+  @ViewChild('firstButton')
+  set firstButton(button: ElementRef<HTMLButtonElement> | undefined) {
+    if (button && !this.focused) {
+      this.focused = true;
+      button.nativeElement.focus();
+    }
+    if (!button) this.focused = false;
+  }
+
+  constructor(private readonly session: SessionTimeoutService) {}
+
+  stay(): void {
+    this.session.extend();
+    this.staySignedIn.emit();
+  }
+
+  private text(key: keyof SessionWarningTexts, seconds?: number): string {
+    const template = this.texts[key] ?? DEFAULT_SESSION_WARNING_TEXTS[key];
+    if (seconds === undefined) return template;
+    return template.replace('{seconds}', `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`);
+  }
+
+  private toView(state: SessionState) {
+    if (state.status !== 'warning') {
+      this.announced = '';
+      return null;
+    }
+    const seconds = Math.ceil(state.remainingMs / 1000);
+    // The live region changes only at a few thresholds, not every second.
+    if (this.announced === '' || ANNOUNCE_AT.includes(seconds)) {
+      this.announced = this.text('announce', seconds);
+    }
+    return {
+      idle: state.reason === 'idle',
+      title: this.text('title'),
+      message: this.text(state.reason === 'idle' ? 'idle' : 'absolute', seconds),
+      stay: this.text('stay'),
+      signOut: this.text('signOut'),
+      announce: this.announced,
+    };
+  }
+}

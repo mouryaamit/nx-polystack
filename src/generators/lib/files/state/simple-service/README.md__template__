@@ -1,0 +1,20 @@
+# <%= projectName %>
+
+Feature state for Angular apps on a small RxJS store (`--variant=simple-service`).
+
+- `Store<T>` (`src/lib/store.ts`) — generic base: `state$`, `select(fn)` (map + distinctUntilChanged),
+  `snapshot` and `setState(partial | fn)`.
+- `<%= className %>Store` (`src/lib/<%= fileName %>.store.ts`) — example feature store, provided in root.
+
+```ts
+import { <%= className %>Store } from '<%= importPath %>';
+
+@Component({ /* … */ })
+export class ListComponent {
+  readonly items$ = this.store.items$;
+
+  constructor(private readonly store: <%= className %>Store) {}
+}
+```
+
+Built as a buildable lib (`nx build <%= projectName %>`).

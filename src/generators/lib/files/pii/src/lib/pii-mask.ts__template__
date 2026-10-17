@@ -1,0 +1,117 @@
+/**
+ * PII masking without Angular: plain functions, unit-testable. A value that does not look like
+ * its format is masked completely (fail closed), never shown — in any script (Devanagari digits,
+ * full-width letters and names in Indian scripts are masked too).
+ */
+export interface PiiMaskRule {
+  /** The value must match (after trimming) or it is masked completely. */
+  valid?: RegExp;
+  /** Characters (letters and digits) left visible at the start. */
+  visibleStart?: number;
+  /** Characters left visible at the end. At least half of them stay masked whatever is set. */
+  visibleEnd?: number;
+  /** Full control: returns the masked text (`valid` is still checked first). */
+  mask?: (value: string, maskChar: string) => string;
+}
+
+export interface PiiMaskOptions {
+  /** Character that replaces hidden characters (default X; only its first character is used). */
+  maskChar?: string;
+  /** Extra or replacement formats, by name. */
+  rules?: Record<string, PiiMaskRule>;
+}
+
+/** Letters, combining marks (e.g. Devanagari vowel signs) and digits of every script. */
+const MASKABLE = /[\p{L}\p{M}\p{N}]/gu;
+
+const digitsOf = (v: string) => v.replace(/\D/g, '');
+
+/** Built-in formats. */
+export const PII_FORMATS: Readonly<Record<string, PiiMaskRule>> = {
+  /** PAN: ABCDE1234F → XXXXX1234F */
+  pan: {
+    valid: /^[A-Za-z]{5}\d{4}[A-Za-z]$/,
+    mask: (v, c) => c.repeat(5) + v.slice(5).toUpperCase(),
+  },
+  /** Aadhaar: 1234 5678 9012 → XXXX XXXX 9012 */
+  aadhaar: {
+    valid: /^\d{4}[\s-]?\d{4}[\s-]?\d{4}$/,
+    mask: (v, c) => `${c.repeat(4)} ${c.repeat(4)} ${digitsOf(v).slice(8)}`,
+  },
+  /** Mobile: +91 98765 43210 → +91 XXXXX X3210, +919876543210 → +91XXXXXX3210 */
+  mobile: {
+    valid: /^(\+\d{1,3}?[\s-]?)?\d{5}[\s-]?\d{5}$/,
+    mask: (v, c) => {
+      // The same anchored split as `valid`: the country code is the shortest prefix that leaves
+      // a ten-digit number.
+      const m = /^(\+\d{1,3}?[\s-]?)?(\d{5}[\s-]?\d{5})$/.exec(v);
+      return m ? (m[1] ?? '') + maskChars(m[2], c, 0, 4) : maskChars(v, c);
+    },
+  },
+  /** Email: asha.k@example.com → aXXX@example.com (one-letter names are masked too) */
+  email: {
+    valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    mask: (v, c) => {
+      const at = v.lastIndexOf('@');
+      const local = Array.from(v.slice(0, at));
+      return `${local.length > 1 ? local[0] : c}${c.repeat(3)}${v.slice(at)}`;
+    },
+  },
+  /** Bank account number: last 4 visible */
+  account: { valid: /^\d{6,18}$/, visibleEnd: 4 },
+  /** Card number: 4111 1111 1111 1111 → XXXX XXXX XXXX 1111 */
+  card: {
+    valid: /^(?=(?:\D*\d){12,19}\D*$)[\d\s-]+$/,
+    visibleEnd: 4,
+  },
+  /** IFSC: not personal, shown as it is when valid */
+  ifsc: { valid: /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/, mask: (v) => v.toUpperCase() },
+};
+
+/**
+ * Masks letters and digits (any script), keeping separators and the first/last visible ones;
+ * at most half of them are ever shown.
+ */
+export function maskChars(
+  value: string,
+  maskChar: string,
+  visibleStart = 0,
+  visibleEnd = 0,
+): string {
+  const total = (value.match(MASKABLE) ?? []).length;
+  const shown = Math.floor(total / 2);
+  const end = Math.min(Math.max(visibleEnd, 0), shown);
+  const start = Math.min(Math.max(visibleStart, 0), shown - end);
+  let seen = 0;
+  return value.replace(MASKABLE, (ch) => {
+    seen++;
+    return seen <= start || seen > total - end ? ch : maskChar;
+  });
+}
+
+/** The mask character: the first character of the option, else X. */
+function maskCharOf(option: unknown): string {
+  const first = Array.from(typeof option === 'string' ? option : '')[0];
+  return first && first.trim() !== '' ? first : 'X';
+}
+
+/** `value` masked as `format`; empty for null/undefined; fully masked when it does not match. */
+export function maskPii(value: unknown, format: string, options: PiiMaskOptions = {}): string {
+  if (value === null || value === undefined) return '';
+  const text = String(value).trim();
+  if (text === '') return '';
+  const maskChar = maskCharOf(options.maskChar);
+  const rules = options.rules ?? {};
+  const rule = Object.prototype.hasOwnProperty.call(rules, format)
+    ? rules[format]
+    : Object.prototype.hasOwnProperty.call(PII_FORMATS, format)
+    ? PII_FORMATS[format]
+    : undefined;
+  if (!rule) return maskChars(text, maskChar);
+  if (rule.valid) {
+    rule.valid.lastIndex = 0; // a /g or /y pattern keeps state between test() calls
+    if (!rule.valid.test(text)) return maskChars(text, maskChar);
+  }
+  if (rule.mask) return rule.mask(text, maskChar);
+  return maskChars(text, maskChar, rule.visibleStart ?? 0, rule.visibleEnd ?? 0);
+}

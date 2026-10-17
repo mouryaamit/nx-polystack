@@ -1,0 +1,139 @@
+import { logger, readJson, updateJson } from '@nx/devkit';
+import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+
+import { ANGULAR_VERSION, ensureAngularDependencies } from '../../src/lib/utils/angular-deps';
+
+describe('ensureAngularDependencies', () => {
+  it('adds Angular 15 runtime and build packages when @angular/core is missing', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const cb = ensureAngularDependencies(tree);
+    const pkg = readJson(tree, 'package.json');
+    expect(ANGULAR_VERSION).toBe('~15.2.0');
+    for (const dep of [
+      '@angular/core',
+      '@angular/common',
+      '@angular/router',
+      '@angular/platform-browser-dynamic',
+    ]) {
+      expect(pkg.dependencies[dep]).toBe('~15.2.0');
+    }
+    expect(pkg.dependencies['zone.js']).toBe('~0.12.0');
+    expect(pkg.dependencies.rxjs).toBe('~7.8.0');
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~15.2.0');
+    expect(pkg.devDependencies['@angular/compiler-cli']).toBe('~15.2.0');
+    expect(pkg.devDependencies.typescript).toBe('~4.9.5');
+    expect(pkg.devDependencies['@types/node']).toBe('~18.16.9');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~15.2.0');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin-template']).toBe('~15.2.0');
+    expect(pkg.devDependencies['@angular-eslint/template-parser']).toBe('~15.2.0');
+    expect(pkg.devDependencies['@nx/angular']).toBeDefined();
+    expect(typeof cb).toBe('function');
+  });
+
+  it('fills in missing build and lint packages at the installed Angular version, without overwriting', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    updateJson(tree, 'package.json', (j) => {
+      j.dependencies = { '@angular/core': '~15.1.0', '@angular/common': '~15.1.0' };
+      j.devDependencies = { nx: '17.0.6', typescript: '~4.8.4' };
+      return j;
+    });
+    expect(typeof ensureAngularDependencies(tree)).toBe('function');
+    const pkg = readJson(tree, 'package.json');
+    expect(pkg.dependencies['@angular/core']).toBe('~15.1.0');
+    expect(pkg.devDependencies.typescript).toBe('~4.8.4');
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~15.1.0');
+    expect(pkg.devDependencies['@angular/compiler-cli']).toBe('~15.1.0');
+    expect(pkg.devDependencies['@nx/angular']).toBe('17.0.6');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~15.2.0');
+    // runtime packages are not added unless asked for
+    expect(pkg.dependencies['@angular/router']).toBeUndefined();
+    expect(pkg.dependencies['@angular/animations']).toBeUndefined();
+  });
+
+  it('adds TypeScript 4.9 when Angular 15 is there but TypeScript is not declared', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    updateJson(tree, 'package.json', (j) => {
+      j.dependencies = { '@angular/core': '~15.2.0' };
+      delete j.devDependencies?.typescript;
+      delete j.dependencies?.typescript;
+      return j;
+    });
+    ensureAngularDependencies(tree);
+    expect(readJson(tree, 'package.json').devDependencies.typescript).toBe('~4.9.5');
+  });
+
+  it('adds a TypeScript-4-compatible @types/node only when none is declared', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    updateJson(tree, 'package.json', (j) => {
+      j.dependencies = { '@angular/core': '~15.2.0' };
+      delete j.devDependencies?.['@types/node'];
+      return j;
+    });
+    ensureAngularDependencies(tree);
+    expect(readJson(tree, 'package.json').devDependencies['@types/node']).toBe('~18.16.9');
+
+    const declared = createTreeWithEmptyWorkspace();
+    updateJson(declared, 'package.json', (j) => {
+      j.dependencies = { '@angular/core': '~15.2.0' };
+      j.devDependencies = { ...j.devDependencies, '@types/node': '18.7.1' };
+      return j;
+    });
+    ensureAngularDependencies(declared);
+    expect(readJson(declared, 'package.json').devDependencies['@types/node']).toBe('18.7.1');
+  });
+
+  it('with includeRuntime, adds the runtime packages generated code imports, at the installed version', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    updateJson(tree, 'package.json', (j) => {
+      j.dependencies = { '@angular/core': '~15.1.0' };
+      return j;
+    });
+    ensureAngularDependencies(tree, { includeRuntime: true });
+    const deps = readJson(tree, 'package.json').dependencies;
+    expect(deps['@angular/router']).toBe('~15.1.0');
+    expect(deps['@angular/platform-browser-dynamic']).toBe('~15.1.0');
+    expect(deps['zone.js']).toBe('~0.12.0');
+    expect(deps['@angular/animations']).toBeUndefined();
+    expect(deps['@angular/forms']).toBeUndefined();
+  });
+
+  it.each(['dependencies', 'devDependencies'])(
+    'adds nothing for another Angular major in %s and warns about what is missing',
+    (field) => {
+      const tree = createTreeWithEmptyWorkspace();
+      updateJson(tree, 'package.json', (j) => {
+        j[field] = { ...j[field], '@angular/core': '~16.2.0' };
+        return j;
+      });
+      const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+      const before = readJson(tree, 'package.json');
+      expect(ensureAngularDependencies(tree)).toBeUndefined();
+      expect(readJson(tree, 'package.json')).toEqual(before);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/Angular 16.*@angular-devkit\/build-angular/s),
+      );
+      warn.mockRestore();
+    },
+  );
+
+  it('uses the installed nx version for @nx/eslint, else ^17.0.0', () => {
+    const withNx = createTreeWithEmptyWorkspace();
+    updateJson(withNx, 'package.json', (j) => {
+      j.devDependencies = { ...j.devDependencies, nx: '17.3.2' };
+      delete j.devDependencies['@nx/eslint'];
+      return j;
+    });
+    ensureAngularDependencies(withNx);
+    expect(readJson(withNx, 'package.json').devDependencies['@nx/eslint']).toBe('17.3.2');
+
+    const withoutNx = createTreeWithEmptyWorkspace();
+    updateJson(withoutNx, 'package.json', (j) => {
+      delete j.devDependencies?.nx;
+      delete j.dependencies?.nx;
+      delete j.devDependencies?.['@nx/eslint'];
+      return j;
+    });
+    ensureAngularDependencies(withoutNx);
+    expect(readJson(withoutNx, 'package.json').devDependencies['@nx/eslint']).toBe('^17.0.0');
+  });
+});

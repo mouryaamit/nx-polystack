@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "title": "Clean",
+  "description": "Remove a project's build outputs (and run flutter clean for Flutter apps).",
+  "type": "object",
+  "properties": {
+    "paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Workspace-relative folders or files to remove (e.g. dist/apps/portal, coverage/apps/portal)."
+    },
+    "flutter": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also run flutter clean in the project folder."
+    }
+  },
+  "required": []
+}

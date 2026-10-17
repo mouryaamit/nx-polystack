@@ -1,0 +1,58 @@
+import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+
+import { Store } from './store';
+
+export interface <%= className %>Item {
+  id: string;
+  name: string;
+}
+
+export interface <%= className %>State {
+  items: <%= className %>Item[];
+  selectedId: string | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export const initial<%= className %>State: <%= className %>State = {
+  items: [],
+  selectedId: null,
+  loading: false,
+  error: null,
+};
+
+/** Example feature store — rename the state and add the updates your feature needs. */
+@Injectable({ providedIn: 'root' })
+export class <%= className %>Store extends Store<<%= className %>State> {
+  readonly items$: Observable<<%= className %>Item[]> = this.select((s) => s.items);
+  readonly loading$: Observable<boolean> = this.select((s) => s.loading);
+  readonly error$: Observable<string | null> = this.select((s) => s.error);
+  readonly selected$: Observable<<%= className %>Item | null> = this.select(
+    (s) => s.items.find((item) => item.id === s.selectedId) ?? null,
+  );
+
+  constructor() {
+    super(initial<%= className %>State);
+  }
+
+  setLoading(): void {
+    this.setState({ loading: true, error: null });
+  }
+
+  setItems(items: <%= className %>Item[]): void {
+    this.setState({ items, loading: false });
+  }
+
+  setError(error: string): void {
+    this.setState({ loading: false, error });
+  }
+
+  selectItem(id: string | null): void {
+    this.setState({ selectedId: id });
+  }
+
+  reset(): void {
+    this.setState(initial<%= className %>State);
+  }
+}
