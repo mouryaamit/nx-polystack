@@ -107,6 +107,7 @@ describe('app generator --dir', () => {
     for (const f of [
       'pubspec.yaml',
       'lib/main.dart',
+      'web/index.html',
       'env/dev.json',
       'lib/l10n/app_en.arb',
       'l10n.yaml',

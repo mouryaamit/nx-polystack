@@ -77,6 +77,11 @@
       "version": "0.39.3",
       "description": "Move sharp to ^0.35.5, the first version without the bundled libvips, libheif and librsvg vulnerabilities",
       "implementation": "./src/migrations/sharp-security-update/sharp-security-update"
+    },
+    "flutter-web-platform": {
+      "version": "1.0.0",
+      "description": "Add the web/ folder (index.html, manifest.json) that flutter build web needs to Flutter apps generated without one",
+      "implementation": "./src/migrations/flutter-web-platform/flutter-web-platform"
     }
   }
 }

@@ -624,6 +624,9 @@ apps/<name>/
   .gitignore
   lib/
     main.dart
+  web/
+    index.html              loads flutter_bootstrap.js (no inline script); keeps $FLUTTER_BASE_HREF
+    manifest.json
   server/
     nginx.conf
 
@@ -632,6 +635,8 @@ environments/<name>/
   env.uat.json
   env.prod.json
 ```
+
+Web builds (`build-web`, `serve`) need Flutter 3.22 or later. Add icons under `web/` if you want them.
 
 ### Examples
 

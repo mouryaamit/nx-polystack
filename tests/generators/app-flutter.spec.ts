@@ -21,6 +21,17 @@ describe('app generator --type=flutter', () => {
     expect(tree.exists('apps/consumer-app/lib/main.dart')).toBe(true);
   });
 
+  it('creates the web platform folder flutter build web needs', async () => {
+    await appGenerator(tree, { name: 'consumer-app', type: 'flutter' });
+    const html = tree.read('apps/consumer-app/web/index.html')!.toString();
+    expect(html).toMatch(/<base href="\$FLUTTER_BASE_HREF"\s*\/?>/);
+    expect(html).toMatch(/<script src="flutter_bootstrap.js" async><\/script>/);
+    expect(html).toContain('<title>Consumer App</title>');
+    expect(html).not.toMatch(/<script>(?!<\/script>)/);
+    const manifest = JSON.parse(tree.read('apps/consumer-app/web/manifest.json')!.toString());
+    expect(manifest.name).toBe('Consumer App');
+  });
+
   it('creates env/{dev,uat,prod}.json', async () => {
     await appGenerator(tree, { name: 'consumer-app', type: 'flutter' });
     expect(tree.exists('apps/consumer-app/env/dev.json')).toBe(true);
@@ -61,9 +72,9 @@ describe('app generator --type=flutter', () => {
   });
 
   it('throws when type is unsupported', async () => {
-    await expect(
-      appGenerator(tree, { name: 'test', type: 'react' as never }),
-    ).rejects.toThrow(/not supported/i);
+    await expect(appGenerator(tree, { name: 'test', type: 'react' as never })).rejects.toThrow(
+      /not supported/i,
+    );
   });
 
   it('generates server/nginx.conf', async () => {
@@ -80,7 +91,11 @@ describe('app generator --type=flutter', () => {
   });
 
   it('scaffolds assetlinks.json when --deeplink is provided', async () => {
-    await appGenerator(tree, { name: 'link-app', type: 'flutter', deeplink: 'https://example.com' });
+    await appGenerator(tree, {
+      name: 'link-app',
+      type: 'flutter',
+      deeplink: 'https://example.com',
+    });
     expect(tree.exists('libs/well-known/dev/.well-known/assetlinks.json')).toBe(true);
   });
 });
