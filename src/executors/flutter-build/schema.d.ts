@@ -7,4 +7,6 @@ export interface FlutterBuildExecutorSchema {
   /** Web server port when serving (default 4200). */
   port?: number;
   obfuscate?: boolean;
+  /** Web builds: strip EXIF from images in dist (default true; only images with EXIF change). */
+  stripExif?: boolean;
 }

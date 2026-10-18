@@ -16,7 +16,7 @@ import { stripOutput } from '../../lib/hardening/strip';
 import { injectBuildMeta } from '../../lib/helpers/inject-meta';
 import { injectCspNonce } from '../../lib/helpers/inject-nonce';
 import { injectSri } from '../../lib/helpers/inject-sri';
-import { stripExif } from '../../lib/helpers/strip-exif';
+import { stripExif, stripExifSummary } from '../../lib/helpers/strip-exif';
 import { resolveCiContext } from '../../lib/utils/ci-resolve';
 import { BuildExecutorSchema } from './schema.d';
 
@@ -177,8 +177,15 @@ export default async function buildExecutor(
     fs.writeFileSync(path.join(servedDir, 'assets', asset.name), asset.bytes);
   }
 
-  if (env === 'PROD' && fs.existsSync(distDir)) {
-    await stripExif({ rootDir: distDir });
+  // Every env: only images that carry EXIF are rewritten, the rest stay byte-identical.
+  if (fs.existsSync(distDir)) {
+    const exif = await stripExif({
+      rootDir: distDir,
+      log: (m) => {
+        if (m.startsWith('skipped')) console.warn(`⚠ strip-exif ${m}`);
+      },
+    });
+    console.log(`ℹ ${stripExifSummary(exif)}`);
   }
 
   if (fs.existsSync(metaHtml)) {

@@ -202,6 +202,51 @@ describe('buildExecutor', () => {
     expect(html).toContain('nonce=');
   });
 
+  it.each(['DEV', 'UAT', 'PROD'])(
+    '%s build strips EXIF and leaves images without EXIF byte-identical',
+    async (env) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
+      const sharp = require('sharp') as any;
+      const envDir = path.join(tmpDir, 'environments', 'web');
+      fs.mkdirSync(envDir, { recursive: true });
+      const file = env === 'DEV' ? 'environment.ts' : `environment.${env.toLowerCase()}.ts`;
+      fs.writeFileSync(
+        path.join(envDir, file),
+        'export const environment = { production: false };',
+      );
+      const distDir = path.join(tmpDir, 'dist', 'apps', 'web', 'assets');
+      fs.mkdirSync(distDir, { recursive: true });
+      const img = () =>
+        sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 9, g: 9, b: 9 } } });
+      const plain = await img().png().toBuffer();
+      fs.writeFileSync(path.join(distDir, 'plain.png'), plain);
+      fs.writeFileSync(
+        path.join(distDir, 'photo.jpg'),
+        await img()
+          .withExif({ IFD0: { Make: 'T' } })
+          .jpeg()
+          .toBuffer(),
+      );
+      const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        const result = await buildExecutor(
+          { type: 'angular', outputPath: 'dist/apps/web', envProject: 'web', env },
+          makeContext('web', tmpDir),
+          runner,
+        );
+        expect(result.success).toBe(true);
+        expect(log.mock.calls.flat().join('\n')).toContain(
+          'strip-exif: 2 scanned, 1 stripped, 1 unchanged, 0 skipped',
+        );
+      } finally {
+        log.mockRestore();
+      }
+      expect(fs.readFileSync(path.join(distDir, 'plain.png')).equals(plain)).toBe(true);
+      const meta = await sharp(fs.readFileSync(path.join(distDir, 'photo.jpg'))).metadata();
+      expect(meta.exif).toBeUndefined();
+    },
+  );
+
   it('sri: true — injects SRI hashes after build', async () => {
     const distDir = path.join(tmpDir, 'dist', 'apps', 'web');
     fs.mkdirSync(distDir, { recursive: true });
