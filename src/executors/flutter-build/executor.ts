@@ -4,6 +4,8 @@ import * as path from 'path';
 
 import { ExecutorContext } from '@nx/devkit';
 
+import { stripExif, stripExifSummary } from '../../lib/helpers/strip-exif';
+
 import { FlutterBuildExecutorSchema } from './schema.d';
 
 export type Runner = (cmd: string, opts: ExecSyncOptions) => void;
@@ -81,6 +83,24 @@ export default async function flutterBuildExecutor(
   }
 
   runner(cmd.replace(/\s+/g, ' ').trim(), execOpts);
+
+  const outDir = path.join(repoRoot, dist);
+  if (options.stripExif === false) {
+    if (target === 'web') console.log('ℹ strip-exif: off (stripExif: false)');
+  } else if (target !== 'web') {
+    if (options.stripExif === true) {
+      console.log(`ℹ stripExif ignored for ${target}: the images are packed into the app bundle.`);
+    }
+  } else if (fs.existsSync(outDir)) {
+    const exif = await stripExif({
+      rootDir: outDir,
+      log: (m) => {
+        if (m.startsWith('skipped')) console.warn(`⚠ strip-exif ${m}`);
+      },
+    });
+    console.log(`ℹ ${stripExifSummary(exif)}`);
+  }
+
   console.log('✅ Flutter build complete');
   return { success: true };
 }

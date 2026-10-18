@@ -38,6 +38,11 @@
       "type": "boolean",
       "default": false,
       "description": "Enable Dart obfuscation for APK / iOS builds (ignored for web)."
+    },
+    "stripExif": {
+      "type": "boolean",
+      "default": true,
+      "description": "Web builds: remove EXIF from the images in dist (only images that have EXIF are rewritten). Set false to leave the output as Flutter wrote it. Ignored for apk / ios."
     }
   },
   "required": []

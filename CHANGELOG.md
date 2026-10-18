@@ -3,6 +3,22 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.2.4
+
+- Angular and Ionic builds strip EXIF in every env (DEV, UAT, PROD, custom), not only PROD. Only
+  images that have EXIF are rewritten, so the rest of the output stays byte-identical.
+- Flutter web builds (`flutter-build`, `target: web`) strip EXIF the same way. It is on by default;
+  set `"stripExif": false` in the target's options to turn it off. apk and ios builds are not
+  touched (the images are inside the app bundle).
+
+## 1.2.3
+
+- PROD builds strip EXIF only from images that have it. Images without EXIF are no longer
+  re-encoded, so their bytes stay identical (before, every .jpg/.png/.webp was re-saved, which could
+  make optimised PNGs larger and re-compress JPEGs). The build logs
+  `strip-exif: <n> scanned, <n> stripped, <n> unchanged, <n> skipped`, and `stripExif()` returns
+  those counts.
+
 ## 1.2.2
 
 - `pstack app --from` keeps `production` in the copied env files (`true` in the prod file); every

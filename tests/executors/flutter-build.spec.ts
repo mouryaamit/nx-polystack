@@ -174,4 +174,68 @@ describe('flutterBuildExecutor', () => {
       '"port" must be a whole number from 1 to 65535',
     );
   });
+
+  describe('stripExif', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
+    const sharp = require('sharp') as any;
+    const img = () =>
+      sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 5, g: 5, b: 5 } } });
+    let outDir: string;
+    let plain: Buffer;
+    let logs: string[];
+    let logSpy: jest.SpyInstance;
+
+    beforeEach(async () => {
+      outDir = path.join(tmpDir, 'dist', 'apps', 'my-app', 'assets');
+      fs.mkdirSync(outDir, { recursive: true });
+      plain = await img().png().toBuffer();
+      fs.writeFileSync(path.join(outDir, 'plain.png'), plain);
+      fs.writeFileSync(
+        path.join(outDir, 'photo.jpg'),
+        await img()
+          .withExif({ IFD0: { Make: 'T' } })
+          .jpeg()
+          .toBuffer(),
+      );
+      logs = [];
+      logSpy = jest.spyOn(console, 'log').mockImplementation((m: string) => {
+        logs.push(m);
+      });
+    });
+    afterEach(() => logSpy.mockRestore());
+
+    const exifOf = async (name: string) =>
+      (await sharp(fs.readFileSync(path.join(outDir, name))).metadata()).exif;
+
+    it('is on by default for web: strips EXIF, leaves other images byte-identical', async () => {
+      await flutterBuildExecutor(
+        { target: 'web', env: 'dev', dist: 'dist/apps/my-app' },
+        makeContext('my-app', tmpDir),
+        runner,
+      );
+      expect(await exifOf('photo.jpg')).toBeUndefined();
+      expect(fs.readFileSync(path.join(outDir, 'plain.png')).equals(plain)).toBe(true);
+      expect(logs).toContain('ℹ strip-exif: 2 scanned, 1 stripped, 1 unchanged, 0 skipped');
+    });
+
+    it('stripExif: false leaves the web output alone', async () => {
+      await flutterBuildExecutor(
+        { target: 'web', env: 'prod', dist: 'dist/apps/my-app', stripExif: false },
+        makeContext('my-app', tmpDir),
+        runner,
+      );
+      expect((await exifOf('photo.jpg'))?.length).toBeGreaterThan(0);
+      expect(logs).toContain('ℹ strip-exif: off (stripExif: false)');
+    });
+
+    it('is not run for apk / ios builds (images are inside the bundle)', async () => {
+      await flutterBuildExecutor(
+        { target: 'apk', env: 'dev', dist: 'dist/apps/my-app', stripExif: true },
+        makeContext('my-app', tmpDir),
+        runner,
+      );
+      expect((await exifOf('photo.jpg'))?.length).toBeGreaterThan(0);
+      expect(logs.join('\n')).toContain('stripExif ignored for apk');
+    });
+  });
 });
