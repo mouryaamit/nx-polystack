@@ -3,6 +3,13 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.2.6
+
+- Release builds encrypt env values in every env, DEV included (before, only non-DEV builds did).
+  The env file is encrypted only for the build and restored afterwards, so `nx serve` still reads
+  the plain file; DEV files still may not hold `${VAR}` placeholders. DEV builds now also skip the
+  Nx cache, like the others, since the env file changes per build.
+
 ## 1.2.5
 
 - The release build's CSP nonce (`secure`) and SRI (`sri`) now rewrite only the served
