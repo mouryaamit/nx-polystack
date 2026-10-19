@@ -63,12 +63,25 @@ const DEFAULT_SRC_FALLBACK: CspDirective[] = [
   'manifest-src',
 ];
 
-const lower = (s: string) => (s.startsWith("'") ? s.toLowerCase() : s);
+/** A quoted keyword in lower case; a hash keeps its (case-sensitive) base64 digest. */
+const lower = (s: string) => {
+  const hash = /^'(sha(?:256|384|512))-(.*)$/i.exec(s);
+  if (hash) return `'${hash[1].toLowerCase()}-${hash[2]}`;
+  return s.startsWith("'") ? s.toLowerCase() : s;
+};
+
+/** -elem directives the generated policy folds into script-src / style-src. */
+const ELEM_DIRECTIVES: Record<string, CspDirective> = {
+  'script-src-elem': 'script-src',
+  'style-src-elem': 'style-src',
+};
 
 /** Sources the generated policy already has, or that the server adds per request. */
 function implied(directive: string, source: string): boolean {
   const s = lower(source);
-  if (/^'(nonce|sha256|sha384|sha512)-/.test(s)) return true;
+  if (/^'nonce-/.test(s)) return true;
+  // Hashes are kept where they work (script-src, style-src); elsewhere they mean nothing.
+  if (/^'sha(256|384|512)-/.test(s)) return directive !== 'script-src' && directive !== 'style-src';
   if (s === "'self'" && directive !== 'frame-ancestors') return true;
   const base = (CSP_DIRECTIVES as Record<string, { base: readonly string[] }>)[directive]?.base;
   return !!base && base.includes(s) && s !== "'none'";
@@ -230,7 +243,13 @@ export function importPolicy(policy: RawPolicy, existing: CspAllowlist['sources'
   const notes: string[] = [];
   const incoming: Record<string, string[]> = {};
 
-  for (const [directive, sources] of Object.entries(policy)) {
+  for (const [rawDirective, sources] of Object.entries(policy)) {
+    const directive = ELEM_DIRECTIVES[rawDirective] ?? rawDirective;
+    if (directive !== rawDirective) {
+      notes.push(
+        `${rawDirective} was merged into ${directive} (the generated policy sets ${directive} only)`,
+      );
+    }
     if (directive in FIXED) {
       const extra = sources.filter((s) => !FIXED_ALLOWS[directive].includes(lower(s)));
       if (extra.length > 0) {

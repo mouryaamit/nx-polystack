@@ -17,10 +17,64 @@ export type CspDirective = keyof typeof CSP_DIRECTIVES;
 
 export const DEFAULT_PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=()';
 
+export const DEFAULT_REFERRER_POLICY = 'strict-origin-when-cross-origin';
+export const REFERRER_POLICIES = [
+  'no-referrer',
+  'no-referrer-when-downgrade',
+  'origin',
+  'origin-when-cross-origin',
+  'same-origin',
+  'strict-origin',
+  'strict-origin-when-cross-origin',
+  'unsafe-url',
+];
+export const DEFAULT_NONCE_SOURCE = 'mod_unique_id';
+/** SSI scope in .htaccess: index = IncludesNOEXEC on index.html only; html = Includes on every .html. */
+export type SsiScope = 'index' | 'html';
+
 export interface CspAllowlist {
   sources: Partial<Record<CspDirective, string[]>>;
   permissionsPolicy: string;
+  /** "mod_unique_id" (UNIQUE_ID with "@" replaced, via SetEnvIfExpr) or "env:NAME" (used as is). */
+  nonceSource?: string;
+  /** Headers removed before the policy is set (Apache), so an upstream one cannot stack with it. */
+  unsetHeaders?: string[];
+  referrerPolicy?: string;
+  /** Apache `Header always set <name> "<value>"` lines, written as given. */
+  extraHeaders?: [string, string][];
+  ssi?: SsiScope;
 }
+
+/** The env variable the nonce comes from with nonce-source "env:NAME", else undefined. */
+export const nonceEnvVar = (a: CspAllowlist): string | undefined =>
+  a.nonceSource?.startsWith('env:') ? a.nonceSource.slice(4) : undefined;
+
+const HEADER_NAME = /^[A-Za-z0-9-]+$/;
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** 'sha256-…' / 'sha384-…' / 'sha512-…' with base64 of that digest's length. */
+const HASH_SOURCE = /^'sha(256|384|512)-([A-Za-z0-9+/_-]+={0,2})'$/i;
+
+/** Whether source is a well-formed CSP hash source (base64 or base64url of a full digest). */
+export function isHashSource(source: string): boolean {
+  const m = HASH_SOURCE.exec(source);
+  if (!m) return false;
+  const b64 = m[2].replace(/-/g, '+').replace(/_/g, '/');
+  const bytes = Buffer.from(b64, 'base64');
+  if (bytes.length * 8 !== Number(m[1])) return false;
+  // Canonical: re-encoding gives the same digits (no stray bits, padding only where due).
+  return bytes.toString('base64').replace(/=+$/, '') === b64.replace(/=+$/, '');
+}
+
+/** Headers pstack csp sets itself; extra-headers may not replace them. */
+const RESERVED_HEADERS = [
+  'content-security-policy',
+  'content-security-policy-report-only',
+  'x-frame-options',
+  'x-content-type-options',
+  'referrer-policy',
+  'strict-transport-security',
+  'permissions-policy',
+];
 
 /** Host sources: https/wss (or no scheme), optional *. prefix, port and a plain path. */
 const HOST =
@@ -36,8 +90,14 @@ export function sourceProblem(directive: CspDirective, source: string): string |
   if (source === "'self'") return undefined;
   // WebAssembly compilation only; no JavaScript eval.
   if (source === "'wasm-unsafe-eval'" && directive === 'script-src') return undefined;
+  if (/^'sha(256|384|512)-/i.test(source)) {
+    if (directive !== 'script-src' && directive !== 'style-src') {
+      return 'hash sources only apply to script-src and style-src';
+    }
+    return isHashSource(source) ? undefined : 'not a valid sha256/384/512 hash (base64 digest)';
+  }
   if (source.startsWith("'")) {
-    return "quoted keywords other than 'self' (and 'wasm-unsafe-eval' in script-src) are not allowed";
+    return "quoted keywords other than 'self', hashes (and 'wasm-unsafe-eval' in script-src) are not allowed";
   }
   if (source === '*') return '"*" allows any host';
   if (SCHEMES.has(source)) {
@@ -73,11 +133,15 @@ export function parseAllowlist(raw: unknown): CspAllowlist {
       out.permissionsPolicy = value.trim();
       continue;
     }
+    if (key in OPTION_KEYS) {
+      OPTION_KEYS[key](value, out);
+      continue;
+    }
     if (!(key in CSP_DIRECTIVES)) {
       throw new Error(
         `csp-allowlist.json: "${key}" is not supported (use ${Object.keys(CSP_DIRECTIVES).join(
           ', ',
-        )}, permissions-policy)`,
+        )}, permissions-policy, ${Object.keys(OPTION_KEYS).join(', ')})`,
       );
     }
     if (!Array.isArray(value) || !value.every((v) => typeof v === 'string')) {
@@ -96,6 +160,60 @@ export function parseAllowlist(raw: unknown): CspAllowlist {
   return out;
 }
 
+const fail = (key: string, what: string): never => {
+  throw new Error(`csp-allowlist.json "${key}" ${what}`);
+};
+
+/** The server-config keys of csp-allowlist.json (everything that is not a directive). */
+const OPTION_KEYS: Record<string, (value: unknown, out: CspAllowlist) => void> = {
+  'nonce-source': (v, out) => {
+    if (
+      typeof v !== 'string' ||
+      (v !== DEFAULT_NONCE_SOURCE && !(v.startsWith('env:') && ENV_NAME.test(v.slice(4))))
+    ) {
+      fail('nonce-source', 'must be "mod_unique_id" or "env:<VARIABLE>" (e.g. env:UNIQUE_ID)');
+    }
+    if (v !== DEFAULT_NONCE_SOURCE) out.nonceSource = v as string;
+  },
+  'unset-headers': (v, out) => {
+    if (!Array.isArray(v) || !v.every((h) => typeof h === 'string' && HEADER_NAME.test(h))) {
+      fail('unset-headers', 'must be a list of header names');
+    }
+    out.unsetHeaders = [...new Set(v as string[])];
+  },
+  'referrer-policy': (v, out) => {
+    if (typeof v !== 'string' || !REFERRER_POLICIES.includes(v)) {
+      fail('referrer-policy', `must be one of ${REFERRER_POLICIES.join(', ')}`);
+    }
+    if (v !== DEFAULT_REFERRER_POLICY) out.referrerPolicy = v as string;
+  },
+  'extra-headers': (v, out) => {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+      fail('extra-headers', 'must be an object of header name → value');
+    }
+    const entries = Object.entries(v as Record<string, unknown>);
+    for (const [name, value] of entries) {
+      if (!HEADER_NAME.test(name)) fail('extra-headers', `: "${name}" is not a header name`);
+      if (RESERVED_HEADERS.includes(name.toLowerCase())) {
+        fail(
+          'extra-headers',
+          `: "${name}" is set from the allowlist itself (use the directives, permissions-policy or referrer-policy)`,
+        );
+      }
+      if (typeof value !== 'string' || !value || /["\\\r\n]/.test(value)) {
+        fail('extra-headers', `: "${name}" must be one line without " or \\`);
+      }
+    }
+    out.extraHeaders = entries as [string, string][];
+  },
+  ssi: (v, out) => {
+    if (v !== 'index' && v !== 'html') {
+      fail('ssi', 'must be "index" (IncludesNOEXEC on index.html) or "html" (Includes on .html)');
+    }
+    if (v === 'html') out.ssi = 'html';
+  },
+};
+
 /** JSON for the file: directives in table order, then permissions-policy when not the default. */
 export function serializeAllowlist(a: CspAllowlist): string {
   const obj: Record<string, unknown> = {};
@@ -104,6 +222,13 @@ export function serializeAllowlist(a: CspAllowlist): string {
   }
   if (a.permissionsPolicy !== DEFAULT_PERMISSIONS_POLICY)
     obj['permissions-policy'] = a.permissionsPolicy;
+  if (a.nonceSource && a.nonceSource !== DEFAULT_NONCE_SOURCE) obj['nonce-source'] = a.nonceSource;
+  if (a.ssi === 'html') obj['ssi'] = a.ssi;
+  if (a.referrerPolicy && a.referrerPolicy !== DEFAULT_REFERRER_POLICY) {
+    obj['referrer-policy'] = a.referrerPolicy;
+  }
+  if (a.unsetHeaders?.length) obj['unset-headers'] = a.unsetHeaders;
+  if (a.extraHeaders?.length) obj['extra-headers'] = Object.fromEntries(a.extraHeaders);
   return JSON.stringify(obj, null, 2) + '\n';
 }
 

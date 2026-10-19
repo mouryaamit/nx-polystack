@@ -33,7 +33,47 @@
     "secure": {
       "type": "boolean",
       "default": false,
-      "description": "Inject CSP nonce SSI placeholders into all HTML files in the dist output."
+      "description": "Write the CSP nonce placeholder into the served index.html (and the other nonce.files); nothing under assets/ is touched."
+    },
+    "nonce": {
+      "type": "object",
+      "description": "secure: how the nonce placeholder is written. Defaults keep the standard markup; set them to match an existing server setup.",
+      "additionalProperties": false,
+      "properties": {
+        "placeholder": {
+          "type": "string",
+          "description": "What the server replaces per request. Default: <!--#echo var=\"CSP_NONCE\" --> (what pstack csp configures)."
+        },
+        "tags": {
+          "type": "string",
+          "enum": ["all", "legacy"],
+          "description": "all (default): every script, style and stylesheet link. legacy: inline scripts (no src), every link and every style."
+        },
+        "position": {
+          "type": "string",
+          "enum": ["end", "after-tag-name"],
+          "description": "Where the nonce attribute goes in a tag (default end)."
+        },
+        "replaceTokens": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Text replaced by the placeholder anywhere in the page, e.g. [\"random-csp-nonce\"]. The build fails when a token sits in quotes the placeholder also uses."
+        },
+        "addMeta": {
+          "type": "boolean",
+          "description": "Add <meta property=\"csp-nonce\"> to <head> (default true)."
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Pages to rewrite, relative to the served root (default [\"index.html\"]); never under assets/."
+        }
+      }
+    },
+    "stripHtmlComments": {
+      "type": "boolean",
+      "default": false,
+      "description": "Every env: remove HTML comments from the served index.html (and the other nonce.files). SSI directives and IE conditional comments stay."
     },
     "sri": {
       "type": "boolean",

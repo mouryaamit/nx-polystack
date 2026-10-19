@@ -1,6 +1,6 @@
 {
   "name": "@mouryaamit/nx-polystack",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Nx plugin and pstack CLI that scaffold and build multi-tech monorepos (Angular, Ionic, Flutter) with a hardened release pipeline.",
   "license": "MIT",
   "type": "commonjs",

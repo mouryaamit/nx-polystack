@@ -3,6 +3,22 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.2.5
+
+- The release build's CSP nonce (`secure`) and SRI (`sri`) now rewrite only the served
+  `index.html`: other pages and everything under `assets/` (e.g. third-party viewer locale pages)
+  stay byte-identical. Tags are parsed with quotes and SSI directives respected, so integrity is
+  never written inside a nonce placeholder and edited tags get no double spaces.
+- New release options to match an existing server setup: `nonce.placeholder`, `nonce.tags`
+  (`all` | `legacy`), `nonce.position` (`end` | `after-tag-name`), `nonce.replaceTokens`,
+  `nonce.addMeta`, `nonce.files`, and `stripHtmlComments` (every env). Defaults keep the
+  standard markup.
+- `pstack csp`: `nonce-source` (`mod_unique_id`, or `env:NAME` for a variable the server sets,
+  e.g. `UNIQUE_ID` from mod_lua; also `--nonce-source`), `unset-headers`, `referrer-policy`,
+  `extra-headers` and `ssi` (`index` | `html`) in `csp-allowlist.json`; `'sha256/384/512-…'`
+  hashes are allowed in `script-src`/`style-src`, and `--import` keeps them (also from
+  `script-src-elem`/`style-src-elem`).
+
 ## 1.2.4
 
 - Angular and Ionic builds strip EXIF in every env (DEV, UAT, PROD, custom), not only PROD. Only

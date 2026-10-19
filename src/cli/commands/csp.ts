@@ -12,7 +12,13 @@ import {
   serializeAllowlist,
 } from '../../lib/csp/allowlist';
 import { importPolicy, ImportResult, readPolicy } from '../../lib/csp/import';
-import { GENERATED_MARKER, renderHtaccess, renderNginx } from '../../lib/csp/render';
+import {
+  CSP_NONCE_SSI,
+  GENERATED_MARKER,
+  noncePlaceholder,
+  renderHtaccess,
+  renderNginx,
+} from '../../lib/csp/render';
 import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
 import { readProjects } from '../../lib/utils/project-json-files';
 import { flagBoolean, flagString } from '../args';
@@ -131,9 +137,74 @@ export function importReport(
   return lines;
 }
 
+/** A placeholder pstack csp writes for nonce-source env:NAME. */
+const ENV_PLACEHOLDER = /^<!--#echo var='[A-Za-z_][A-Za-z0-9_]*' -->$/;
+
+/**
+ * The release target(s) must write the placeholder the server config fills, in the target
+ * options and in every configuration that sets its own `nonce` (Nx replaces the whole object).
+ * A placeholder pstack wrote for env:NAME is reset when the source goes back to mod_unique_id;
+ * any other hand-set placeholder is only reported.
+ */
+export function syncNoncePlaceholder(
+  tree: Tree,
+  root: string,
+  wanted: string,
+  dryRun = false,
+): string[] {
+  const file = `${root}/project.json`;
+  const raw = tree.read(file, 'utf-8');
+  if (raw === null) return [];
+  type Opts = Record<string, unknown>;
+  const json = JSON.parse(raw) as {
+    targets?: Record<
+      string,
+      { executor?: string; options?: Opts; configurations?: Record<string, Opts> }
+    >;
+  };
+  const lines: string[] = [];
+  let changed = false;
+  const verb = (v: string) => (dryRun ? `would be ${v}` : v);
+
+  const sync = (where: string, holder: Opts, always: boolean) => {
+    if (!always && holder['nonce'] === undefined) return;
+    const nonce = { ...((holder['nonce'] ?? {}) as Opts) };
+    const current = (nonce['placeholder'] as string | undefined) ?? CSP_NONCE_SSI;
+    if (current === wanted) return;
+    if (wanted === CSP_NONCE_SSI && !ENV_PLACEHOLDER.test(current)) {
+      lines.push(
+        `Note: ${where} writes nonce.placeholder ${current}; this config fills ${CSP_NONCE_SSI}.`,
+      );
+      return;
+    }
+    if (wanted === CSP_NONCE_SSI) delete nonce['placeholder'];
+    else nonce['placeholder'] = wanted;
+    if (Object.keys(nonce).length === 0) delete holder['nonce'];
+    else holder['nonce'] = nonce;
+    changed = true;
+    lines.push(
+      `  ${file}: ${where} nonce.placeholder ${verb(
+        wanted === CSP_NONCE_SSI ? 'reset to the default' : `set to ${wanted}`,
+      )}`,
+    );
+  };
+
+  for (const [name, target] of Object.entries(json.targets ?? {})) {
+    if (target.executor !== POLYSTACK_BUILD_EXECUTOR) continue;
+    const options = target.options ?? {};
+    sync(name, options, wanted !== CSP_NONCE_SSI);
+    if (Object.keys(options).length > 0) target.options = options;
+    for (const [cfg, opts] of Object.entries(target.configurations ?? {})) {
+      sync(`${name}:${cfg}`, opts, false);
+    }
+  }
+  if (changed) tree.write(file, JSON.stringify(json, null, 2) + '\n');
+  return lines;
+}
+
 /** pstack csp --app=<project>: edit csp-allowlist.json and render .htaccess / nginx.conf from it. */
 export async function runCsp(ctx: CommandContext): Promise<number> {
-  for (const f of ['app', 'add', 'remove', 'import']) {
+  for (const f of ['app', 'add', 'remove', 'import', 'nonceSource']) {
     if (ctx.flags[f] === true) throw new CliError(`--${f} needs a value.`);
   }
   const app = flagString(ctx.flags, 'app');
@@ -141,6 +212,7 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
   const adds = parseEdits('add', flagString(ctx.flags, 'add'));
   const removes = parseEdits('remove', flagString(ctx.flags, 'remove'));
   const force = ctx.flags['force'] !== undefined && flagBoolean(ctx.flags, 'force');
+  const nonceSourceFlag = flagString(ctx.flags, 'nonceSource');
   const importFlag = flagString(ctx.flags, 'import');
   const imported = importFlag === undefined ? undefined : readImportSource(importFlag, ctx.cwd);
   let parsedImport: ReturnType<typeof readPolicy> | undefined;
@@ -202,6 +274,7 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
       }
       edited.sources[directive] = before.filter((s) => s !== source);
     }
+    if (nonceSourceFlag !== undefined) edited.nonceSource = nonceSourceFlag;
     let checked: CspAllowlist;
     try {
       checked = parseAllowlist(JSON.parse(serializeAllowlist(edited)));
@@ -209,7 +282,11 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
       throw new CliError((err as Error).message);
     }
     // An import that adds nothing leaves csp-allowlist.json as it is (also its formatting).
-    const edits = adds.length + removes.length + (importAdded ? 1 : 0);
+    const nonceSourceChanged =
+      nonceSourceFlag !== undefined &&
+      (checked.nonceSource ?? 'mod_unique_id') !== (allowlist.nonceSource ?? 'mod_unique_id');
+    const edits =
+      adds.length + removes.length + (importAdded ? 1 : 0) + (nonceSourceChanged ? 1 : 0);
     if (edits > 0) {
       const text = serializeAllowlist(checked);
       if (tree.read(listFile, 'utf-8') !== text) tree.write(listFile, text);
@@ -224,11 +301,13 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
       `  policy          ${buildPolicy(checked).replace(/\{N\}/g, '<nonce>')}`,
     );
 
+    let htaccessKept = false;
     for (const [file, text] of [
       [`${project.root}/src/.htaccess`, renderHtaccess(app, checked)],
       [`${project.root}/server/nginx.conf`, renderNginx(app, checked)],
     ] as const) {
       const state = fileState(tree, file, text);
+      if (state === 'hand-written' && !force && file.endsWith('.htaccess')) htaccessKept = true;
       if (state === 'hand-written' && !force) {
         out.push(
           `  ${file}: hand-written, kept (--force replaces it)` +
@@ -241,6 +320,18 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
         const done = state === 'missing' ? 'written' : state === 'differs' ? 'updated' : 'replaced';
         out.push(`  ${file}: ${ctx.dryRun ? `would be ${done}` : done}`);
       }
+    }
+
+    // The build must write what the Apache config fills; a kept hand-written .htaccess may
+    // expect something else, so the target is left alone then.
+    if (htaccessKept) {
+      out.push(
+        '  release nonce.placeholder not synced: src/.htaccess is hand-written (--force replaces it)',
+      );
+    } else {
+      out.push(
+        ...syncNoncePlaceholder(tree, project.root, noncePlaceholder(checked), !!ctx.dryRun),
+      );
     }
 
     const inlining = inlinesCriticalCss(project.json);

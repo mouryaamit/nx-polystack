@@ -20,7 +20,9 @@ Deploy the `.htaccess` file alongside the Angular build output. It needs the
 `mod_rewrite`, `mod_headers`, `mod_include`, `mod_unique_id` and `mod_setenvif` Apache
 modules (the last three give each request its own CSP nonce when the release build runs with
 `secure: true`), and `AllowOverride FileInfo Options=IncludesNOEXEC` (or `All`) for the
-folder.
+folder. When the server sets its own nonce variable (e.g. `UNIQUE_ID` from mod_lua), run
+`pstack csp --app=<%= name %> --nonce-source=env:UNIQUE_ID`: mod_unique_id and mod_setenvif are
+then not needed.
 
 ## CSP overrides
 
