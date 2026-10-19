@@ -12,9 +12,9 @@ import { refreshNgswHashes } from '../../lib/hardening/ngsw';
 import { obfuscateOutput, Obfuscator } from '../../lib/hardening/obfuscate';
 import { resolveHardening } from '../../lib/hardening/options';
 import { checkSourceMaps } from '../../lib/hardening/source-maps';
-import { stripOutput } from '../../lib/hardening/strip';
+import { stripHtmlComments as stripHtmlCommentsText, stripOutput } from '../../lib/hardening/strip';
 import { injectBuildMeta } from '../../lib/helpers/inject-meta';
-import { injectCspNonce } from '../../lib/helpers/inject-nonce';
+import { injectCspNonce, resolveNonceSettings } from '../../lib/helpers/inject-nonce';
 import { injectSri } from '../../lib/helpers/inject-sri';
 import { stripExif, stripExifSummary } from '../../lib/helpers/strip-exif';
 import { resolveCiContext } from '../../lib/utils/ci-resolve';
@@ -47,6 +47,8 @@ export default async function buildExecutor(
     buildTarget,
     buildConfiguration,
     secure = false,
+    nonce,
+    stripHtmlComments = false,
     sri = false,
     baseHref,
     keySplit,
@@ -79,6 +81,12 @@ export default async function buildExecutor(
 
   // Invalid hardening options fail before the env files are touched or anything is built.
   const hardening = resolveHardening(options, env);
+  let nonceSettings: ReturnType<typeof resolveNonceSettings>;
+  try {
+    nonceSettings = resolveNonceSettings(nonce);
+  } catch (err) {
+    throw new Error(`build executor: ${(err as Error).message}`);
+  }
   hardening.warnings.forEach((w) => console.warn(`⚠ ${w}`));
 
   const ciCtx = resolveCiContext();
@@ -203,12 +211,26 @@ export default async function buildExecutor(
 
   // The served index.html: <outputPath>, or <outputPath>/browser for the application builder.
   if (fs.existsSync(path.join(checkRoot, 'index.html'))) {
+    if (stripHtmlComments) {
+      for (const rel of nonceSettings.files) {
+        const file = path.join(checkRoot, rel);
+        if (!fs.existsSync(file)) continue;
+        const html = fs.readFileSync(file, 'utf8');
+        const out = stripHtmlCommentsText(html);
+        if (out !== html) fs.writeFileSync(file, out);
+      }
+    }
     if (secure) {
-      injectCspNonce({ distDir });
+      injectCspNonce({ distDir, ...nonceSettings, stripComments: false });
     }
 
     if (sri || builtWithIntegrity) {
-      injectSri({ distDir, cdnAllowlist: readSriAllowlist(repoRoot), refresh: true });
+      injectSri({
+        distDir,
+        cdnAllowlist: readSriAllowlist(repoRoot),
+        refresh: true,
+        files: nonceSettings.files,
+      });
     }
     if (chunkSri && prepared.keyParts) {
       noteExternalScripts(path.join(checkRoot, 'index.html'));

@@ -1,3 +1,5 @@
+import { NonceSettings } from '../../lib/helpers/inject-nonce';
+
 export interface BuildExecutorSchema {
   type: 'angular' | 'ionic';
   outputPath: string;
@@ -8,7 +10,12 @@ export interface BuildExecutorSchema {
   buildTarget?: string;
   /** Configuration of buildTarget. Default: PROD → production, UAT → uat, otherwise development. */
   buildConfiguration?: string;
+  /** Write the CSP nonce placeholder into the served index.html (and the other nonce.files). */
   secure?: boolean;
+  /** secure: how the nonce placeholder is written (defaults: the standard markup). */
+  nonce?: NonceSettings;
+  /** Every env: remove HTML comments (not SSI or IE conditionals) from the nonce.files pages. */
+  stripHtmlComments?: boolean;
   /**
    * Integrity for every chunk: passed to the Angular build as --subresource-integrity, hashes
    * refreshed after strip/obfuscate. With cipher aes-gcm the runtime refuses to decrypt when a

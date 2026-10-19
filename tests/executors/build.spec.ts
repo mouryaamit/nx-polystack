@@ -247,6 +247,86 @@ describe('buildExecutor', () => {
     },
   );
 
+  it('secure: only the served index.html changes; assets/ pages stay byte-identical', async () => {
+    const distDir = path.join(tmpDir, 'dist', 'apps', 'web');
+    const pages: Record<string, string> = {
+      'assets/inline-locale-files/de.html': '<script type="application/l10n">{"k":"v"}</script>',
+      'assets/fonts/demo.html': '<html><head><style>a{}</style></head></html>',
+      'assets/togetherjs/x.html': '<script src="t.js"></script>',
+    };
+    for (const [rel, text] of Object.entries(pages)) {
+      fs.mkdirSync(path.dirname(path.join(distDir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(distDir, rel), text);
+    }
+    fs.writeFileSync(path.join(distDir, 'index.html'), '<html><head></head><body></body></html>');
+    const result = await buildExecutor(
+      { type: 'angular', outputPath: 'dist/apps/web', envProject: 'web', env: 'DEV', secure: true },
+      makeContext('web', tmpDir),
+      runner,
+    );
+    expect(result.success).toBe(true);
+    for (const [rel, text] of Object.entries(pages)) {
+      expect(fs.readFileSync(path.join(distDir, rel), 'utf8')).toBe(text);
+    }
+    expect(fs.readFileSync(path.join(distDir, 'index.html'), 'utf8')).toContain('csp-nonce');
+  });
+
+  it('secure with legacy nonce settings and stripHtmlComments (DEV too)', async () => {
+    const distDir = path.join(tmpDir, 'dist', 'apps', 'web');
+    fs.mkdirSync(distDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(distDir, 'index.html'),
+      '<html><head><!-- note --><link rel="icon" href="f.ico">' +
+        '<meta name="CSP-NONCE" content="random-csp-nonce"></head>' +
+        '<body><script src="main.js"></script><script>go()</script></body></html>',
+    );
+    const P = "<!--#echo var='UNIQUE_ID' -->";
+    await buildExecutor(
+      {
+        type: 'angular',
+        outputPath: 'dist/apps/web',
+        envProject: 'web',
+        env: 'DEV',
+        secure: true,
+        stripHtmlComments: true,
+        nonce: {
+          placeholder: P,
+          tags: 'legacy',
+          position: 'after-tag-name',
+          replaceTokens: ['random-csp-nonce'],
+          addMeta: false,
+        },
+      },
+      makeContext('web', tmpDir),
+      runner,
+    );
+    const html = fs
+      .readFileSync(path.join(distDir, 'index.html'), 'utf8')
+      .replace(/\n\s*<meta name="x-build"[^>]*>/, ''); // the build meta is the intended difference
+    expect(html).toBe(
+      `<html><head><link nonce="${P}" rel="icon" href="f.ico">` +
+        `<meta name="CSP-NONCE" content="${P}"></head>` +
+        `<body><script src="main.js"></script><script nonce="${P}">go()</script></body></html>`,
+    );
+  });
+
+  it('rejects invalid nonce options before building', async () => {
+    await expect(
+      buildExecutor(
+        {
+          type: 'angular',
+          outputPath: 'dist/apps/web',
+          envProject: 'web',
+          env: 'DEV',
+          nonce: { tags: 'some' as 'all' },
+        },
+        makeContext('web', tmpDir),
+        runner,
+      ),
+    ).rejects.toThrow(/nonce.tags/);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
   it('sri: true — injects SRI hashes after build', async () => {
     const distDir = path.join(tmpDir, 'dist', 'apps', 'web');
     fs.mkdirSync(distDir, { recursive: true });

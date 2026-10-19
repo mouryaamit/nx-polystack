@@ -190,6 +190,7 @@ describe('csp import (NX-49)', () => {
           "'wasm-unsafe-eval'",
           'https://www.tags.example.com',
           'https://cdn.example.com',
+          'https://elem.example.com',
         ],
         'frame-ancestors': ["'self'", 'https://partner.example.com'],
       });
@@ -211,12 +212,12 @@ describe('csp import (NX-49)', () => {
         "script-src 'unsafe-eval'",
         'script-src http://old.example.com',
         'script-src data:',
-        'script-src-elem',
         'object-src',
       ]);
       expect(r.skipped.filter((s) => s.kind === 'refused')).toHaveLength(4);
-      expect(r.skipped.find((s) => s.directive === 'script-src-elem')?.reason).toContain(
-        'https://elem.example.com',
+      // NX-70: script-src-elem is merged into script-src.
+      expect(r.notes).toContain(
+        'script-src-elem was merged into script-src (the generated policy sets script-src only)',
       );
       // The result is a valid allowlist.
       expect(() => parseAllowlist(r.sources)).not.toThrow();
@@ -239,6 +240,30 @@ describe('csp import (NX-49)', () => {
 
     it('notes an input without a policy', () => {
       expect(importPolicy({}, {}).notes).toEqual(['no Content-Security-Policy found in the input']);
+    });
+  });
+
+  describe('hash sources (NX-70)', () => {
+    const h256 = `'sha256-${'A'.repeat(43)}='`;
+    const h384 = `'sha384-${'aB+/'.repeat(16)}'`;
+
+    it('keeps hashes from script-src-elem and style-src, digest case untouched', () => {
+      const read = readPolicy(
+        `script-src-elem 'self' ${h256} 'SHA384-${'aB+/'.repeat(
+          16,
+        )}'; style-src 'self' ${h384}; img-src ${h256}`,
+      );
+      const r = importPolicy(read.policy, {});
+      expect(r.sources['script-src']).toEqual([h256, h384]);
+      expect(r.sources['style-src']).toEqual([h384]);
+      expect(r.sources['img-src']).toBeUndefined();
+      expect(() => parseAllowlist(r.sources)).not.toThrow();
+    });
+
+    it('refuses malformed hashes and hashes outside script-src/style-src', () => {
+      expect(() => parseAllowlist({ 'script-src': ["'sha256-short'"] })).toThrow(/valid sha256/);
+      expect(() => parseAllowlist({ 'img-src': [h256] })).toThrow(/script-src and style-src/);
+      expect(parseAllowlist({ 'script-src': [h256] }).sources['script-src']).toEqual([h256]);
     });
   });
 });

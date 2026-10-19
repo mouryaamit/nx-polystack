@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { stripHtmlCommentsSafe } from '../html/tags';
+
 import { listFiles } from './files';
 
 export interface StripOptions {
@@ -32,8 +34,6 @@ export interface MinifyOptions {
 }
 
 const SKIP_DIRS = ['assets'];
-/** Plain comments; SSI (`<!--#…`) and IE conditionals (`<!--[if …`, `<!--<![endif]`) stay. */
-const HTML_COMMENT = /<!--(?!#|\[if|<!\[endif)[\s\S]*?-->/g;
 /** A tag with Angular's hydration attribute `ngh`. */
 const NGH_ATTRIBUTE = /<[^>]*\sngh(?:\s*=|[\s/>])/;
 const TOP_LEVEL_MODULE_SYNTAX = /^\s*(import|export)\b/m;
@@ -105,8 +105,9 @@ export function stripCssComments(css: string): string {
   return out;
 }
 
+/** Comments outside tags and <script>/<style> content; SSI and IE conditionals stay. */
 export function stripHtmlComments(html: string): string {
-  return html.replace(HTML_COMMENT, '');
+  return stripHtmlCommentsSafe(html);
 }
 
 /**

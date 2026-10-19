@@ -3,7 +3,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { injectCspNonce, NONCE_SSI_PLACEHOLDER } from '../../src/lib/helpers/inject-nonce';
 import { injectSri } from '../../src/lib/helpers/inject-sri';
+import { scanTags } from '../../src/lib/html/tags';
 
 describe('injectSri', () => {
   let tmpDir: string;
@@ -116,5 +118,94 @@ describe('injectSri refresh with an unresolvable local url', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('injectSri with nonce placeholders and assets', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'inj-sri-n-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const write = (rel: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(tmpDir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, rel), text);
+  };
+  const read = (rel: string) => fs.readFileSync(path.join(tmpDir, rel), 'utf8');
+
+  it('after the nonce: integrity outside the SSI directive, same tags, no double spaces', () => {
+    write('main.js', 'main');
+    write('styles.css', 'a{}');
+    write(
+      'index.html',
+      '<html><head><link rel="stylesheet" href="styles.css"></head>' +
+        '<body><script  src="main.js" type="module"></script><script>boot()</script></body></html>',
+    );
+    injectCspNonce({ distDir: tmpDir });
+    const before = scanTags(read('index.html'));
+    injectSri({ distDir: tmpDir, cdnAllowlist: [] });
+    const html = read('index.html');
+    const after = scanTags(html);
+
+    expect(after.map((t) => t.name)).toEqual(before.map((t) => t.name));
+    after.forEach((tag, i) => {
+      const names = tag.attrs
+        .map((a) => a.name)
+        .filter((n) => !/^(integrity|crossorigin)$/.test(n));
+      expect(names).toEqual(before[i].attrs.map((a) => a.name));
+    });
+    // Every SSI directive is intact: nothing was written inside one.
+    expect(html.match(/<!--#[^>]*-->/g)).toEqual(Array(4).fill(NONCE_SSI_PLACEHOLDER));
+    const script = after.find((t) => t.attrs.some((a) => a.value === 'main.js'));
+    expect(script?.attrs.map((a) => a.name)).toEqual([
+      'src',
+      'integrity',
+      'crossorigin',
+      'type',
+      'nonce',
+    ]);
+    // The tag kept its own spacing; nothing new added a second space.
+    expect(html).toContain('<script  src="main.js" integrity="sha384-');
+    expect(html.replace('<script  src', '')).not.toMatch(/<[a-z]+[^>]* {2}/);
+  });
+
+  it('never touches pages under assets/', () => {
+    write('main.js', 'main');
+    const page =
+      `<script src="../main.js" nonce="${NONCE_SSI_PLACEHOLDER}"></script>` +
+      '<link rel="stylesheet" href="x.css">';
+    write('assets/togetherjs/a.html', page);
+    write('assets/x.css', 'a{}');
+    write('index.html', '<script src="main.js"></script>');
+    injectSri({ distDir: tmpDir, cdnAllowlist: [] });
+    expect(read('assets/togetherjs/a.html')).toBe(page);
+    expect(read('index.html')).toContain('integrity=');
+    expect(() =>
+      injectSri({ distDir: tmpDir, cdnAllowlist: [], files: ['assets/togetherjs/a.html'] }),
+    ).toThrow(/under assets/);
+    expect(() => injectSri({ distDir: tmpDir, cdnAllowlist: [], files: ['../x.html'] })).toThrow(
+      /files/,
+    );
+  });
+});
+
+describe('scanTags', () => {
+  it('keeps a > inside quotes and SSI directives within the tag', () => {
+    const html =
+      '<script nonce="<!--#echo var="CSP_NONCE" -->" data-x="a>b">if (a > b) {}</script>' +
+      "<link nonce='<!--#echo var='UNIQUE_ID' -->' href=x.css><!-- <p> --><p>";
+    const tags = scanTags(html);
+    expect(tags.map((t) => t.name)).toEqual(['script', 'link', 'p']);
+    expect(tags[0].attrs.map((a) => [a.name, a.value])).toEqual([
+      ['nonce', '<!--#echo var="CSP_NONCE" -->'],
+      ['data-x', 'a>b'],
+    ]);
+    expect(tags[1].attrs.map((a) => [a.name, a.value])).toEqual([
+      ['nonce', "<!--#echo var='UNIQUE_ID' -->"],
+      ['href', 'x.css'],
+    ]);
   });
 });

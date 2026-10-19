@@ -274,4 +274,120 @@ describe('pstack csp --import (NX-49)', () => {
     expect(delegationArgs('csp', [inline], path.join(ws, 'apps/portal'), ws)).toEqual([inline]);
     expect(helpText('0.38.0')).toContain('--import=<file|policy>');
   });
+
+  describe('existing Apache + mod_lua setup (NX-70)', () => {
+    const legacyList = {
+      'connect-src': ['https://api.example.com'],
+      'script-src': [`'sha256-${'A'.repeat(43)}='`],
+      'nonce-source': 'env:UNIQUE_ID',
+      'unset-headers': ['Content-Security-Policy'],
+      'referrer-policy': 'strict-origin',
+      'extra-headers': { 'X-DEBUG-UNIQUE-ID': '%{UNIQUE_ID}e' },
+      ssi: 'html',
+    };
+
+    it('uses UNIQUE_ID as is: no SetEnvIfExpr, %{UNIQUE_ID}e in the header, single-quoted SSI', async () => {
+      const ws = workspace();
+      writeJson(path.join(ws, 'apps', 'portal', 'csp-allowlist.json'), legacyList);
+      await run(ws, {});
+      const ht = read(ws, 'src/.htaccess');
+      expect(ht).not.toContain('SetEnvIfExpr');
+      expect(ht).not.toMatch(/mod_unique_id|mod_setenvif/);
+      expect(ht).toContain("'nonce-%{UNIQUE_ID}e'");
+      expect(ht).toContain("<!--#echo var='UNIQUE_ID' -->");
+      expect(ht).toContain(`'sha256-${'A'.repeat(43)}='`);
+      // Order: unset before the policy is set; the debug header as written.
+      const lines = ht.split('\n');
+      const unset = lines.indexOf('Header always unset Content-Security-Policy');
+      const set = lines.findIndex((l) => l.startsWith('Header always set Content-Security-Policy'));
+      expect(unset).toBeGreaterThan(-1);
+      expect(unset).toBeLessThan(set);
+      expect(ht).toContain('Header always set Referrer-Policy "strict-origin"');
+      expect(ht).toContain('Header always set X-DEBUG-UNIQUE-ID "%{UNIQUE_ID}e"');
+      expect(ht).toContain('Options +Includes\nAddOutputFilter INCLUDES .html');
+      expect(ht).toContain('AllowOverride FileInfo Options=Includes ');
+      expect(ht).toContain(
+        'Header unset Content-Security-Policy\nHeader always unset Content-Security-Policy',
+      );
+      // Nginx replaces the same placeholder (double-quoted: it holds single quotes).
+      expect(read(ws, 'server/nginx.conf')).toContain(
+        `sub_filter "<!--#echo var='UNIQUE_ID' -->" $request_id;`,
+      );
+      // The release target writes the placeholder the server fills.
+      const pj = JSON.parse(read(ws, 'project.json'));
+      expect(pj.targets.release.options.nonce).toEqual({
+        placeholder: "<!--#echo var='UNIQUE_ID' -->",
+      });
+      expect(out()).toContain("release nonce.placeholder set to <!--#echo var='UNIQUE_ID' -->");
+      // The allowlist round-trips unchanged.
+      expect(JSON.parse(read(ws, 'csp-allowlist.json'))).toEqual(legacyList);
+    });
+
+    it('--nonce-source sets the key; the default output keeps mod_unique_id', async () => {
+      const ws = workspace();
+      await run(ws, {});
+      expect(read(ws, 'src/.htaccess')).toContain("SetEnvIfExpr \"reqenv('UNIQUE_ID')");
+      await run(ws, { nonceSource: 'env:UNIQUE_ID' });
+      expect(JSON.parse(read(ws, 'csp-allowlist.json'))['nonce-source']).toBe('env:UNIQUE_ID');
+      expect(read(ws, 'src/.htaccess')).not.toContain('SetEnvIfExpr');
+      await expect(run(ws, { nonceSource: 'env:bad name' })).rejects.toThrow(/nonce-source/);
+    });
+
+    it('syncs configurations that set nonce, and resets when going back to mod_unique_id', async () => {
+      const ws = workspace();
+      const pjFile = path.join(ws, 'apps', 'portal', 'project.json');
+      const pj = JSON.parse(fs.readFileSync(pjFile, 'utf8'));
+      pj.targets.release.configurations.prod = { env: 'PROD', nonce: { tags: 'legacy' } };
+      writeJson(pjFile, pj);
+      await run(ws, { nonceSource: 'env:UNIQUE_ID' });
+      let rel = JSON.parse(read(ws, 'project.json')).targets.release;
+      const P = "<!--#echo var='UNIQUE_ID' -->";
+      expect(rel.options.nonce).toEqual({ placeholder: P });
+      expect(rel.configurations.prod.nonce).toEqual({ tags: 'legacy', placeholder: P });
+      expect(rel.configurations.uat.nonce).toBeUndefined();
+
+      await run(ws, { nonceSource: 'mod_unique_id' });
+      rel = JSON.parse(read(ws, 'project.json')).targets.release;
+      expect(rel.options.nonce).toBeUndefined();
+      expect(rel.configurations.prod.nonce).toEqual({ tags: 'legacy' });
+      expect(read(ws, 'src/.htaccess')).toContain('SetEnvIfExpr');
+    });
+
+    it('--dry-run reports the placeholder change without writing it', async () => {
+      const ws = workspace();
+      await runCsp(
+        makeCtx({ cwd: ws, dryRun: true, flags: { app: 'portal', nonceSource: 'env:UNIQUE_ID' } }),
+      );
+      expect(out()).toContain("nonce.placeholder would be set to <!--#echo var='UNIQUE_ID' -->");
+      expect(JSON.parse(read(ws, 'project.json')).targets.release.options).toBeUndefined();
+    });
+
+    it('--import keeps sha256 hashes from script-src-elem', async () => {
+      const ws = workspace();
+      const h = `'sha256-${'Zz9+'.repeat(10)}abc='`;
+      await run(ws, { import: `script-src-elem 'self' ${h} https://www.googletagmanager.com` });
+      expect(JSON.parse(read(ws, 'csp-allowlist.json'))['script-src']).toEqual([
+        h,
+        'https://www.googletagmanager.com',
+      ]);
+      expect(read(ws, 'src/.htaccess')).toContain(h);
+      expect(out()).toContain('script-src-elem was merged into script-src');
+    });
+
+    it('refuses unsafe extra headers and unknown referrer policies', async () => {
+      for (const bad of [
+        { 'extra-headers': { 'content-security-policy': "default-src * 'unsafe-inline'" } },
+        { 'extra-headers': { 'X-Frame-Options': 'ALLOWALL' } },
+        { 'script-src': [`'sha256-${'A'.repeat(44)}'`] },
+        { 'extra-headers': { 'X-A': 'a" Header set Evil "1' } },
+        { 'extra-headers': { 'X A': 'v' } },
+        { 'referrer-policy': 'everything' },
+        { ssi: 'all' },
+      ]) {
+        const ws = workspace();
+        writeJson(path.join(ws, 'apps', 'portal', 'csp-allowlist.json'), bad);
+        await expect(run(ws, {})).rejects.toThrow(/csp-allowlist.json/);
+      }
+    });
+  });
 });

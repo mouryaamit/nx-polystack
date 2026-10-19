@@ -218,6 +218,9 @@ OPTIONS — csp (--app required; writes the server files that are missing or wer
                                .htaccess / nginx.conf, or JSON (directive → sources); refused
                                sources ('unsafe-inline', 'unsafe-eval', http:, …) are listed, not
                                imported; paths covered by a host entry are dropped
+  --nonce-source=<src>         mod_unique_id (default) or env:<VAR>: a variable the server sets per
+                               request (e.g. env:UNIQUE_ID from mod_lua), used as is; also sets the
+                               release target's nonce.placeholder
   --force                      Also replace hand-written .htaccess / nginx.conf
   --dry-run                    Show what would change
 
