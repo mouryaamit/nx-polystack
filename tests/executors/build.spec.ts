@@ -52,31 +52,32 @@ describe('buildExecutor', () => {
       isVerbose: false,
     } as unknown as ExecutorContext);
 
-  it('DEV build — calls nx build:development, skips encrypt and backup', async () => {
+  it('DEV build — encrypts the dev env file during the build too, then restores it', async () => {
     const envDir = path.join(tmpDir, 'environments', 'web');
     fs.mkdirSync(envDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(envDir, 'environment.ts'),
-      'export const environment = { production: false };',
-    );
+    const original = "export const environment = { production: false, password: 'dev-secret' };";
+    fs.writeFileSync(path.join(envDir, 'environment.ts'), original);
+    let duringBuild = '';
+    runner.mockImplementation(() => {
+      duringBuild = fs.readFileSync(path.join(envDir, 'environment.ts'), 'utf8');
+    });
 
-    const ctx = makeContext('web', tmpDir);
     const result = await buildExecutor(
       { type: 'angular', outputPath: 'dist/apps/web', envProject: 'web', env: 'DEV' },
-      ctx,
+      makeContext('web', tmpDir),
       runner,
     );
 
     expect(result.success).toBe(true);
     expect(runner).toHaveBeenCalledWith(
-      expect.stringContaining('nx run web:build:development'),
+      expect.stringMatching(
+        /nx run web:build:development --outputPath=dist\/apps\/web --skip-nx-cache$/,
+      ),
       expect.any(Object),
     );
-    expect(runner).toHaveBeenCalledWith(
-      expect.stringContaining('--outputPath=dist/apps/web'),
-      expect.any(Object),
-    );
-    // No backup created for DEV
+    expect(duringBuild).not.toContain('dev-secret');
+    expect(duringBuild).toMatch(/password: '[^']+'/);
+    expect(fs.readFileSync(path.join(envDir, 'environment.ts'), 'utf8')).toBe(original);
     expect(fs.existsSync(path.join(envDir, 'environment.ts.bak'))).toBe(false);
   });
 

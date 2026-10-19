@@ -122,7 +122,7 @@ export default async function buildExecutor(
     const outputArg = `--outputPath=${outputPath}`;
     const baseHrefArg = baseHref ? `--baseHref=${baseHref}` : '';
     // The env file changes per build (encryption, stamp), so the Angular build is never cached.
-    const cacheArg = env === 'DEV' ? '' : '--skip-nx-cache';
+    const cacheArg = '--skip-nx-cache';
     const sriArg = chunkSri ? '--subresourceIntegrity' : '';
     const cmd =
       `npx nx run ${target}:${angularConfig} ${outputArg} ${baseHrefArg} ${sriArg} ${cacheArg}`

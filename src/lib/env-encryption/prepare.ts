@@ -68,9 +68,10 @@ export interface PreparedEnv {
 const rel = (root: string, file: string) => path.relative(root, file).split(path.sep).join('/');
 
 /**
- * Release-build preparation of an env file. DEV: checks there are no placeholders, changes
- * nothing. Other envs: recovers a crashed build, backs the file up, fills `${VAR}` placeholders,
- * stamps the build time and branch, encrypts; `restore()` puts the original back.
+ * Release-build preparation of an env file, in every env (DEV too): recovers a crashed build,
+ * backs the file up, fills `${VAR}` placeholders, stamps the build time and branch, encrypts;
+ * `restore()` puts the original back. DEV files may not hold placeholders (`nx serve` reads them
+ * as they are).
  */
 export function prepareEnvFile(opts: PrepareEnvOptions): PreparedEnv {
   const log = opts.log ?? ((m: string) => console.log(m));
@@ -105,7 +106,6 @@ export function prepareEnvFile(opts: PrepareEnvOptions): PreparedEnv {
         );
       }
     }
-    return noop;
   }
   // One release build at a time per file; others using the same files wait. Sorted, so two builds
   // never take the same locks in a different order.
