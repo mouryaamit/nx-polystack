@@ -3,6 +3,14 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.2.7
+
+- Apps import their env file as `@env/<app>/environment` through a new `@env/*` alias in
+  `tsconfig.base.json`, instead of a relative path into `environments/`. Nx 18 and later refuse the
+  relative form in `@nx/enforce-module-boundaries`, which blocked lint after an Angular 17+ upgrade.
+  `pstack update` (migration `env-import-alias`) adds the alias and rewrites the existing imports;
+  `pstack app`, `pstack app --from` and `pstack migrate` use it too.
+
 ## 1.2.6
 
 - Release builds encrypt env values in every env, DEV included (before, only non-DEV builds did).

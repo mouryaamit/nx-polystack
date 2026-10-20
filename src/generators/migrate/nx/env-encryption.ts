@@ -334,7 +334,7 @@ export function exportedNames(text: string): string[] {
 /**
  * Whether an env-secret.ts has the known shape: CryptoJS with the ENC() marker, exports
  * envSecret and decryptEnvironment, exports nothing the wrapper would not keep, and imports
- * `environment` from a relative path.
+ * `environment` from a relative path or the `@env/` alias.
  */
 export function isKnownEnvSecret(text: string): { envImport: string } | undefined {
   const names = exportedNames(text);
@@ -344,7 +344,7 @@ export function isKnownEnvSecret(text: string): { envImport: string } | undefine
   const keyType = /\btype\s+EncryptedEnvKey\s*=\s*([^;\n]+)/.exec(stripComments(text));
   if (keyType && keyType[1].trim() !== 'string') return undefined;
   if (!/crypto-js/.test(text) || !text.includes('ENC(')) return undefined;
-  const m = /import\s*\{\s*environment\s*\}\s*from\s*(['"])(\.[^'"]+)\1/.exec(text);
+  const m = /import\s*\{\s*environment\s*\}\s*from\s*(['"])((?:\.|@env\/)[^'"]+)\1/.exec(text);
   return m ? { envImport: m[2] } : undefined;
 }
 

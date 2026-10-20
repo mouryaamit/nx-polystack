@@ -30,6 +30,7 @@ import {
   declaredVersion,
   ensureReleaseHardeningDependencies,
 } from '../../lib/utils/dependencies';
+import { ensureEnvAlias, envAliasImport } from '../../lib/utils/env-alias';
 import { generateAngularEnvFiles, generateFlutterEnvFiles } from '../../lib/utils/env-files';
 import { refreshLlmBlocks, workspaceProjectNames } from '../../lib/utils/llm-block';
 import { addNpmScripts } from '../../lib/utils/npm-scripts';
@@ -153,10 +154,13 @@ export default async function appGenerator(
       cspConnectSrc: cspConnectSrc ?? '',
       root: projectPath,
       up,
-      envImport:
+      envImport: envImportSpecifier(
+        tree,
         envLayout === 'per-env'
           ? PER_ENV_ROOT_FILE.replace(/\.ts$/, '')
           : `environments/${projectName}/environment`,
+        `${projectPath}/src`,
+      ),
       template: '',
     };
     generateFiles(tree, path.join(__dirname, 'files', 'angular'), projectPath, vars);
@@ -493,4 +497,18 @@ function scaffoldDeeplink(tree: Tree, projectName: string, deeplink: string): vo
     `libs/well-known/README.md`,
     `# Deep-link well-known files\n\nHost the files in each env folder at \`https://${domain}/.well-known/\`.\nReplace \`TEAMID\` and \`REPLACE_WITH_CERT_SHA256\` with real values before publishing.\n`,
   );
+}
+
+/**
+ * How main.ts imports its env file: through the `@env/*` alias (added to tsconfig when missing;
+ * Nx 18+ refuses relative imports of the root environments/ folder), or relatively when the
+ * workspace maps `@env/*` to something else.
+ */
+function envImportSpecifier(tree: Tree, envFile: string, fromDir: string): string {
+  const state = ensureEnvAlias(tree);
+  if (state === 'present' || state === 'added') {
+    return envAliasImport(envFile);
+  }
+  const rel = path.posix.relative(fromDir, envFile);
+  return rel.startsWith('.') ? rel : `./${rel}`;
 }

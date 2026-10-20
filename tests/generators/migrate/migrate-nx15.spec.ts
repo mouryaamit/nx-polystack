@@ -230,7 +230,7 @@ describe('migrate generator: Nx 15 multi-app source', () => {
     });
     const secret = tree.read('libs/shared/src/config/env-secret.ts', 'utf8') as string;
     expect(secret).toContain("from '@mouryaamit/nx-polystack/runtime/env-secret'");
-    expect(secret).toContain("import { environment } from '../../../../environments/environment';");
+    expect(secret).toContain("import { environment } from '@env/environment';");
     for (const fn of [
       'envSecret',
       'decryptEnvValue',

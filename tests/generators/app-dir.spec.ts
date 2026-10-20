@@ -51,9 +51,7 @@ describe('app generator --dir', () => {
       '../../../dist/out-tsc',
     );
     expect(readJson(tree, `${root}/.eslintrc.json`).extends[0]).toBe('../../../.eslintrc.json');
-    expect(read(tree, `${root}/src/main.ts`)).toContain(
-      "from '../../../../environments/portal/environment'",
-    );
+    expect(read(tree, `${root}/src/main.ts`)).toContain("from '@env/portal/environment'");
     const readme = read(tree, `${root}/server/README.md`);
     expect(readme).toContain('COPY dist/apps/legacy/portal/ /usr/share/nginx/html/');
     expect(readme).toContain(`COPY ${root}/server/nginx.conf`);
@@ -84,9 +82,7 @@ describe('app generator --dir', () => {
     expect(cap).toContain(`(${root}/)`);
     expect(readJson(tree, `${root}/tsconfig.json`).extends).toBe('../../../tsconfig.base.json');
     expect(readJson(tree, `${root}/.eslintrc.json`).extends[0]).toBe('../../../.eslintrc.json');
-    expect(read(tree, `${root}/src/main.ts`)).toContain(
-      "from '../../../../environments/field-ops/environment'",
-    );
+    expect(read(tree, `${root}/src/main.ts`)).toContain("from '@env/field-ops/environment'");
     expect(tree.exists(`${root}/package.json`)).toBe(true);
   });
 
@@ -187,5 +183,48 @@ describe('app generator --dir', () => {
     await envGenerator(tree, { all: true, name: 'qa' });
     const scripts = readJson(tree, 'package.json').scripts;
     expect(scripts['build:field-ops:qa:android']).toContain('cap-sync --platform=android');
+  });
+});
+
+describe('app generator env imports (NX-83)', () => {
+  it('adds the @env/* alias and imports the env file through it', async () => {
+    const tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
+    tree.write('package.json', JSON.stringify({ scripts: {}, devDependencies: { nx: '17.0.6' } }));
+    tree.write('tsconfig.base.json', JSON.stringify({ compilerOptions: { paths: {} } }));
+    await appGenerator(tree, { name: 'web', type: 'angular' });
+    expect(readJson(tree, 'tsconfig.base.json').compilerOptions.paths['@env/*']).toEqual([
+      'environments/*',
+    ]);
+    expect(read(tree, 'apps/web/src/main.ts')).toContain("from '@env/web/environment'");
+  });
+
+  it('falls back to a relative import when @env/* maps elsewhere', async () => {
+    const tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
+    tree.write('package.json', JSON.stringify({ scripts: {}, devDependencies: { nx: '17.0.6' } }));
+    tree.write(
+      'tsconfig.base.json',
+      JSON.stringify({ compilerOptions: { paths: { '@env/*': ['src/env/*'] } } }),
+    );
+    await appGenerator(tree, { name: 'web', type: 'angular' });
+    expect(read(tree, 'apps/web/src/main.ts')).toContain(
+      "from '../../../environments/web/environment'",
+    );
+    expect(readJson(tree, 'tsconfig.base.json').compilerOptions.paths['@env/*']).toEqual([
+      'src/env/*',
+    ]);
+  });
+
+  it('app --from moves @env/<base> imports to the new app', async () => {
+    const tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
+    tree.write('package.json', JSON.stringify({ scripts: {}, devDependencies: { nx: '17.0.6' } }));
+    tree.write('tsconfig.base.json', JSON.stringify({ compilerOptions: { paths: {} } }));
+    await appGenerator(tree, { name: 'web', type: 'angular' });
+    tree.write(
+      'apps/web/src/app/extra.ts',
+      "import { environment } from '@env/web/environment';\nexport const e = environment;\n",
+    );
+    await appGenerator(tree, { name: 'admin', type: 'angular', from: 'web' });
+    expect(read(tree, 'apps/admin/src/main.ts')).toContain("from '@env/admin/environment'");
+    expect(read(tree, 'apps/admin/src/app/extra.ts')).toContain("from '@env/admin/environment'");
   });
 });

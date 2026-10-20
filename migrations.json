@@ -87,6 +87,11 @@
       "version": "1.0.2",
       "description": "Move GitHub workflows to the Node 24 action versions (checkout, setup-node, cache, nx-set-shas v5; create-pull-request v8)",
       "implementation": "./src/migrations/github-actions-node24/github-actions-node24"
+    },
+    "env-import-alias": {
+      "version": "1.2.7",
+      "description": "Import env files through the @env/* tsconfig alias instead of a relative path into environments/ (refused by @nx/enforce-module-boundaries from Nx 18 on)",
+      "implementation": "./src/migrations/env-import-alias/env-import-alias"
     }
   }
 }

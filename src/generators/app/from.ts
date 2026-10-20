@@ -483,8 +483,10 @@ export function appFrom(tree: Tree, o: AppFromOptions): AppFromResult {
       t = t.replace(re, '../'.repeat(newDepth + fileDepth));
     }
     t = replacePath(t, base.root, root);
-    if (base.envProject)
+    if (base.envProject) {
       t = replacePath(t, `environments/${base.envProject}`, `environments/${name}`);
+      t = replacePath(t, `@env/${base.envProject}`, `@env/${name}`);
+    }
     return t;
   };
 

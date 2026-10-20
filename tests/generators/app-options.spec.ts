@@ -268,7 +268,7 @@ describe('app generator options (NX-43)', () => {
       }
       expect(read(tree, 'environments/environment.ts')).toContain('Replaced at build time');
       expect(read(tree, 'apps/portal/src/main.ts')).toContain(
-        "from '../../../environments/environment'",
+        "from '@env/environment'",
       );
       const configs = readJson(tree, 'apps/portal/project.json').targets.build.configurations;
       const repl = (c: string) => configs[c].fileReplacements;
@@ -289,7 +289,7 @@ describe('app generator options (NX-43)', () => {
       await appGenerator(tree, { name: 'admin', type: 'angular' });
       expect(read(tree, 'environments/environment.ts')).toContain('custom: true');
       expect(read(tree, 'apps/admin/src/main.ts')).toContain(
-        "from '../../../environments/admin/environment'",
+        "from '@env/admin/environment'",
       );
       expect(tree.exists('environments/admin/environment.ts')).toBe(true);
       const dev = readJson(tree, 'apps/admin/project.json').targets.build.configurations
