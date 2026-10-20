@@ -4,6 +4,7 @@ import * as path from 'path';
 import { GeneratorCallback, logger, Tree } from '@nx/devkit';
 
 import { readPackageVersion, selfPackageRoot } from '../../cli/context';
+import { applyEnvAlias, EnvAliasReport } from '../../lib/utils/env-alias';
 import { refreshLlmBlocks, workspaceProjectNames } from '../../lib/utils/llm-block';
 
 import {
@@ -479,6 +480,7 @@ async function migrateOne(
   rerender(rec.tree);
 
   // Copied source files are not run through Prettier: they stay as the source had them.
+  logEnvAlias(applyEnvAlias(rec.tree));
   refreshLlmBlocks(rec.tree);
   recordManifest(
     tree,
@@ -557,6 +559,7 @@ async function migrateWorkspace(
   };
   const rerender = (t: Tree) => t.write(reportPath, renderReport(reportArgs));
   rerender(rec.tree);
+  logEnvAlias(applyEnvAlias(rec.tree));
   refreshLlmBlocks(rec.tree);
   recordManifest(
     tree,
@@ -578,4 +581,13 @@ async function migrateWorkspace(
     data,
     rerender,
   };
+}
+
+/** Env files are imported through @env/* (Nx 18+ refuses relative imports of environments/). */
+function logEnvAlias(report: EnvAliasReport): void {
+  const files = Object.keys(report.files);
+  if (files.length > 0) logger.info(`migrate: env imports now use @env/ in ${files.join(', ')}.`);
+  if (report.state === 'conflict') {
+    logger.warn('migrate: tsconfig maps "@env/*" elsewhere; env imports were left relative.');
+  }
 }

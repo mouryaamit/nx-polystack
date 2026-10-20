@@ -168,6 +168,38 @@ await decryptEnvironmentAsync(other);
     expect(again.join('\n')).toMatch(/custom.*getKey/s);
   });
 
+  it('adds the env import through @env/ when the workspace has the alias', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'tsconfig.base.json',
+      JSON.stringify({ compilerOptions: { paths: { '@env/*': ['environments/*'] } } }),
+    );
+    addProjectConfiguration(tree, 'portal', {
+      root: 'apps/portal',
+      sourceRoot: 'apps/portal/src',
+      targets: {
+        build: {
+          executor: '@angular-devkit/build-angular:browser',
+          options: { main: 'apps/portal/src/main.ts' },
+        },
+        release: {
+          executor: '@mouryaamit/nx-polystack:build',
+          options: { type: 'angular', outputPath: 'dist/apps/portal', envProject: 'portal' },
+        },
+      },
+    });
+    tree.write(
+      'apps/portal/src/main.ts',
+      "import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';\n" +
+        "import { AppModule } from './app/app.module';\n\n" +
+        'platformBrowserDynamic().bootstrapModule(AppModule);\n',
+    );
+    switchAppsToGcm(tree, []);
+    expect(tree.read('apps/portal/src/main.ts', 'utf8')).toContain(
+      "import { environment } from '@env/portal/environment';",
+    );
+  });
+
   it('reports only listed keys in listed mode', () => {
     const tree = createTreeWithEmptyWorkspace();
     addProjectConfiguration(tree, 'portal', {

@@ -4,6 +4,7 @@ import { Tree } from '@nx/devkit';
 
 import { POLYSTACK_BUILD_EXECUTOR } from '../utils/angular-project';
 import { FoundProject, findProjects } from '../utils/llm-block';
+import { envAliasImport, hasEnvAlias } from '../utils/env-alias';
 import { EnvEncryptionConfig, listedKeys } from './config';
 import { closingBracket, isCodeAt, quotedStrings, stripComments } from './env-file';
 
@@ -341,12 +342,15 @@ export function switchAppsToGcm(
     const envProject = String(release.options?.['envProject'] ?? name);
     const files = tsFiles(tree, sourceRootOf(p));
     if (main && tree.exists(main)) {
-      const rel = path.posix.relative(
-        path.posix.dirname(main),
-        `environments/${envProject}/environment`,
-      );
+      const envFile = `environments/${envProject}/environment`;
+      const rel = path.posix.relative(path.posix.dirname(main), envFile);
+      const envImport = hasEnvAlias(tree)
+        ? envAliasImport(envFile)
+        : rel.startsWith('.')
+        ? rel
+        : `./${rel}`;
       const text = tree.read(main, 'utf8') ?? '';
-      const next = rewriteMainForGcm(text, rel.startsWith('.') ? rel : `./${rel}`, opts.metaName);
+      const next = rewriteMainForGcm(text, envImport, opts.metaName);
       if (next === undefined) {
         notes.push(
           `${name}: ${main} has an unknown shape; before bootstrapping add ` +
