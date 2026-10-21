@@ -3,6 +3,43 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.4.0
+
+Angular 17 is supported, the second release of one public release per Angular major.
+
+- **New workspaces on 17:** `pstack new --angular=17` starts on Angular 17.3, Nx 18.3, TypeScript 5.4
+  and angular-eslint 17.3.
+- **Generators on 17:** apps, Ionic apps and libraries get Angular 17 packages, Ionic 7.8 and
+  Capacitor 6. New apps keep the webpack `browser` builder; `serve` and `extract-i18n` use
+  `buildTarget`.
+- **Migration on 17:** `pstack migrate` brings in Angular CLI apps, Ionic apps and Nx workspaces on 17,
+  and accepts Nx workspaces on Nx 15 to 22.
+
+Checked by:
+
+- a new Angular 17 workspace with generated apps, an Ionic app and a library: build, lint, test and
+  release builds;
+- migrated `ng new` 17, Ionic 7 and `create-nx-workspace` 18.3 sources: build, lint and release
+  builds.
+
+The 1.3.2 and 1.3.3 entries below were development releases leading to this one.
+
+## 1.3.3
+
+- `pstack migrate` accepts Nx workspaces on Nx 15 to 22 (it was 15 to 17), so Angular 17+ Nx
+  workspaces can be migrated. When the source's nx.json infers targets with plugins, the report
+  says which ones, since inferred targets are not in project.json and are not copied.
+
+## 1.3.2
+
+- `pstack new --angular=17` starts a workspace on Angular 17.3 with Nx 18.3, TypeScript 5.4,
+  angular-eslint 17.3, zone.js 0.14, typescript-eslint 7 and eslint-plugin-unused-imports 3.
+- On an Angular 17 workspace, `pstack app`, `pstack lib` and `pstack migrate` add the Angular 17
+  packages (Ionic apps get Ionic 7.8 and Capacitor 6), and new apps' `serve` and `extract-i18n`
+  targets use `buildTarget` (Angular 17 renamed `browserTarget`). Apps keep the webpack `browser`
+  builder.
+- Workspaces on Nx 18 or later get typescript-eslint 7 when ESLint packages are added.
+
 ## 1.3.1
 
 The public release of 1.3.0's changes: Angular 16 support, `pstack new --angular`, and

@@ -15,6 +15,7 @@ import {
 import {
   ANGULAR_VERSION,
   ensureAngularDependencies,
+  workspaceGeneratorMajor,
   workspaceGeneratorVersions,
 } from '../../lib/utils/angular-deps';
 import {
@@ -187,7 +188,7 @@ export default async function appGenerator(
 
     generateAngularEnvFiles(tree, projectName, envLayout);
 
-    const targetOptions = { envLayout, port };
+    const targetOptions = { envLayout, port, angularMajor: workspaceGeneratorMajor(tree) };
     const targets =
       type === 'ionic'
         ? ionicProjectTargets(projectName, projectPath, targetOptions)
