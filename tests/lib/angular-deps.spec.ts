@@ -1,7 +1,11 @@
 import { logger, readJson, updateJson } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 
-import { ANGULAR_VERSION, ensureAngularDependencies } from '../../src/lib/utils/angular-deps';
+import {
+  ANGULAR_VERSION,
+  angularGeneratorVersions,
+  ensureAngularDependencies,
+} from '../../src/lib/utils/angular-deps';
 
 describe('ensureAngularDependencies', () => {
   it('adds Angular 15 runtime and build packages when @angular/core is missing', () => {
@@ -102,7 +106,7 @@ describe('ensureAngularDependencies', () => {
     (field) => {
       const tree = createTreeWithEmptyWorkspace();
       updateJson(tree, 'package.json', (j) => {
-        j[field] = { ...j[field], '@angular/core': '~16.2.0' };
+        j[field] = { ...j[field], '@angular/core': '~17.3.0' };
         return j;
       });
       const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
@@ -110,7 +114,9 @@ describe('ensureAngularDependencies', () => {
       expect(ensureAngularDependencies(tree)).toBeUndefined();
       expect(readJson(tree, 'package.json')).toEqual(before);
       expect(warn).toHaveBeenCalledWith(
-        expect.stringMatching(/Angular 16.*@angular-devkit\/build-angular/s),
+        expect.stringMatching(
+          /Angular 17; the generators support Angular 15, 16.*@angular-devkit\/build-angular/s,
+        ),
       );
       warn.mockRestore();
     },
@@ -135,5 +141,50 @@ describe('ensureAngularDependencies', () => {
     });
     ensureAngularDependencies(withoutNx);
     expect(readJson(withoutNx, 'package.json').devDependencies['@nx/eslint']).toBe('^17.0.0');
+  });
+
+  it('major 16: the whole Angular 16 set for a workspace without Angular (pstack new --angular=16)', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    ensureAngularDependencies(tree, { major: 16 });
+    const pkg = readJson(tree, 'package.json');
+    expect(pkg.dependencies['@angular/core']).toBe('~16.2.12');
+    expect(pkg.dependencies['@angular/router']).toBe('~16.2.12');
+    expect(pkg.dependencies['zone.js']).toBe('~0.13.0');
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~16.2.12');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~16.3.1');
+    expect(pkg.devDependencies.typescript).toBe('~5.1.6');
+    expect(pkg.devDependencies['@types/node']).toBe('~20.10.0');
+  });
+
+  it('an Angular 16 workspace gets the missing build, lint and TypeScript 5.1 packages', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    updateJson(tree, 'package.json', (j) => {
+      j.dependencies = { '@angular/core': '~16.2.12' };
+      j.devDependencies = { nx: '17.0.6' };
+      return j;
+    });
+    ensureAngularDependencies(tree, { includeRuntime: true });
+    const pkg = readJson(tree, 'package.json');
+    expect(pkg.dependencies['@angular/router']).toBe('~16.2.12');
+    expect(pkg.dependencies['zone.js']).toBe('~0.13.0');
+    expect(pkg.devDependencies['@angular/compiler-cli']).toBe('~16.2.12');
+    expect(pkg.devDependencies['@angular-eslint/template-parser']).toBe('~16.3.1');
+    expect(pkg.devDependencies.typescript).toBe('~5.1.6');
+  });
+
+  it('versions per generator major; other majors are refused', () => {
+    expect(angularGeneratorVersions(15)).toMatchObject({
+      angular: '~15.2.0',
+      ionicAngular: '~7.8.0',
+      capacitor: '~5.7.0',
+    });
+    expect(angularGeneratorVersions(16)).toMatchObject({
+      angular: '~16.2.12',
+      ionicAngular: '~7.8.6',
+      capacitor: '^6.0.0',
+    });
+    expect(() => angularGeneratorVersions(17)).toThrow(
+      /not supported by the generators \(15, 16\)/,
+    );
   });
 });

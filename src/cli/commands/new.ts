@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { flagString } from '../args';
+import { GENERATOR_ANGULAR_MAJORS } from '../../lib/utils/angular-deps';
+import { Flags, flagString } from '../args';
 import { findWorkspaceRoot } from '../context';
 import { execOrThrow, hasGit } from '../exec';
 import { runInTree } from '../run-tree';
@@ -15,6 +16,22 @@ export interface NewDeps {
 }
 
 const defaultDeps: NewDeps = { exec: execOrThrow, hasGit };
+
+/** --angular=<major> of pstack new / preset: undefined when absent, else a generator major. */
+export function angularMajorFlag(flags: Flags): number | undefined {
+  const raw = flags['angular'];
+  if (raw === undefined) return undefined;
+  const major = typeof raw === 'string' ? Number(raw.trim()) : NaN;
+  if (!GENERATOR_ANGULAR_MAJORS.includes(major)) {
+    throw new CliError(
+      `--angular must be one of ${GENERATOR_ANGULAR_MAJORS.join(', ')}` +
+        (typeof raw === 'string' ? ` (got "${raw}")` : '') +
+        '. To reach a later Angular, create the workspace on the newest of these and run ' +
+        '"pstack upgrade angular".',
+    );
+  }
+  return major;
+}
 
 export async function runNew(ctx: CommandContext, deps: NewDeps = defaultDeps): Promise<number> {
   const dir = ctx.positionals[0];
@@ -42,6 +59,7 @@ export async function runNew(ctx: CommandContext, deps: NewDeps = defaultDeps): 
       `"${baseBranch}" is not a valid branch name (allowed: letters, digits, _ . / -).`,
     );
   }
+  const angular = angularMajorFlag(ctx.flags);
   const infraOptions = await presetInfraFlags(ctx.flags);
   const skipInstall = !!ctx.flags['skipInstall'];
   const skipGit = !!ctx.flags['skipGit'];
@@ -56,6 +74,7 @@ export async function runNew(ctx: CommandContext, deps: NewDeps = defaultDeps): 
       ...infraOptions,
       llm: flagString(ctx.flags, 'llm'),
       projectDescription: flagString(ctx.flags, 'projectDescription'),
+      angular,
       // Prettier cannot resolve config for a folder that does not exist yet (dry run).
       skipFormat: ctx.dryRun || !!ctx.flags['skipFormat'],
       pluginVersion: ctx.selfVersion,

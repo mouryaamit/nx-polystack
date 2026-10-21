@@ -2,13 +2,13 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { formatFiles, generateFiles, GeneratorCallback, logger, readJson, Tree } from '@nx/devkit';
-import { FsTree } from 'nx/src/generators/tree';
 
 import { installSource } from '../../cli/install-source';
 import { PLUGIN_GITHUB_REPO, PLUGIN_NAME } from '../../cli/versions';
 import { addMissingDependencies, declaredVersion } from '../../lib/utils/dependencies';
 import { hasFlutterProject, refreshLlmBlocks } from '../../lib/utils/llm-block';
 import { addNpmScripts } from '../../lib/utils/npm-scripts';
+import { fsTree } from '../../lib/utils/nx-tree';
 import {
   addQualityEslintRules,
   addTypecheckNxDefaults,
@@ -160,7 +160,7 @@ function nxCacheDirectory(tree: Tree): string {
 /** Renders a template folder in memory; returns workspace path → content. */
 function render(dir: string, vars: Record<string, unknown>): Map<string, string> {
   // Never flushed: the root only has to be a path that is not the workspace.
-  const scratch = new FsTree(path.join(os.tmpdir(), `pstack-infra-render-${process.pid}`), false);
+  const scratch = fsTree(path.join(os.tmpdir(), `pstack-infra-render-${process.pid}`));
   generateFiles(scratch, path.join(FILES, dir), '.', { ...vars, template: '' });
   const out = new Map<string, string>();
   for (const c of scratch.listChanges()) {

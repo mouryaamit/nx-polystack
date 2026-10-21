@@ -155,6 +155,51 @@ describe('migrate generator: multi-project Angular CLI workspace', () => {
     );
   });
 
+  it('keeps application-builder apps as they are in an Angular 17+ workspace', async () => {
+    const src = fixtureCopy('angular15-workspace');
+    const pkg = readJsonFile<{
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    }>(src, 'package.json');
+    for (const field of [pkg.dependencies, pkg.devDependencies]) {
+      for (const k of Object.keys(field)) {
+        if (k.startsWith('@angular/') || k === '@angular-devkit/build-angular')
+          field[k] = '^17.3.0';
+      }
+    }
+    putJson(src, 'package.json', pkg);
+    const ws = readJsonFile<{
+      projects: Record<string, { architect: Record<string, Record<string, unknown>> }>;
+    }>(src, 'angular.json');
+    const admin = ws.projects['admin'].architect;
+    const options = admin['build']['options'] as Record<string, unknown>;
+    admin['build'] = {
+      builder: '@angular-devkit/build-angular:application',
+      options: { ...options, browser: options['main'], main: undefined },
+      configurations: admin['build']['configurations'],
+    };
+    admin['serve'] = {
+      builder: '@angular-devkit/build-angular:dev-server',
+      configurations: { development: { buildTarget: 'admin:build:development' } },
+    };
+    putJson(src, 'angular.json', ws);
+
+    const tree = workspace();
+    const root = readJson(tree, 'package.json');
+    root.dependencies = { '@angular/core': '~17.3.0' };
+    tree.write('package.json', JSON.stringify(root));
+    await migrateGenerator(tree, { source: src, name: 'field-workspace' });
+    const pj = readJson(tree, 'apps/admin/project.json');
+    expect(pj.targets.build.executor).toBe('@angular-devkit/build-angular:application');
+    expect(pj.targets.build.options.browser).toBe('apps/admin/src/main.ts');
+    expect(pj.targets.build.options.main).toBeUndefined();
+    expect(pj.targets.serve.configurations.development).toEqual({
+      buildTarget: 'admin:build:development',
+    });
+    const report = tree.read('docs/migrations/field-workspace.md', 'utf8') as string;
+    expect(report).not.toContain('@angular-devkit/build-angular:application became');
+  });
+
   it('converts application-builder apps and leaves server-rendered ones out', async () => {
     const src = fixtureCopy('angular15-workspace');
     const ws = readJsonFile<{

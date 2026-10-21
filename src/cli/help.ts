@@ -11,6 +11,8 @@ USAGE
 COMMANDS
   new <dir>   Create a new polystack workspace in <dir> (installs deps, initialises git)
   update      Upgrade this workspace's nx-polystack version and run its migrations
+  upgrade     upgrade angular: move the workspace to the next Angular major (Nx, TypeScript,
+              build and lint packages, Ionic, Capacitor, Node), one commit per step
   preset      Bootstrap a workspace root skeleton in the current directory
   app         Scaffold a new application into an existing workspace
   lib         Scaffold a shared library (ts, angular, ionic, flutter, assets, styles,
@@ -36,6 +38,8 @@ COMMANDS
               into existing Angular/Ionic apps; new apps get them automatically
   hardening   Show or change an app's release hardening (leak check, source maps, comment and
               console stripping, obfuscation, SRI for every chunk)
+  inspect     Tell whether a build was made by pstack: reads the build meta of a dist folder,
+              an index.html or a URL (tool and versions, env, time, branch, commit)
   infra       Add repo docs, CI gates (affected lint/test/build, dependency cycles), quality
               checks (knip, pre-push audit + secret scan) and a dependency-upgrade workflow
 
@@ -51,16 +55,32 @@ OPTIONS — new / preset
   --llm=<tools>                AI-assistant files, as pstack llm: claude | agents | copilot
                                (codex, openai-gpt → agents; comma-separated)
   --projectDescription=<text>  Short project description
+  --angular=<major>            Start on this Angular: 15 | 16 (default: Angular 15, added by the
+                               first Angular or Ionic app)
   --skipFormat                 Skip Prettier format pass
   --skip-install               new only — do not run npm install
   --skip-git                   new only — do not initialise git
   --force                      new only — allow creating inside another Nx workspace
+
+OPTIONS — inspect
+  pstack inspect <dist folder | index.html | URL>
+  --json                       Print the result as JSON (the aes-gcm key share is never shown)
+  Exit code 0 when a pstack build meta is found, 1 when not.
 
 OPTIONS — update
   --to=<version>               Target version, also as "pstack update <version>"
                                (default: this CLI's version)
   --allow-dirty                Run with uncommitted changes
   --force                      Allow downgrading
+
+OPTIONS — upgrade angular
+  --to=<major>                 Go up to this Angular major, one step at a time (default: the
+                               next major); asks before each further step unless --yes
+  --yes                        Do every step up to --to without asking
+  --skip-check                 Skip "nx run-many -t build lint" after each step
+  --no-commit                  Leave each step's changes uncommitted (with --to, stops after one)
+  --dry-run                    Print the steps; change nothing
+  Needs a clean git tree and the Node major of the step (Node 22 for Angular 21).
 
 OPTIONS — app
   --type=<type>                App type: angular | ionic | flutter  (required)
@@ -298,5 +318,7 @@ EXAMPLES
   pstack hardening --app=portal --configuration=uat --obfuscate=light --sri
   pstack update
   pstack update 0.3.0 --dry-run
+  pstack upgrade angular --dry-run
+  pstack upgrade angular --to=18
 `.trimStart();
 }

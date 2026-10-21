@@ -194,6 +194,46 @@ describe('migrate generator: standalone Angular CLI app', () => {
         return src;
       }
 
+      /** angular18Source with Angular 18 in its package.json, and a workspace on Angular 18. */
+      function onAngular18(): string {
+        const src = angular18Source();
+        const pkg = readJsonFile<{ dependencies: Record<string, string> }>(src, 'package.json');
+        for (const k of Object.keys(pkg.dependencies)) {
+          if (k.startsWith('@angular/')) pkg.dependencies[k] = '^18.2.0';
+        }
+        putJson(src, 'package.json', pkg);
+        const ws = pkgOf(tree);
+        ws.dependencies = { ...(ws.dependencies ?? {}), '@angular/core': '~18.2.0' };
+        tree.write('package.json', JSON.stringify(ws));
+        return src;
+      }
+
+      it('keeps the application builder when the workspace is on Angular 17+', async () => {
+        await migrateGenerator(tree, { source: onAngular18(), name: 'portal' });
+        const pj = readJson(tree, 'apps/portal/project.json');
+        expect(pj.targets.build.executor).toBe('@angular/build:application');
+        expect(pj.targets.build.outputs).toEqual(['{options.outputPath.base}']);
+        expect(pj.targets.build.options).toMatchObject({
+          outputPath: { base: 'dist/apps/portal', browser: '' },
+          browser: 'apps/portal/src/main.ts',
+          index: 'apps/portal/src/index.html',
+          serviceWorker: 'apps/portal/ngsw-config.json',
+          define: { BUILD: '"x"' },
+        });
+        expect(pj.targets.build.options.main).toBeUndefined();
+        expect(pj.targets.serve.executor).toBe('@angular/build:dev-server');
+        expect(pj.targets.serve.configurations.development.buildTarget).toBe(
+          'portal:build:development',
+        );
+        expect(pj.targets.release.options.outputPath).toBe('dist/apps/portal');
+        expect(readJson(tree, 'apps/portal/tsconfig.json').compilerOptions).toMatchObject({
+          moduleResolution: 'bundler',
+          verbatimModuleSyntax: true,
+        });
+        const report = tree.read('docs/migrations/portal.md', 'utf8') ?? '';
+        expect(report).not.toContain('became @angular-devkit/build-angular:browser');
+      });
+
       it('converts the application builder to the Angular 15 browser builder', async () => {
         await migrateGenerator(tree, { source: angular18Source(), name: 'portal' });
         const pj = readJson(tree, 'apps/portal/project.json');
@@ -898,24 +938,38 @@ describe('migrate generator: standalone Angular CLI app', () => {
       tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~16.2.0' } }));
       await expect(migrateGenerator(tree, { source: FIXTURE, name: 'portal' })).rejects.toThrow(
         'migrate: the workspace uses Angular 16 (@angular/core ~16.2.0) but the source uses Angular 15 ' +
-          '(@angular/core ^15.2.0). Bring them to the same major first, or pass --force-angular',
+          '(@angular/core ^15.2.0). Update the source to Angular 16 first, one major at a time ' +
+          '(`ng update @angular/core@16 @angular/cli@16`, and so on)',
+      );
+      expect(tree.exists('apps/portal')).toBe(false);
+    });
+
+    it('a source newer than the workspace is told to bring the workspace up first', async () => {
+      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~15.2.0' } }));
+      const src = fixtureCopy('angular15-app');
+      const pkg = readJsonFile<{ dependencies: Record<string, string> }>(src, 'package.json');
+      pkg.dependencies['@angular/core'] = '^17.3.0';
+      putJson(src, 'package.json', pkg);
+      await expect(migrateGenerator(tree, { source: src, name: 'portal' })).rejects.toThrow(
+        'Bring the workspace to Angular 17 first (one major at a time), or migrate into a ' +
+          'workspace that is on Angular 17. Or pass --force-angular',
       );
       expect(tree.exists('apps/portal')).toBe(false);
     });
 
     it('--force-angular proceeds, keeps the workspace Angular and flags the mismatch', async () => {
-      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~16.2.0' } }));
+      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~17.3.0' } }));
       await migrateGenerator(tree, { source: FIXTURE, name: 'portal', forceAngular: true });
       const pkg = pkgOf(tree);
-      expect(pkg.dependencies['@angular/core']).toBe('~16.2.0');
+      expect(pkg.dependencies['@angular/core']).toBe('~17.3.0');
       expect(pkg.dependencies['@angular/router']).toBeUndefined();
       expect(pkg.dependencies['zone.js']).toBe('~0.12.0');
       const report = tree.read('docs/migrations/portal.md', 'utf8')!;
       expect(report).toContain('## Angular version');
       expect(report).toContain(
-        'Angular major mismatch: the workspace has @angular/core `~16.2.0` (Angular 16)',
+        'Angular major mismatch: the workspace has @angular/core `~17.3.0` (Angular 17)',
       );
-      expect(report).toContain('Install versions matching Angular 16 for:');
+      expect(report).toContain('Install versions matching Angular 17 for:');
       expect(report).toContain(
         'Not added (they would mix Angular majors): `@angular-devkit/build-angular`, `@angular/animations`',
       );

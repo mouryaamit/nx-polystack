@@ -14,7 +14,7 @@
     "env": {
       "type": "string",
       "default": "dev",
-      "description": "Environment tier — selects <project root>/env/<env>.json for --dart-define-from-file."
+      "description": "Environment tier \u2014 selects <project root>/env/<env>.json for --dart-define-from-file."
     },
     "dist": {
       "type": "string",
@@ -43,6 +43,18 @@
       "type": "boolean",
       "default": true,
       "description": "Web builds: remove EXIF from the images in dist (only images that have EXIF are rewritten). Set false to leave the output as Flutter wrote it. Ignored for apk / ios."
+    },
+    "buildMeta": {
+      "type": "object",
+      "description": "Web builds: the build meta (<meta name=\"x-build\">) written into index.html. gen (default true) adds gen (nx-polystack@<version>), ng and nx to its payload; set false to leave them out.",
+      "properties": {
+        "gen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write the tool and its versions into the build meta."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": []

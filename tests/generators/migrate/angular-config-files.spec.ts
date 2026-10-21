@@ -40,6 +40,28 @@ describe('migrate: tsconfig and ESLint rewrites', () => {
     });
   });
 
+  it('root tsconfig: module preserve keeps its bundler resolution over the base', () => {
+    // Angular 20+ ng new: module preserve, no moduleResolution (TypeScript defaults it to bundler).
+    expect(
+      appRootTsconfig({ compilerOptions: { module: 'preserve', target: 'ES2022' } }, mapper())[
+        'compilerOptions'
+      ],
+    ).toEqual({ module: 'preserve', target: 'ES2022', moduleResolution: 'bundler' });
+    // An explicit moduleResolution, or a source tsconfig that extends another, is left as it is.
+    expect(
+      appRootTsconfig(
+        { compilerOptions: { module: 'preserve', moduleResolution: 'node' } },
+        mapper(),
+      )['compilerOptions'],
+    ).toEqual({ module: 'preserve', moduleResolution: 'node' });
+    expect(
+      appRootTsconfig(
+        { extends: './tsconfig.shared.json', compilerOptions: { module: 'preserve' } },
+        mapper(),
+      )['compilerOptions'],
+    ).toEqual({ module: 'preserve' });
+  });
+
   it('root tsconfig: rebases include, files, references and typeRoots for a nested project root', () => {
     expect(
       appRootTsconfig(

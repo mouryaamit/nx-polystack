@@ -1,10 +1,76 @@
 import { GeneratorCallback, logger, Tree } from '@nx/devkit';
 
+import { ANGULAR_PINS, pinRange } from '../upgrade/pins';
+
 import { addMissingDependencies, declaredVersion, majorOf, nxVersion } from './dependencies';
 
-/** Angular line the generated app templates target (NgModule bootstrap, browser builder, browserTarget). */
+/** Angular line a workspace without Angular gets by default (NgModule bootstrap, browser builder). */
 export const ANGULAR_VERSION = '~15.2.0';
-const ANGULAR_MAJOR = 15;
+export const ANGULAR_MAJOR = 15;
+
+/**
+ * Angular majors the generators write for: `pstack new --angular=<major>`, and `pstack app` / `:lib`
+ * fill in packages for a workspace on one of them. One major is added per public release.
+ */
+export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16];
+
+/** Versions the generators add for one Angular major (only where a package is missing). */
+export interface AngularGeneratorVersions {
+  angular: string;
+  zoneJs: string;
+  typescript: string;
+  typesNode: string;
+  angularEslint: string;
+  ionicAngular: string;
+  capacitor: string;
+}
+
+const ZONE_JS: Record<number, string> = { 15: '~0.12.0', 16: '~0.13.0' };
+/** @types/node the major's TypeScript can parse (a latest one uses newer syntax: TS1139). */
+const TYPES_NODE: Record<number, string> = { 15: '~18.16.9', 16: '~20.10.0' };
+
+export function angularGeneratorVersions(major: number): AngularGeneratorVersions {
+  if (major === 15) {
+    // Kept as released: angular-eslint 15.x works with any Angular 15.x.
+    return {
+      angular: ANGULAR_VERSION,
+      zoneJs: ZONE_JS[15],
+      typescript: '~4.9.5',
+      typesNode: TYPES_NODE[15],
+      angularEslint: ANGULAR_VERSION,
+      ionicAngular: '~7.8.0',
+      capacitor: '~5.7.0',
+    };
+  }
+  const pins = ANGULAR_PINS[major];
+  if (!pins || !GENERATOR_ANGULAR_MAJORS.includes(major)) {
+    throw new Error(
+      `Angular ${major} is not supported by the generators (${GENERATOR_ANGULAR_MAJORS.join(
+        ', ',
+      )}).`,
+    );
+  }
+  return {
+    angular: `~${pins.angular}`,
+    zoneJs: ZONE_JS[major],
+    typescript: `~${pins.typescript}`,
+    typesNode: TYPES_NODE[major],
+    angularEslint: pinRange(pins.angularEslint),
+    ionicAngular: pinRange(pins.ionic),
+    capacitor: `^${pins.capacitor}.0.0`,
+  };
+}
+
+/**
+ * The generator versions for the workspace's Angular (the declared @angular/core), or for Angular
+ * 15 when there is none or the major is not one the generators support.
+ */
+export function workspaceGeneratorVersions(tree: Tree): AngularGeneratorVersions {
+  const major = majorOf(declaredVersion(tree, '@angular/core') ?? '');
+  return angularGeneratorVersions(
+    major !== undefined && GENERATOR_ANGULAR_MAJORS.includes(major) ? major : ANGULAR_MAJOR,
+  );
+}
 
 /** Full runtime set for a workspace that has no Angular yet. */
 const RUNTIME_ALL = [
@@ -18,7 +84,7 @@ const RUNTIME_ALL = [
   '@angular/router',
 ];
 
-/** Runtime packages the generated app code imports (filled in for an existing Angular 15 workspace). */
+/** Runtime packages the generated app code imports (filled in for an existing Angular workspace). */
 const RUNTIME_IMPORTED = [
   '@angular/common',
   '@angular/compiler',
@@ -27,48 +93,51 @@ const RUNTIME_IMPORTED = [
   '@angular/router',
 ];
 
-const RUNTIME_SUPPORT: Record<string, string> = {
-  rxjs: '~7.8.0',
-  tslib: '^2.3.0',
-  'zone.js': '~0.12.0',
-};
+function runtimeSupport(v: AngularGeneratorVersions): Record<string, string> {
+  return { rxjs: '~7.8.0', tslib: '^2.3.0', 'zone.js': v.zoneJs };
+}
 
-function buildAndLintPackages(angular: string, nx: string): Record<string, string> {
+function buildAndLintPackages(
+  angular: string,
+  nx: string,
+  v: AngularGeneratorVersions,
+): Record<string, string> {
   return {
     '@angular-devkit/build-angular': angular,
     '@angular/cli': angular,
     '@angular/compiler-cli': angular,
     '@nx/angular': nx,
     '@nx/eslint': nx,
-    // angular-eslint 15.x works with any Angular 15.x
-    '@angular-eslint/eslint-plugin': ANGULAR_VERSION,
-    '@angular-eslint/eslint-plugin-template': ANGULAR_VERSION,
-    '@angular-eslint/template-parser': ANGULAR_VERSION,
+    '@angular-eslint/eslint-plugin': v.angularEslint,
+    '@angular-eslint/eslint-plugin-template': v.angularEslint,
+    '@angular-eslint/template-parser': v.angularEslint,
   };
 }
 
 /**
- * Dev packages Angular 15 needs at a TypeScript-4-compatible version. Without them npm can hoist a
- * TypeScript 5.x (refused by the Angular 15 compiler: "requires TypeScript >=4.8.2 and <5.0.0") or
- * a latest @types/node, whose `const` type parameters TypeScript 4.9 can't parse (TS1139).
+ * TypeScript and @types/node at the versions the major's compiler accepts. Without them npm can
+ * hoist a newer TypeScript (Angular 15 refuses 5.x, Angular 16 refuses 5.2+) or a latest
+ * @types/node whose syntax that TypeScript can't parse (TS1139).
  * Only added when missing; a declared version is never replaced.
  */
-const TS4_DEV_PACKAGES: Record<string, string> = {
-  typescript: '~4.9.5',
-  '@types/node': '~18.16.9',
-};
+function typeScriptPackages(v: AngularGeneratorVersions): Record<string, string> {
+  return { typescript: v.typescript, '@types/node': v.typesNode };
+}
 
 export interface EnsureAngularOptions {
   /** Also add the runtime packages the generated app imports (used by `pstack app`). */
   includeRuntime?: boolean;
+  /** Angular major for a workspace without @angular/core (default 15; `pstack new --angular`). */
+  major?: number;
 }
 
 /**
- * Makes sure an Angular 15 app can build and lint. Packages are only added, never upgraded:
- * - no @angular/core → the whole Angular 15 set (runtime, build, lint, TypeScript ~4.9.5,
- *   @types/node ~18.16.9);
- * - Angular 15 installed → missing build/lint packages at the installed Angular version
- *   (plus the imported runtime packages when `includeRuntime`);
+ * Makes sure a generated Angular app or library can build and lint. Packages are only added,
+ * never upgraded:
+ * - no @angular/core → the whole set for `major` (default 15): runtime, build, lint, TypeScript
+ *   and @types/node;
+ * - a generator major installed (15, 16) → missing build/lint packages at the installed Angular
+ *   version (plus the imported runtime packages when `includeRuntime`);
  * - another Angular major → nothing; warns which build/lint packages are missing.
  */
 export function ensureAngularDependencies(
@@ -79,33 +148,39 @@ export function ensureAngularDependencies(
   const core = declaredVersion(tree, '@angular/core');
 
   if (core === undefined) {
+    const v = angularGeneratorVersions(opts.major ?? ANGULAR_MAJOR);
     const deps: Record<string, string> = {
-      ...Object.fromEntries(RUNTIME_ALL.map((d) => [d, ANGULAR_VERSION])),
-      ...RUNTIME_SUPPORT,
+      ...Object.fromEntries(RUNTIME_ALL.map((d) => [d, v.angular])),
+      ...runtimeSupport(v),
     };
-    const devDeps = { ...buildAndLintPackages(ANGULAR_VERSION, nx), ...TS4_DEV_PACKAGES };
+    const devDeps = { ...buildAndLintPackages(v.angular, nx, v), ...typeScriptPackages(v) };
     return addMissingDependencies(tree, deps, devDeps);
   }
 
-  const devDeps = buildAndLintPackages(core, nx);
-  if (majorOf(core) !== ANGULAR_MAJOR) {
+  const major = majorOf(core);
+  if (major === undefined || !GENERATOR_ANGULAR_MAJORS.includes(major)) {
+    const devDeps = buildAndLintPackages(core, nx, angularGeneratorVersions(ANGULAR_MAJOR));
     const missing = Object.keys(devDeps).filter(
       (name) => declaredVersion(tree, name) === undefined,
     );
     if (missing.length > 0) {
       logger.warn(
-        `nx-polystack: workspace uses Angular ${majorOf(core) ?? core}; generated apps target ` +
-          `Angular ${ANGULAR_MAJOR}. Not adding packages automatically — install versions matching ` +
-          `your Angular for: ${missing.join(', ')}.`,
+        `nx-polystack: workspace uses Angular ${major ?? core}; the generators support Angular ` +
+          `${GENERATOR_ANGULAR_MAJORS.join(', ')}. Not adding packages automatically — install ` +
+          `versions matching your Angular for: ${missing.join(', ')}.`,
       );
     }
     return undefined;
   }
 
+  const v = angularGeneratorVersions(major);
   const deps: Record<string, string> = opts.includeRuntime
-    ? { ...Object.fromEntries(RUNTIME_IMPORTED.map((d) => [d, core])), ...RUNTIME_SUPPORT }
+    ? { ...Object.fromEntries(RUNTIME_IMPORTED.map((d) => [d, core])), ...runtimeSupport(v) }
     : {};
-  return addMissingDependencies(tree, deps, { ...devDeps, ...TS4_DEV_PACKAGES });
+  return addMissingDependencies(tree, deps, {
+    ...buildAndLintPackages(core, nx, v),
+    ...typeScriptPackages(v),
+  });
 }
 
 /**

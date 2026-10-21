@@ -2,7 +2,7 @@ import * as path from 'path';
 
 import { GeneratorCallback, installPackagesTask, readJson, Tree, updateJson } from '@nx/devkit';
 
-import { ensureAngularDependencies } from '../../lib/utils/angular-deps';
+import { ANGULAR_MAJOR, ensureAngularDependencies } from '../../lib/utils/angular-deps';
 import {
   addMissingDependencies,
   declaredVersion,
@@ -40,14 +40,37 @@ export function angularMismatch(
     : { workspace, source, workspaceMajor, sourceMajor };
 }
 
-/** The --force-angular refusal message. */
+/** The --force-angular refusal message, with the way out for each direction. */
 export function angularMismatchMessage(m: AngularMismatch): string {
+  const fix =
+    m.sourceMajor > m.workspaceMajor
+      ? `Bring the workspace to Angular ${m.sourceMajor} first (one major at a time), or ` +
+        `migrate into a workspace that is on Angular ${m.sourceMajor}.`
+      : `Update the source to Angular ${m.workspaceMajor} first, one major at a time ` +
+        `(\`ng update @angular/core@${m.sourceMajor + 1} @angular/cli@${m.sourceMajor + 1}\`, ` +
+        `and so on), so its code gets each version's migrations.`;
   return (
     `the workspace uses Angular ${m.workspaceMajor} (@angular/core ${m.workspace}) but the ` +
-    `source uses Angular ${m.sourceMajor} (@angular/core ${m.source}). Bring them to the same ` +
-    'major first, or pass --force-angular to migrate anyway (the build may fail until the ' +
-    'versions match).'
+    `source uses Angular ${m.sourceMajor} (@angular/core ${m.source}). ${fix} Or pass ` +
+    '--force-angular to migrate anyway (the build may fail until the versions match).'
   );
+}
+
+/** First Angular major with the application builder (`@angular-devkit/build-angular:application`). */
+export const APPLICATION_BUILDER_MAJOR = 17;
+/** Angular majors whose workspace builds with TypeScript 4.x (5-only tsconfig options fail). */
+export const TS4_MAX_ANGULAR_MAJOR = 15;
+
+/**
+ * The Angular major the migrated code will build with: the workspace's, or (when the workspace has
+ * no Angular yet) the source's, which the migration adds; the generators' default otherwise.
+ */
+export function buildAngularMajor(tree: Tree, pkg: PackageJson | undefined): number {
+  const workspace = tree.exists('package.json')
+    ? declaredVersion(tree, '@angular/core')
+    : undefined;
+  const version = workspace ?? sourceDependency(pkg, '@angular/core');
+  return (version ? majorOf(version) : undefined) ?? ANGULAR_MAJOR;
 }
 
 /** Packages versioned with Angular itself. */

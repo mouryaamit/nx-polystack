@@ -10,6 +10,7 @@ import { copyIntoTree, CopyResult, DEFAULT_MAX_FILES, SkipRules } from '../copy'
 import {
   angularMismatch,
   angularMismatchMessage,
+  buildAngularMajor,
   DependencySkip,
   mergeDependencies,
   packageNames,
@@ -308,7 +309,8 @@ function migrateLib(
     forceAngular: ctx.forceAngular,
     rewriteImports: ctx.rewriteImports,
   };
-  migrateProjectTsconfigs(tree, pctx, '', copy.copied, mapper, data);
+  const angularMajor = buildAngularMajor(tree, sourceRootPackage(ctx.sourceDir).pkg);
+  migrateProjectTsconfigs(tree, pctx, '', copy.copied, mapper, data, angularMajor);
   if (sourceExists(pkgDir, 'tsconfig.json')) {
     // Apps compile the library source through its alias; project references and composite
     // builds pointed at the old package layout.

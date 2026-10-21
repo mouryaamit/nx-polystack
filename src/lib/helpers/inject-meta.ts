@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 
+import type { GenInfo } from './build-gen';
+
 export interface InjectMetaOptions {
   indexHtmlPath: string;
   env: string;
@@ -12,6 +14,8 @@ export interface InjectMetaOptions {
   now?: Date;
   /** Extra payload fields (aes-gcm key share `k`). */
   extra?: Record<string, string>;
+  /** Tool and versions that made the build (gen, ng, nx); omitted when undefined. */
+  gen?: GenInfo;
 }
 
 export function injectBuildMeta(opts: InjectMetaOptions): void {
@@ -42,6 +46,7 @@ export function injectBuildMeta(opts: InjectMetaOptions): void {
     branch,
     commit,
     build: buildNumber,
+    ...(opts.gen ?? {}),
   };
 
   const base64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');

@@ -1,9 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { FsTree } from 'nx/src/generators/tree';
-
 import { FLUTTER_PLATFORMS, FlutterPlatform, WorkspaceProject } from '../../lib/release/plan';
+import { fsTree } from '../../lib/utils/nx-tree';
 import { readProjects } from '../../lib/utils/project-json-files';
 import { flagBoolean, flagString } from '../args';
 import { CliError, CommandContext } from '../types';
@@ -21,7 +20,7 @@ const list = (v: string | undefined): string[] | undefined =>
 /** Every project.json of the workspace, with its name (or folder name). */
 export function readWorkspaceProjects(root: string): WorkspaceProject[] {
   try {
-    return readProjects(new FsTree(root, false));
+    return readProjects(fsTree(root));
   } catch (err) {
     throw new CliError((err as Error).message);
   }

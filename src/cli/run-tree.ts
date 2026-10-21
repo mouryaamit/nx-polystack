@@ -1,5 +1,5 @@
 import { logger, Tree } from '@nx/devkit';
-import { FsTree, flushChanges, printChanges } from 'nx/src/generators/tree';
+import { flushChanges, fsTree, printChanges } from '../lib/utils/nx-tree';
 
 export interface RunTreeOptions {
   dryRun: boolean;
@@ -14,7 +14,7 @@ export async function runInTree(
   opts: RunTreeOptions,
   fn: (tree: Tree) => unknown,
 ): Promise<number> {
-  const tree = new FsTree(root, opts.verbose);
+  const tree = fsTree(root, opts.verbose);
   const callback = await fn(tree);
   const changes = tree.listChanges();
 

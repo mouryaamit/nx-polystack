@@ -3,6 +3,97 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.3.0
+
+Angular 16 is supported. This is the first release of one public release per Angular major.
+
+- **New workspaces on 16:** `pstack new --angular=16`.
+- **Generators on 16:** apps, Ionic apps and libraries get Angular 16 packages, Ionic 7.8 and
+  Capacitor 6.
+- **Migration on 16:** `pstack migrate` brings in Angular CLI apps, Ionic apps and Nx workspaces on 16.
+- **Upgrades:** `pstack upgrade angular` moves a workspace one major at a time, from 15 up to 21.
+- **Nx versions:** the plugin loads in workspaces on Nx 17 to 22.
+
+Checked by:
+
+- a new Angular 16 workspace with generated apps, an Ionic app and a library: build, lint, test and
+  release builds;
+- migrated `ng new` 16, Ionic 7 and `create-nx-workspace` 17.0 sources: build, lint and release
+  builds;
+- `pstack upgrade angular` run from 15 to 21 on a sample workspace.
+
+The README's "Angular versions" table lists what is supported and the known breakpoints of each
+upgrade step. The 1.2.8–1.2.15 entries below were development releases leading to this one.
+
+## 1.2.15
+
+- `pstack new --angular=16` (and `:preset --angular=16`) starts a workspace on Angular 16.2, with
+  TypeScript 5.1, angular-eslint 16.3 and zone.js 0.13. Without it, nothing changes: the first app
+  adds Angular 15.
+- On an Angular 16 workspace, `pstack app`, `pstack lib` and `pstack migrate` add the missing
+  build, lint and TypeScript packages for Angular 16 (they used to warn and add nothing). Ionic apps
+  get Ionic 7.8 and Capacitor 6 there (Capacitor 5 on Angular 15).
+
+## 1.2.14
+
+- `pstack upgrade angular`: the Angular 20 step runs Angular's `inject()` migration
+  (`nx g @angular/core:inject`) after installing angular-eslint 20, whose recommended config makes
+  `@angular-eslint/prefer-inject` an error, so libraries with constructor injection failed the
+  step's lint check. If the migration cannot run, pstack says so and the check reports the rule.
+
+## 1.2.13
+
+- `pstack upgrade angular`: after the Angular 18 migrations, removes `HttpClientModule` left in an
+  NgModule's `exports` (or other lists) in files the migration no longer imports it into. Angular's
+  own migration leaves it there in shared modules that re-exported `HttpClientModule`, and the
+  library build then fails ("Cannot find name 'HttpClientModule'").
+
+## 1.2.12
+
+- New `pstack upgrade angular`: moves the workspace to the next Angular major (15 → 21), one
+  step and one commit at a time, with the Nx, TypeScript, build and lint packages, Ionic,
+  Capacitor and Node versions tested for that major. It runs `nx migrate`, the second
+  `nx migrate @angular/core` pass Nx 22 needs, `@ionic/migrate` for Ionic 9 and `cap migrate`
+  for apps with native projects, then `nx run-many -t build lint`. `--to=<major>`, `--yes`,
+  `--skip-check`, `--no-commit` and `--dry-run` are supported.
+
+## 1.2.11
+
+- The plugin's peer range is now Nx 17 to 22 (`nx` and `@nx/devkit` `>=17.0.0 <23.0.0`), so strict
+  installs in a newer Nx workspace no longer refuse it. Generators, executors and the release
+  target were checked on Nx 17 to 22 by walking a workspace from Angular 15 to 21.
+- The CLI's file-system tree now comes from one place, with a clear error if a future Nx moves it.
+  The `clean` and `flutter-build` executors no longer read `context.workspace`, which Nx 20
+  removed (they use `projectsConfigurations`, available since Nx 16).
+
+## 1.2.10
+
+- `pstack migrate` keeps an Angular 20+ app's module resolution. `ng new` writes
+  `module: "preserve"` without `moduleResolution`, which TypeScript resolves as `bundler`; once
+  the app extended the workspace's `tsconfig.base.json` it got the base's `"node"` instead, and
+  the application builder failed (TS5098 on `customConditions`). The migrated tsconfig now sets
+  `moduleResolution: "bundler"` in that case.
+
+## 1.2.9
+
+- `pstack migrate` keeps an Angular 17+ app's own builders (`application`, `@angular/build:*`),
+  options and tsconfig when the workspace is on Angular 17 or later. Before, it always converted
+  them to the Angular 15 browser builder. Angular 15 and 16 workspaces still convert them, as
+  before. An application-builder `serviceWorker` path is now moved with the app.
+- When the workspace and the source use different Angular majors, `pstack migrate` now says which
+  side to update: a newer source needs the workspace brought to its major first, an older source
+  needs `ng update`, one major at a time. `--force-angular` still migrates anyway.
+
+## 1.2.8
+
+- Builds say which tool made them: the build meta (`<meta name="x-build">`) of Angular/Ionic
+  release builds now carries `gen` (`nx-polystack@<version>`), `ng` (Angular) and `nx` (Nx).
+  Flutter web builds get the same build meta, which they did not have before. Release option
+  `buildMeta: { "gen": false }` (also on `flutter-build`) leaves the tool fields out.
+- New `pstack inspect <dist folder | index.html | URL>`: finds the build meta under any name and
+  prints whether pstack made the build, with the versions, env, time, branch and commit
+  (`--json` for scripts). The aes-gcm key share is never printed.
+
 ## 1.2.7
 
 - Apps import their env file as `@env/<app>/environment` through a new `@env/*` alias in

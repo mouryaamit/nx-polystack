@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/schema",
   "cli": "nx",
   "title": "Angular / Ionic Build",
-  "description": "Full build pipeline for Angular and Ionic apps: encrypt-env → nx build → strip-exif → inject-meta, with optional leak check, source-map guard, comment and console stripping, CSP nonce and SRI hash.",
+  "description": "Full build pipeline for Angular and Ionic apps: encrypt-env \u2192 nx build \u2192 strip-exif \u2192 inject-meta, with optional leak check, source-map guard, comment and console stripping, CSP nonce and SRI hash.",
   "type": "object",
   "properties": {
     "type": {
@@ -28,7 +28,7 @@
     },
     "buildConfiguration": {
       "type": "string",
-      "description": "Configuration of buildTarget. Default: PROD → production, UAT → uat, otherwise development."
+      "description": "Configuration of buildTarget. Default: PROD \u2192 production, UAT \u2192 uat, otherwise development."
     },
     "secure": {
       "type": "boolean",
@@ -56,7 +56,9 @@
         },
         "replaceTokens": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Text replaced by the placeholder anywhere in the page, e.g. [\"random-csp-nonce\"]. The build fails when a token sits in quotes the placeholder also uses."
         },
         "addMeta": {
@@ -65,7 +67,9 @@
         },
         "files": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Pages to rewrite, relative to the served root (default [\"index.html\"]); never under assets/."
         }
       }
@@ -74,6 +78,18 @@
       "type": "boolean",
       "default": false,
       "description": "Every env: remove HTML comments from the served index.html (and the other nonce.files). SSI directives and IE conditional comments stay."
+    },
+    "buildMeta": {
+      "type": "object",
+      "description": "Every env: what the build meta (<meta name=\"x-build\">) records about the build tool. gen (default true) adds gen (nx-polystack@<version>), ng (Angular) and nx (Nx) to its payload; set false to leave them out.",
+      "properties": {
+        "gen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write the tool and its versions (gen, ng, nx) into the build meta."
+        }
+      },
+      "additionalProperties": false
     },
     "sri": {
       "type": "boolean",
@@ -101,13 +117,16 @@
     },
     "dropConsole": {
       "type": "array",
-      "items": { "type": "string", "enum": ["log", "debug", "warn", "info", "error", "trace"] },
+      "items": {
+        "type": "string",
+        "enum": ["log", "debug", "warn", "info", "error", "trace"]
+      },
       "description": "non-DEV: console methods whose calls are removed from the built JS (needs terser in the workspace)."
     },
     "obfuscate": {
       "type": "string",
       "enum": ["off", "light", "medium", "strong"],
-      "description": "non-DEV: obfuscate the app's own JS (main and lazy chunks; runtime, polyfills, vendor, scripts and styles are skipped). light ≈ +20% gzip, medium ≈ +67%, strong also encodes the strings of the chunk holding the decrypt code and flattens its control flow. Needs javascript-obfuscator in the workspace. Default: off."
+      "description": "non-DEV: obfuscate the app's own JS (main and lazy chunks; runtime, polyfills, vendor, scripts and styles are skipped). light \u2248 +20% gzip, medium \u2248 +67%, strong also encodes the strings of the chunk holding the decrypt code and flattens its control flow. Needs javascript-obfuscator in the workspace. Default: off."
     },
     "obfuscateOptions": {
       "type": "object",
@@ -125,7 +144,9 @@
     },
     "domains": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "aes-gcm: hosts this build may run on (set per configuration). Empty: no lock."
     },
     "includeWww": {

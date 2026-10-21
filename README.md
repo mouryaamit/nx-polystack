@@ -23,7 +23,38 @@ pstack app --from=portal --name=partner-portal   # a copy of portal, env values 
 pinned copy, so output always matches the workspace's version. Move a workspace to a new release
 with `pstack update`, which installs it and runs its migrations.
 
-Requires Node 20 and npm 10+. Workspaces use Nx 17.
+Requires Node 20 and npm 10+. `pstack new` creates Nx 17 workspaces on Angular 15 or, with
+`--angular=16`, Angular 16; the plugin itself loads in workspaces on Nx 17 to 22.
+
+## Angular versions
+
+Each release adds one Angular major and keeps every earlier one.
+
+| Angular | Nx     | TypeScript | Ionic | Capacitor | Node  | Status                                 |
+| ------- | ------ | ---------- | ----- | --------- | ----- | -------------------------------------- |
+| 15.2    | 17.0.6 | 4.9        | 7.8   | 5         | 20    | supported                              |
+| 16.2    | 17.0.6 | 5.1        | 7.8   | 6         | 20    | supported (1.3.0)                      |
+| 17–21   | 18–22  | 5.4–5.9    | 7–9   | 6–8       | 20/22 | `pstack upgrade angular` only, for now |
+
+Supported means:
+
+- `pstack new --angular=<major>` creates a workspace on that major;
+- its apps and libraries generate, build, lint, test and release-build;
+- `pstack migrate` brings in standalone Angular CLI and Ionic apps and Nx workspaces of the same major;
+- `pstack upgrade angular` moves a workspace there from the previous major.
+
+`pstack upgrade angular` moves a workspace one major at a time, with one commit per step. Each step
+pins Nx, TypeScript, the build and lint packages, Ionic, Capacitor and Node. It works up to Angular 21
+today. Generators for 17 and later come in the next releases; until then they warn which packages to
+add.
+
+Known breakpoints when upgrading:
+
+- **16:** View Engine libraries no longer load.
+- **17:** Nx 18's module-boundary rule refuses relative environment imports (pstack uses `@env/*`).
+- **18:** `HttpClientModule` can be left in an NgModule's lists; `pstack upgrade angular` removes it.
+- **20:** angular-eslint 20 makes `prefer-inject` an error; the step runs Angular's `inject()` migration.
+- **21:** Node 22 is required, Ionic 9 comes through `@ionic/migrate`, and Capacitor moves to 8.
 
 ## What you get
 
@@ -50,6 +81,7 @@ Requires Node 20 and npm 10+. Workspaces use Nx 17.
 | ---------------------------------------- | -------------------------------------------------------------------------- |
 | `pstack new <dir>`                       | Create a workspace (installs dependencies, initialises git)                |
 | `pstack update`                          | Upgrade the workspace's plugin and run its migrations                      |
+| `pstack upgrade angular`                 | Move the workspace to the next Angular major (one commit per step)         |
 | `pstack app` / `pstack lib`              | Add an application or a shared library                                     |
 | `pstack env`                             | Add an environment to some or all apps                                     |
 | `pstack migrate`                         | Copy an existing project into the workspace (the source is never modified) |

@@ -105,14 +105,14 @@ describe('app generator --type=angular', () => {
     expect(typeof cb).toBe('function');
   });
 
-  it('leaves an existing Angular version alone (adds only terser)', async () => {
+  it('leaves an Angular major the generators do not support alone (adds only terser)', async () => {
     tree.write(
       'package.json',
-      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~16.2.0' } }),
+      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~17.3.0' } }),
     );
     await appGenerator(tree, { name: 'my-app', type: 'angular' });
     const pkg = JSON.parse(tree.read('package.json')!.toString());
-    expect(pkg.dependencies).toEqual({ '@angular/core': '~16.2.0' });
+    expect(pkg.dependencies).toEqual({ '@angular/core': '~17.3.0' });
     expect(pkg.devDependencies).toEqual({ terser: '^5.16.0' });
   });
 

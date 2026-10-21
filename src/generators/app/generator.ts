@@ -12,7 +12,11 @@ import {
   readJson,
 } from '@nx/devkit';
 
-import { ensureAngularDependencies } from '../../lib/utils/angular-deps';
+import {
+  ANGULAR_VERSION,
+  ensureAngularDependencies,
+  workspaceGeneratorVersions,
+} from '../../lib/utils/angular-deps';
 import {
   angularProjectTargets,
   cleanTarget,
@@ -148,6 +152,8 @@ export default async function appGenerator(
   if (type === 'angular' || type === 'ionic') {
     const vars = {
       name: projectName,
+      // Capacitor for the workspace's Angular (5 on 15, 6 on 16); Angular itself is added below.
+      capacitorVersion: workspaceGeneratorVersions(tree).capacitor,
       className,
       title,
       appId,
@@ -211,11 +217,11 @@ export default async function appGenerator(
     const hardeningTask = ensureReleaseHardeningDependencies(tree);
     installTask = ensureAngularDependencies(tree, { includeRuntime: true }) ?? hardeningTask;
     if (type === 'ionic') {
-      const core = declaredVersion(tree, '@angular/core') ?? '~15.2.0';
+      const core = declaredVersion(tree, '@angular/core') ?? ANGULAR_VERSION;
       // @angular/forms is a peer of @ionic/angular; match the installed Angular.
       const ionicTask = addMissingDependencies(
         tree,
-        { '@ionic/angular': '~7.8.0', '@angular/forms': core },
+        { '@ionic/angular': workspaceGeneratorVersions(tree).ionicAngular, '@angular/forms': core },
         {},
       );
       const rootTask = installTask;

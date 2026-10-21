@@ -70,6 +70,27 @@ describe('pstack new', () => {
     expect(logSpy.mock.calls.flat().join('\n')).toMatch(/cd ws/);
   });
 
+  it('--angular=16 starts the workspace on Angular 16; other majors are refused', async () => {
+    const cwd = tmpDir();
+    await runNew(
+      makeCtx({ cwd, positionals: ['ws'], flags: { skipFormat: true, angular: '16' } }),
+      recorder().deps,
+    );
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'ws', 'package.json'), 'utf8'));
+    expect(pkg.dependencies['@angular/core']).toBe('~16.2.12');
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~16.2.12');
+    expect(pkg.devDependencies.typescript).toBe('~5.1.6');
+
+    for (const angular of ['17', true]) {
+      await expect(
+        runNew(
+          makeCtx({ cwd: tmpDir(), positionals: ['ws'], flags: { skipFormat: true, angular } }),
+          recorder().deps,
+        ),
+      ).rejects.toThrow(/--angular must be one of 15, 16/);
+    }
+  });
+
   it('honours --skip-install and --skip-git', async () => {
     const cwd = tmpDir();
     const { calls, deps } = recorder();

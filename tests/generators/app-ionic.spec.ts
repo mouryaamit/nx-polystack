@@ -42,6 +42,25 @@ describe('app generator --type=ionic', () => {
     expect(tree.read('apps/field-ops/.gitignore', 'utf8')).toContain('node_modules');
   });
 
+  it('on an Angular 16 workspace: Ionic 7.8 and Capacitor 6', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~16.2.12' },
+        devDependencies: { nx: '17.0.6' },
+      }),
+    );
+    await appGenerator(tree, { name: 'field-ops', type: 'ionic' });
+    const pkg = readJson(tree, 'package.json');
+    expect(pkg.dependencies['@ionic/angular']).toBe('~7.8.6');
+    expect(pkg.dependencies['@angular/forms']).toBe('~16.2.12');
+    expect(pkg.devDependencies.typescript).toBe('~5.1.6');
+    const appPkg = readJson(tree, 'apps/field-ops/package.json');
+    expect(appPkg.dependencies['@capacitor/core']).toBe('^6.0.0');
+    expect(appPkg.devDependencies['@capacitor/cli']).toBe('^6.0.0');
+  });
+
   it('uses --appId when given', async () => {
     await appGenerator(tree, { name: 'field-ops', type: 'ionic', appId: 'com.acme.field' });
     expect(tree.read('apps/field-ops/capacitor.config.ts', 'utf8')).toContain(

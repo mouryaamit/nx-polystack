@@ -91,7 +91,6 @@ export default async function cleanExecutor(
   const projectName = context.projectName ?? '';
   const projectRoot =
     context.projectsConfigurations?.projects?.[projectName]?.root ??
-    context.workspace?.projects?.[projectName]?.root ??
     `apps/${projectName}`;
   if (options.paths !== undefined && !Array.isArray(options.paths)) {
     console.error('✖ clean: "paths" must be a list of workspace-relative paths');

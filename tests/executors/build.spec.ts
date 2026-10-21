@@ -694,8 +694,9 @@ describe('buildExecutor aes-gcm', () => {
     );
     const meta = readMeta();
     expect(Object.keys(meta).sort()).toEqual(
-      ['branch', 'build', 'commit', 'env', 'timestamp_ist', 'timestamp_utc'].sort(),
+      ['branch', 'build', 'commit', 'env', 'gen', 'timestamp_ist', 'timestamp_utc'].sort(),
     );
+    expect(meta.gen).toMatch(/^nx-polystack@/);
     expect(fs.existsSync(path.join(dist, 'assets'))).toBe(false);
     expect(builtEnv).not.toContain('__pstack');
     expect(builtEnv).toMatch(/password: 'U2FsdGVkX1/);
