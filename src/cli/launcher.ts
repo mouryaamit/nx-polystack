@@ -8,7 +8,7 @@ import { CliError } from './types';
 import { compareVersions } from './versions';
 
 /** Commands the global CLI always runs itself. */
-export const NEVER_DELEGATE = new Set(['', 'help', 'new', 'update', '_migrate']);
+export const NEVER_DELEGATE = new Set(['', 'help', 'new', 'update', '_migrate', 'inspect']);
 
 /** Generator commands that act on the workspace (run from its root when delegated). */
 export const WORKSPACE_COMMANDS = new Set([
@@ -24,6 +24,7 @@ export const WORKSPACE_COMMANDS = new Set([
   'release',
   'csp',
   'shared',
+  'upgrade',
 ]);
 
 /** First plugin version whose CLI has each command; older pinned copies cannot run them. */
@@ -38,6 +39,7 @@ export const MIN_LOCAL_VERSION: Readonly<Record<string, string>> = {
   release: '0.32.0',
   csp: '0.33.0',
   shared: '0.35.0',
+  upgrade: '1.2.12',
 };
 
 /** First plugin version that understands a flag of a command (checked when the flag is given). */

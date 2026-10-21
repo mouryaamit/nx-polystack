@@ -19,8 +19,10 @@ import { copyIntoTree, SkipRules } from '../copy';
 import {
   angularMismatch,
   angularMismatchMessage,
+  buildAngularMajor,
   DependencySkip,
   mergeDependencies,
+  TS4_MAX_ANGULAR_MAJOR,
 } from '../dependencies';
 import { upTo } from '../names';
 import { browserslistFile, classifyDependencySpec, SpecContext } from '../npm-deps';
@@ -358,12 +360,14 @@ export function migrateAngularApp(
   noteBuildConfigs(copy.copied, sourceRoot, data);
 
   // 2. project.json
+  const angularMajor = buildAngularMajor(tree, sourcePkg);
   const pj = angularProjectJson({
     sourceProject,
     project,
     name,
     projectRoot,
     exists: mapper.exists,
+    angularMajor,
   });
   writeJson(tree, `${projectRoot}/project.json`, pj.projectJson);
   setProjectTags(tree, projectRoot, opts.tags ?? ['scope:app', 'type:app', 'platform:web']);
@@ -378,7 +382,7 @@ export function migrateAngularApp(
   if (nonceNote) data.notes.push(nonceNote);
 
   // 3. tsconfig
-  migrateTsconfigs(tree, ctx, sourceRoot, copy.copied, mapper, data);
+  migrateTsconfigs(tree, ctx, sourceRoot, copy.copied, mapper, data, angularMajor);
 
   // 4. ESLint
   migrateEslint(tree, ctx, project.prefix ?? 'app', copy.copied, mapper, data);
@@ -435,14 +439,20 @@ export function migrateProjectTsconfigs(
   copied: string[],
   mapper: PathMapper,
   data: MigrationReportData,
+  angularMajor = 15,
 ): void {
   const { sourceDir, projectRoot } = ctx;
+  // TypeScript 5-only options are rewritten only for workspaces that build with TypeScript 4.
+  const ts4 = (config: Record<string, unknown>, file: string) =>
+    angularMajor <= TS4_MAX_ANGULAR_MAJOR
+      ? typeScript4Config(config, file)
+      : { config, notes: [] as string[] };
   const rootTs = readSourceJsonStrict(sourceDir, 'tsconfig.json');
   const appTsconfig = `${projectRoot}/tsconfig.json`;
   if (rootTs && !tree.exists(appTsconfig)) {
-    const ts4 = typeScript4Config(appRootTsconfig(rootTs, mapper), appTsconfig);
-    writeJson(tree, appTsconfig, ts4.config);
-    data.angularNotes.push(...ts4.notes);
+    const out = ts4(appRootTsconfig(rootTs, mapper), appTsconfig);
+    writeJson(tree, appTsconfig, out.config);
+    data.angularNotes.push(...out.notes);
   } else if (rootTs) {
     data.notes.push(
       `The project folder has its own tsconfig.json; the source root tsconfig.json was not ` +
@@ -462,10 +472,10 @@ export function migrateProjectTsconfigs(
       sourceRoot,
       projectRoot,
     });
-    const ts4 = typeScript4Config(fixed.config, file);
-    writeJson(tree, file, ts4.config);
+    const out = ts4(fixed.config, file);
+    writeJson(tree, file, out.config);
     data.notes.push(...fixed.warnings);
-    data.angularNotes.push(...ts4.notes);
+    data.angularNotes.push(...out.notes);
   }
 }
 
@@ -476,8 +486,9 @@ function migrateTsconfigs(
   copied: string[],
   mapper: PathMapper,
   data: MigrationReportData,
+  angularMajor: number,
 ): void {
-  migrateProjectTsconfigs(tree, ctx, sourceRoot, copied, mapper, data);
+  migrateProjectTsconfigs(tree, ctx, sourceRoot, copied, mapper, data, angularMajor);
   const { sourceDir, projectRoot } = ctx;
   const rootTs = readSourceJsonStrict(sourceDir, 'tsconfig.json');
   const co = (rootTs?.['compilerOptions'] ?? {}) as Record<string, unknown>;

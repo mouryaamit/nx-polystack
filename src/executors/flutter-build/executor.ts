@@ -4,7 +4,10 @@ import * as path from 'path';
 
 import { ExecutorContext } from '@nx/devkit';
 
+import { generatorInfo } from '../../lib/helpers/build-gen';
+import { injectBuildMeta } from '../../lib/helpers/inject-meta';
 import { stripExif, stripExifSummary } from '../../lib/helpers/strip-exif';
+import { resolveCiContext } from '../../lib/utils/ci-resolve';
 
 import { FlutterBuildExecutorSchema } from './schema.d';
 
@@ -28,9 +31,7 @@ export default async function flutterBuildExecutor(
   const projectName = context.projectName!;
   const repoRoot = context.root;
   // Migrated projects keep their source root; generated ones live in apps/<name>.
-  const configuredRoot =
-    context.projectsConfigurations?.projects?.[projectName]?.root ??
-    context.workspace?.projects?.[projectName]?.root;
+  const configuredRoot = context.projectsConfigurations?.projects?.[projectName]?.root;
   const projectDir = path.join(repoRoot, configuredRoot ?? path.join('apps', projectName));
 
   const envFile = path.join(projectDir, 'env', `${env}.json`);
@@ -50,6 +51,8 @@ export default async function flutterBuildExecutor(
   if (!dist) {
     throw new Error('flutter-build: "dist" option is required for non-serve builds');
   }
+  // Checked before the Flutter build, so a bad buildMeta option fails fast.
+  const gen = generatorInfo(repoRoot, options.buildMeta);
 
   const outRel = path.relative(projectDir, path.join(repoRoot, dist));
   const baseHrefArg = baseHref ? `--base-href ${baseHref}` : '';
@@ -99,6 +102,20 @@ export default async function flutterBuildExecutor(
       },
     });
     console.log(`ℹ ${stripExifSummary(exif)}`);
+  }
+
+  // Web: the same build meta as Angular release builds (env, time, branch, commit, tool).
+  const indexHtml = path.join(outDir, 'index.html');
+  if (target === 'web' && fs.existsSync(indexHtml)) {
+    const ci = resolveCiContext();
+    injectBuildMeta({
+      indexHtmlPath: indexHtml,
+      env: env.toUpperCase(),
+      branch: ci.branch,
+      commit: ci.commit,
+      buildNumber: ci.buildNumber,
+      gen,
+    });
   }
 
   console.log('✅ Flutter build complete');

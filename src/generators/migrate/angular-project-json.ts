@@ -4,6 +4,7 @@ import { angularReleaseTarget, withReleaseHardening } from '../../lib/utils/angu
 
 import type { AngularProject, AngularTarget } from './adapters/angular-cli';
 import { convertAngular17Project } from './angular17';
+import { APPLICATION_BUILDER_MAJOR } from './dependencies';
 
 export { applicationBuilderTargets } from './angular17';
 export type { ApplicationBuilderTarget } from './angular17';
@@ -138,6 +139,9 @@ function mapOption(key: string, value: unknown, oldProject: string, m: PathMappe
   if (key === 'prerender' && isObject(value) && typeof value['routesFile'] === 'string') {
     return { ...value, routesFile: mapPath(value['routesFile'] as string, m) };
   }
+  // Application builder: `serviceWorker` is the ngsw-config.json path (the browser builder's is a
+  // boolean, with the path in ngswConfigPath).
+  if (key === 'serviceWorker' && typeof value === 'string') return mapPath(value, m);
   if (PATH_OPTIONS.includes(key) && typeof value === 'string') return mapPath(value, m);
   if (key === 'index') {
     if (typeof value === 'string') return mapPath(value, m);
@@ -241,8 +245,10 @@ export function addReleaseTarget(
   }
   const release = angularReleaseTarget(name) as Json & { options: Json };
   const outputPath = (build['options'] as Json | undefined)?.['outputPath'];
-  release.options['outputPath'] =
-    typeof outputPath === 'string' ? outputPath : `dist/${projectRoot}`;
+  // The application builder may give { base, browser }; the release reads index.html from the
+  // base or its browser/ folder.
+  const base = isObject(outputPath) ? outputPath['base'] : outputPath;
+  release.options['outputPath'] = typeof base === 'string' ? base : `dist/${projectRoot}`;
   const configs = releaseConfigurations(buildConfigs);
   const names = Object.keys(configs);
   release['configurations'] = configs;
@@ -268,7 +274,7 @@ export function angularAppNpmScripts(
 }
 
 const BUILDERS_WITH_OUTPUT_PATH =
-  /^@angular-devkit\/build-angular:(browser|browser-esbuild|application|server|ng-packagr)$/;
+  /^(@angular-devkit\/build-angular:(browser|browser-esbuild|application|server|ng-packagr)|@angular\/build:application)$/;
 
 function convertTarget(target: AngularTarget, oldProject: string, m: PathMapper): Json {
   const { builder, executor, options, configurations, defaultConfiguration, ...rest } = target;
@@ -286,7 +292,9 @@ function convertTarget(target: AngularTarget, oldProject: string, m: PathMapper)
     BUILDERS_WITH_OUTPUT_PATH.test(out['executor'] as string) &&
     mappedOptions?.['outputPath'] !== undefined
   ) {
-    out['outputs'] = ['{options.outputPath}'];
+    out['outputs'] = [
+      isObject(mappedOptions['outputPath']) ? '{options.outputPath.base}' : '{options.outputPath}',
+    ];
   }
   for (const [k, v] of Object.entries(rest)) out[k] = v;
   if (mappedOptions) out['options'] = mappedOptions;
@@ -313,6 +321,11 @@ export interface ProjectJsonInput {
   projectRoot?: string;
   /** Other copied projects: source name → new name. */
   renames?: ReadonlyMap<string, string>;
+  /**
+   * Angular major the workspace builds with (default 15). Below 17 the application builder does
+   * not exist, so Angular 17+ builders are converted to the browser builder; from 17 they are kept.
+   */
+  angularMajor?: number;
 }
 
 export interface ProjectJsonResult {
@@ -328,8 +341,12 @@ export interface ProjectJsonResult {
 
 export function angularProjectJson(input: ProjectJsonInput): ProjectJsonResult {
   const { sourceProject, name } = input;
-  // Angular 17+ builders → the Angular 15 ones (server-rendered apps are refused before this).
-  const converted = convertAngular17Project(input.project, sourceProject);
+  // Angular 17+ builders → the Angular 15 ones, only for workspaces without the application
+  // builder (server-rendered apps are refused before this).
+  const converted =
+    (input.angularMajor ?? 15) < APPLICATION_BUILDER_MAJOR
+      ? convertAngular17Project(input.project, sourceProject)
+      : { project: input.project, notes: [] };
   const project = converted.project;
   const projectRoot = input.projectRoot ?? `apps/${name}`;
   const library = project.projectType === 'library';

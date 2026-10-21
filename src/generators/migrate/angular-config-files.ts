@@ -45,6 +45,16 @@ export function appRootTsconfig(source: Json, m: PathMapper): Json {
             ? ov.filter((t) => !isNodeModulesTypes(t)).map(rebase)
             : ov;
       }
+      // A root tsconfig without moduleResolution got TypeScript's default for its module
+      // (`preserve` → bundler, as Angular 20+ `ng new` writes it). Extending tsconfig.base.json
+      // would replace that default with the base's (often "node"), which breaks the build.
+      if (
+        source['extends'] === undefined &&
+        co['moduleResolution'] === undefined &&
+        String(co['module'] ?? '').toLowerCase() === 'preserve'
+      ) {
+        co['moduleResolution'] = 'bundler';
+      }
       out[k] = co;
     } else if ((k === 'include' || k === 'files' || k === 'exclude') && Array.isArray(v)) {
       out[k] = v.map(rebase);

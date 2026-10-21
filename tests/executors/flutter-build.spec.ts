@@ -239,3 +239,73 @@ describe('flutterBuildExecutor', () => {
     });
   });
 });
+
+describe('flutterBuildExecutor build meta (NX-85)', () => {
+  let tmpDir: string;
+  let runner: jest.MockedFunction<Runner>;
+  const decode = (html: string) =>
+    JSON.parse(
+      Buffer.from(/<meta name="x-build" content="([^"]+)">/.exec(html)![1], 'base64').toString(),
+    );
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flutter-meta-'));
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'my-app'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'node_modules', 'nx'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'node_modules', 'nx', 'package.json'),
+      JSON.stringify({ version: '22.7.12' }),
+    );
+    const out = path.join(tmpDir, 'dist', 'apps', 'my-app');
+    runner = jest.fn<void, Parameters<Runner>>(() => {
+      fs.mkdirSync(out, { recursive: true });
+      fs.writeFileSync(path.join(out, 'index.html'), '<html><head></head><body></body></html>');
+    });
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const html = () => fs.readFileSync(path.join(tmpDir, 'dist/apps/my-app/index.html'), 'utf8');
+
+  it('writes the build meta with the tool into web builds', async () => {
+    await flutterBuildExecutor(
+      { target: 'web', env: 'uat', dist: 'dist/apps/my-app' },
+      makeContext('my-app', tmpDir),
+      runner,
+    );
+    const meta = decode(html());
+    expect(meta.env).toBe('UAT');
+    expect(meta.gen).toMatch(/^nx-polystack@\d+\.\d+\.\d+/);
+    expect(meta.nx).toBe('22.7.12');
+    expect(meta.ng).toBeUndefined();
+  });
+
+  it('buildMeta.gen: false leaves the tool out', async () => {
+    await flutterBuildExecutor(
+      { target: 'web', env: 'dev', dist: 'dist/apps/my-app', buildMeta: { gen: false } },
+      makeContext('my-app', tmpDir),
+      runner,
+    );
+    const meta = decode(html());
+    expect(meta.env).toBe('DEV');
+    expect(meta.gen).toBeUndefined();
+  });
+
+  it('refuses a bad buildMeta before building', async () => {
+    await expect(
+      flutterBuildExecutor(
+        {
+          target: 'web',
+          dist: 'dist/apps/my-app',
+          buildMeta: { gen: 'yes' as unknown as boolean },
+        },
+        makeContext('my-app', tmpDir),
+        runner,
+      ),
+    ).rejects.toThrow('buildMeta.gen must be true or false');
+    expect(runner).not.toHaveBeenCalled();
+  });
+});

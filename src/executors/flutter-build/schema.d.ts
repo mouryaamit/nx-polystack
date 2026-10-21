@@ -9,4 +9,6 @@ export interface FlutterBuildExecutorSchema {
   obfuscate?: boolean;
   /** Web builds: strip EXIF from images in dist (default true; only images with EXIF change). */
   stripExif?: boolean;
+  /** Web: `gen: false` leaves the tool and its versions out of the build meta. */
+  buildMeta?: { gen?: boolean };
 }

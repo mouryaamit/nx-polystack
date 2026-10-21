@@ -1,8 +1,9 @@
-import { FsTree } from 'nx/src/generators/tree';
+import type { Tree } from '@nx/devkit';
 
 import { APP_ID_RE, BaseApp, defaultAppId, describeBaseApp } from '../../generators/app/from';
 import { appRoot, NAME_RE, parseDir } from '../../lib/utils/app-dir';
 import { checkBaseHref } from '../../lib/utils/base-href';
+import { fsTree } from '../../lib/utils/nx-tree';
 import { scanProjects } from '../../lib/utils/project-json-files';
 import { nextFreePort, portProblem, usedServePorts } from '../../lib/utils/serve-port';
 import { flagBoolean, flagString } from '../args';
@@ -83,7 +84,7 @@ export async function runAppFrom(ctx: CommandContext, deps: AppDeps): Promise<nu
   const yes = flagBoolean(ctx.flags, 'yes') || flagBoolean(ctx.flags, 'y');
 
   const root = requireWorkspace(ctx.cwd, 'app');
-  const tree = new FsTree(root, false);
+  const tree = fsTree(root);
   const base = checked(() => describeBaseApp(tree, from)) as BaseApp;
   const interactive = deps.interactive ?? (!yes && isInteractive());
   // Flag values the questions would not ask again are checked now, not after them.
@@ -145,7 +146,7 @@ function checked<T>(fn: () => T): T {
 }
 
 /** The questions for what was not given as a flag (base app values as defaults). */
-async function ask(tree: FsTree, base: BaseApp, given: Answers, p: Prompter): Promise<Answers> {
+async function ask(tree: Tree, base: BaseApp, given: Answers, p: Prompter): Promise<Answers> {
   const a: Answers = { ...given };
   const projects = new Set(scanProjects(tree).map((x) => x.name));
   const folderProblem = (name: string, dir: string | undefined) => {

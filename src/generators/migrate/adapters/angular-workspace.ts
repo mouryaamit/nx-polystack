@@ -17,6 +17,7 @@ import { copyIntoTree, DEFAULT_MAX_FILES, SkipRules } from '../copy';
 import {
   angularMismatch,
   angularMismatchMessage,
+  buildAngularMajor,
   mergeDependencies,
   packageNames,
 } from '../dependencies';
@@ -290,6 +291,7 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
   const ionicApps: { p: Planned; releases: string[] }[] = [];
   let usesNgPackagr = false;
   const exists = (rel: string) => sourceExists(sourceDir, rel);
+  const angularMajor = buildAngularMajor(tree, sourceRootPackage(sourceDir).pkg);
   const nameOf = (sourceName: string) =>
     plan.projects.find((x) => x.source.name === sourceName)?.name ?? sourceName;
   const renames = new Map(plan.projects.map((x) => [x.source.name, x.name]));
@@ -311,6 +313,7 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
       projectRoot: p.newRoot,
       exists,
       renames,
+      angularMajor,
     });
     if (kind === 'lib') useNxPackageBuild(pj.projectJson, p.newRoot);
     writeJson(tree, `${p.newRoot}/project.json`, pj.projectJson);
@@ -340,7 +343,7 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
       maxFiles: ctx.maxFiles,
       rewriteImports: ctx.rewriteImports,
     };
-    migrateProjectTsconfigs(tree, pctx, root, copy.copied, mapper, data);
+    migrateProjectTsconfigs(tree, pctx, root, copy.copied, mapper, data, angularMajor);
     const prefix =
       typeof p.source.config['prefix'] === 'string' ? p.source.config['prefix'] : 'app';
     migrateEslint(tree, pctx, prefix as string, copy.copied, mapper, data);

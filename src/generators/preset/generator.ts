@@ -6,6 +6,7 @@ import { readPackageVersion, selfPackageRoot } from '../../cli/context';
 import { formatPluginSpec, PLUGIN_NAME } from '../../cli/versions';
 import { defaultEnvEncryptionConfig } from '../../lib/env-encryption/config';
 import { writeEnvEncryptionBlock } from '../../lib/env-encryption/workspace';
+import { ensureAngularDependencies, GENERATOR_ANGULAR_MAJORS } from '../../lib/utils/angular-deps';
 import { LINT_STAGED_CONFIG } from '../../lib/utils/lint-staged';
 import {
   LINT_STAGED_ESLINT_COMMAND,
@@ -93,6 +94,19 @@ export default async function presetGenerator(
     return json;
   });
   tree.write(LINT_STAGED_ESLINT_SCRIPT, LINT_STAGED_ESLINT_JS);
+
+  // `pstack new --angular=N`: the workspace starts on that Angular, so apps, libraries and
+  // migrated projects are generated for it (pstack new installs after the preset).
+  if (options.angular !== undefined) {
+    if (!GENERATOR_ANGULAR_MAJORS.includes(options.angular)) {
+      throw new Error(
+        `preset: --angular must be one of ${GENERATOR_ANGULAR_MAJORS.join(', ')} (got ${
+          options.angular
+        }).`,
+      );
+    }
+    ensureAngularDependencies(tree, { major: options.angular });
+  }
 
   // Repo docs, CI (replaces the old --ci templates), quality checks, upgrade workflow. Its install
   // task is not returned: `pstack new` (or Nx's create flow) installs after the preset.

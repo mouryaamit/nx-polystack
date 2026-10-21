@@ -77,6 +77,11 @@
       "default": false,
       "description": "Skip npm install after generation."
     },
+    "angular": {
+      "type": "number",
+      "enum": [15, 16],
+      "description": "Angular major to add to the workspace now. Without it, the first Angular or Ionic app adds Angular 15."
+    },
     "pluginVersion": {
       "type": "string",
       "description": "nx-polystack version to pin in the generated package.json (default: the running plugin's version)."

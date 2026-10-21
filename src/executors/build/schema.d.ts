@@ -16,6 +16,8 @@ export interface BuildExecutorSchema {
   nonce?: NonceSettings;
   /** Every env: remove HTML comments (not SSI or IE conditionals) from the nonce.files pages. */
   stripHtmlComments?: boolean;
+  /** Build meta: `gen: false` leaves out the tool and its versions (gen, ng, nx). */
+  buildMeta?: { gen?: boolean };
   /**
    * Integrity for every chunk: passed to the Angular build as --subresource-integrity, hashes
    * refreshed after strip/obfuscate. With cipher aes-gcm the runtime refuses to decrypt when a

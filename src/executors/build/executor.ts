@@ -13,6 +13,7 @@ import { obfuscateOutput, Obfuscator } from '../../lib/hardening/obfuscate';
 import { resolveHardening } from '../../lib/hardening/options';
 import { checkSourceMaps } from '../../lib/hardening/source-maps';
 import { stripHtmlComments as stripHtmlCommentsText, stripOutput } from '../../lib/hardening/strip';
+import { generatorInfo } from '../../lib/helpers/build-gen';
 import { injectBuildMeta } from '../../lib/helpers/inject-meta';
 import { injectCspNonce, resolveNonceSettings } from '../../lib/helpers/inject-nonce';
 import { injectSri } from '../../lib/helpers/inject-sri';
@@ -90,6 +91,8 @@ export default async function buildExecutor(
   hardening.warnings.forEach((w) => console.warn(`⚠ ${w}`));
 
   const ciCtx = resolveCiContext();
+  // Checked before the Angular build, so a bad buildMeta option fails fast.
+  const gen = generatorInfo(repoRoot, options.buildMeta);
   // SRI for every chunk: Angular hashes them (the webpack runtime holds the lazy ones), the hashes
   // are swapped after strip/obfuscate, and aes-gcm builds require integrity at runtime.
   const chunkSri = sri && env !== 'DEV';
@@ -206,6 +209,7 @@ export default async function buildExecutor(
       metaName: prepared.config.metaName,
       now,
       extra: prepared.keyParts ? { k: prepared.keyParts.share } : undefined,
+      gen,
     });
   }
 

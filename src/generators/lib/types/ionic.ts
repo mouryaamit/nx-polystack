@@ -1,11 +1,15 @@
 import * as path from 'path';
 
+import {
+  angularGeneratorVersions,
+  workspaceGeneratorVersions,
+} from '../../../lib/utils/angular-deps';
 import { declaredVersion } from '../../../lib/utils/dependencies';
 import { ANGULAR_LIB_VARIANTS, writeAngularLib } from '../angular-lib';
 import { caretRange, LibTypeSpec } from '../lib-utils';
 
-/** Same Ionic line the ionic app type installs. */
-export const IONIC_ANGULAR_VERSION = '~7.8.0';
+/** Ionic line the ionic app type installs on an Angular 15 workspace (16: the step's pin). */
+export const IONIC_ANGULAR_VERSION = angularGeneratorVersions(15).ionicAngular;
 
 export const ionicLib: LibTypeSpec = {
   defaultScope: 'ionic',
@@ -19,7 +23,7 @@ export const ionicLib: LibTypeSpec = {
       srcTemplates: path.join(__dirname, '..', 'files', 'ionic'),
       // @angular/forms and @angular/router are peers of @ionic/angular; match the installed Angular.
       dependencies: (core) => ({
-        '@ionic/angular': IONIC_ANGULAR_VERSION,
+        '@ionic/angular': workspaceGeneratorVersions(tree).ionicAngular,
         '@angular/forms': core,
         '@angular/router': core,
       }),
