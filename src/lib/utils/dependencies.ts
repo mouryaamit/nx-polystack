@@ -45,14 +45,23 @@ export function addMissingDependencies(
   return addDependenciesToPackageJson(tree, d, dd);
 }
 
+/**
+ * typescript-eslint for an Nx version: 5 up to Nx 17; 7 from Nx 18, whose Angular (17+) and
+ * angular-eslint 17.2+ need it.
+ */
+export function typescriptEslintVersion(nx: string): string {
+  return (majorOf(nx) ?? 17) >= 18 ? '^7.18.0' : '^5.62.0';
+}
+
 /** ESLint stack every workspace needs for the root .eslintrc.json (same versions as the sample). */
 export function lintDependencies(nx: string): Deps {
+  const tsEslint = typescriptEslintVersion(nx);
   return {
     eslint: '^8.57.0',
     '@nx/eslint': nx,
     '@nx/eslint-plugin': nx,
-    '@typescript-eslint/eslint-plugin': '^5.62.0',
-    '@typescript-eslint/parser': '^5.62.0',
+    '@typescript-eslint/eslint-plugin': tsEslint,
+    '@typescript-eslint/parser': tsEslint,
     'eslint-config-prettier': '^9.1.0',
   };
 }

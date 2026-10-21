@@ -24,7 +24,7 @@ pinned copy, so output always matches the workspace's version. Move a workspace 
 with `pstack update`, which installs it and runs its migrations.
 
 Requires Node 20 and npm 10+. `pstack new` creates Nx 17 workspaces on Angular 15 or, with
-`--angular=16`, Angular 16; the plugin itself loads in workspaces on Nx 17 to 22.
+`--angular=16`, Angular 16, and Nx 18 workspaces with `--angular=17`; the plugin itself loads in workspaces on Nx 17 to 22.
 
 ## Angular versions
 
@@ -34,7 +34,8 @@ Each release adds one Angular major and keeps every earlier one.
 | ------- | ------ | ---------- | ----- | --------- | ----- | -------------------------------------- |
 | 15.2    | 17.0.6 | 4.9        | 7.8   | 5         | 20    | supported                              |
 | 16.2    | 17.0.6 | 5.1        | 7.8   | 6         | 20    | supported (1.3.1)                      |
-| 17–21   | 18–22  | 5.4–5.9    | 7–9   | 6–8       | 20/22 | `pstack upgrade angular` only, for now |
+| 17.3    | 18.3.5 | 5.4        | 7.8   | 6         | 20    | supported (1.4.0)                      |
+| 18–21   | 19–22  | 5.5–5.9    | 8–9   | 7–8       | 20/22 | `pstack upgrade angular` only, for now |
 
 Supported means:
 
@@ -45,7 +46,7 @@ Supported means:
 
 `pstack upgrade angular` moves a workspace one major at a time, with one commit per step. Each step
 pins Nx, TypeScript, the build and lint packages, Ionic, Capacitor and Node. It works up to Angular 21
-today. Generators for 17 and later come in the next releases; until then they warn which packages to
+today. Generators for 18 and later come in the next releases; until then they warn which packages to
 add.
 
 Known breakpoints when upgrading:
@@ -68,7 +69,7 @@ Known breakpoints when upgrading:
   - build-provenance meta, EXIF stripping, leak checks, source-map control, comment and console
     stripping, and optional obfuscation.
 - **Migration** of existing projects into the workspace: standalone Angular CLI, Ionic/Capacitor and
-  Flutter apps, multi-project Angular CLI repos, Nx 15–17 workspaces and npm/Yarn/pnpm workspaces —
+  Flutter apps, multi-project Angular CLI repos, Nx 15–22 workspaces and npm/Yarn/pnpm workspaces —
   with rollback.
 - **Repo infrastructure**: docs, CI gates (affected lint/test/build, dependency cycles, type checks),
   quality checks and a scheduled dependency-upgrade workflow.

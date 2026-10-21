@@ -106,7 +106,7 @@ describe('ensureAngularDependencies', () => {
     (field) => {
       const tree = createTreeWithEmptyWorkspace();
       updateJson(tree, 'package.json', (j) => {
-        j[field] = { ...j[field], '@angular/core': '~17.3.0' };
+        j[field] = { ...j[field], '@angular/core': '~18.2.0' };
         return j;
       });
       const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
@@ -115,7 +115,7 @@ describe('ensureAngularDependencies', () => {
       expect(readJson(tree, 'package.json')).toEqual(before);
       expect(warn).toHaveBeenCalledWith(
         expect.stringMatching(
-          /Angular 17; the generators support Angular 15, 16.*@angular-devkit\/build-angular/s,
+          /Angular 18; the generators support Angular 15, 16, 17.*@angular-devkit\/build-angular/s,
         ),
       );
       warn.mockRestore();
@@ -183,8 +183,16 @@ describe('ensureAngularDependencies', () => {
       ionicAngular: '~7.8.6',
       capacitor: '^6.0.0',
     });
-    expect(() => angularGeneratorVersions(17)).toThrow(
-      /not supported by the generators \(15, 16\)/,
+    expect(angularGeneratorVersions(17)).toMatchObject({
+      angular: '~17.3.12',
+      zoneJs: '~0.14.0',
+      typescript: '~5.4.5',
+      angularEslint: '~17.3.0',
+      ionicAngular: '~7.8.6',
+      capacitor: '^6.0.0',
+    });
+    expect(() => angularGeneratorVersions(18)).toThrow(
+      /not supported by the generators \(15, 16, 17\)/,
     );
   });
 });

@@ -42,6 +42,15 @@ export interface AngularTargetOptions {
   envLayout?: EnvLayout;
   /** Dev-server port. */
   port?: number;
+  /** The workspace's Angular major: from 17, serve and extract-i18n name `buildTarget`. */
+  angularMajor?: number;
+}
+
+/** Angular 17 renamed the dev-server and extract-i18n `browserTarget` option to `buildTarget`. */
+export const BUILD_TARGET_OPTION_MAJOR = 17;
+
+function buildTargetKey(angularMajor?: number): 'buildTarget' | 'browserTarget' {
+  return (angularMajor ?? 15) >= BUILD_TARGET_OPTION_MAJOR ? 'buildTarget' : 'browserTarget';
 }
 
 function envReplacement(name: string, envFile: string, layout: EnvLayout) {
@@ -99,14 +108,19 @@ export function angularBuildTarget(
   };
 }
 
-export function angularServeTarget(name: string, port?: number): Record<string, unknown> {
+export function angularServeTarget(
+  name: string,
+  port?: number,
+  angularMajor?: number,
+): Record<string, unknown> {
+  const key = buildTargetKey(angularMajor);
   return {
     executor: '@angular-devkit/build-angular:dev-server',
     ...(port !== undefined ? { options: { port } } : {}),
     configurations: {
-      production: { browserTarget: `${name}:build:production` },
-      uat: { browserTarget: `${name}:build:uat` },
-      development: { browserTarget: `${name}:build:development` },
+      production: { [key]: `${name}:build:production` },
+      uat: { [key]: `${name}:build:uat` },
+      development: { [key]: `${name}:build:development` },
     },
     defaultConfiguration: 'development',
   };
@@ -155,7 +169,7 @@ export function angularProjectTargets(
 ): Record<string, unknown> {
   return {
     build: angularBuildTarget(name, root, opts.envLayout ?? 'default'),
-    serve: angularServeTarget(name, opts.port),
+    serve: angularServeTarget(name, opts.port, opts.angularMajor),
     release: angularReleaseTarget(name, root),
     clean: cleanTarget(root),
     typecheck: typecheckTarget(`${root}/tsconfig.app.json`),
@@ -166,7 +180,7 @@ export function angularProjectTargets(
     },
     'extract-i18n': {
       executor: '@angular-devkit/build-angular:extract-i18n',
-      options: { browserTarget: `${name}:build` },
+      options: { [buildTargetKey(opts.angularMajor)]: `${name}:build` },
     },
   };
 }

@@ -108,12 +108,38 @@ describe('app generator --type=angular', () => {
   it('leaves an Angular major the generators do not support alone (adds only terser)', async () => {
     tree.write(
       'package.json',
-      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~17.3.0' } }),
+      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~18.2.0' } }),
     );
     await appGenerator(tree, { name: 'my-app', type: 'angular' });
     const pkg = JSON.parse(tree.read('package.json')!.toString());
-    expect(pkg.dependencies).toEqual({ '@angular/core': '~17.3.0' });
+    expect(pkg.dependencies).toEqual({ '@angular/core': '~18.2.0' });
     expect(pkg.devDependencies).toEqual({ terser: '^5.16.0' });
+  });
+
+  it('on Angular 17, serve and extract-i18n use buildTarget (browserTarget below 17)', async () => {
+    await appGenerator(tree, { name: 'old', type: 'angular' });
+    const old = JSON.parse(tree.read('apps/old/project.json')!.toString());
+    expect(old.targets.serve.configurations.production).toEqual({
+      browserTarget: 'old:build:production',
+    });
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~17.3.12' },
+        devDependencies: { nx: '18.3.5' },
+      }),
+    );
+    await appGenerator(tree, { name: 'my-app', type: 'angular' });
+    const pj = JSON.parse(tree.read('apps/my-app/project.json')!.toString());
+    expect(pj.targets.serve.configurations.development).toEqual({
+      buildTarget: 'my-app:build:development',
+    });
+    expect(pj.targets['extract-i18n'].options).toEqual({ buildTarget: 'my-app:build' });
+    const pkg = JSON.parse(tree.read('package.json')!.toString());
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~17.3.12');
+    expect(pkg.devDependencies['@nx/angular']).toBe('18.3.5');
+    expect(pkg.devDependencies.typescript).toBe('~5.4.5');
   });
 
   it('adds @mouryaamit/<name> path alias to tsconfig.base.json', async () => {

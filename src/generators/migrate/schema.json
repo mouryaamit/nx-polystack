@@ -3,7 +3,7 @@
   "cli": "nx",
   "id": "migrate",
   "title": "Migrate a standalone project",
-  "description": "Copy an existing project into the workspace, the source never modified: a standalone Angular CLI, Ionic/Capacitor or Flutter app as apps/<name>, or the Angular, Ionic and Flutter projects of an Nx 15-17 workspace at their own paths. With rollback=<name>, undo a migration.",
+  "description": "Copy an existing project into the workspace, the source never modified: a standalone Angular CLI, Ionic/Capacitor or Flutter app as apps/<name>, or the Angular, Ionic and Flutter projects of an Nx 15-22 workspace at their own paths. With rollback=<name>, undo a migration.",
   "type": "object",
   "properties": {
     "source": {

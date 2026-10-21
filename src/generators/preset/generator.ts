@@ -6,12 +6,15 @@ import { readPackageVersion, selfPackageRoot } from '../../cli/context';
 import { formatPluginSpec, PLUGIN_NAME } from '../../cli/versions';
 import { defaultEnvEncryptionConfig } from '../../lib/env-encryption/config';
 import { writeEnvEncryptionBlock } from '../../lib/env-encryption/workspace';
+import { ANGULAR_PINS } from '../../lib/upgrade/pins';
 import { ensureAngularDependencies, GENERATOR_ANGULAR_MAJORS } from '../../lib/utils/angular-deps';
+import { typescriptEslintVersion } from '../../lib/utils/dependencies';
 import { LINT_STAGED_CONFIG } from '../../lib/utils/lint-staged';
 import {
   LINT_STAGED_ESLINT_COMMAND,
   LINT_STAGED_ESLINT_JS,
   LINT_STAGED_ESLINT_SCRIPT,
+  unusedImportsVersion,
 } from '../../lib/utils/quality';
 import { normalizeProviders } from '../../lib/utils/llm-block';
 import infraGenerator from '../infra/generator';
@@ -32,6 +35,32 @@ export function isRecursiveLintCommand(command: string): boolean {
   return /^\s*(npm\s+run(-script)?|yarn|pnpm(\s+run)?)\s+lint(\s+--fix|\s+--\s.*)?\s*$/.test(
     command,
   );
+}
+
+/**
+ * Nx and the lint stack for a new workspace on this Angular major: the major's Nx pin (Nx 18 from
+ * Angular 17), and from Nx 18 typescript-eslint 7 with eslint-plugin-unused-imports 3 (its peer).
+ */
+export function alignWorkspaceStack(tree: Tree, angularMajor: number): void {
+  const nx = `~${ANGULAR_PINS[angularMajor].nx}`;
+  const tsEslint = typescriptEslintVersion(nx);
+  updateJson(tree, 'package.json', (json) => {
+    const dev: Record<string, string> = json.devDependencies ?? {};
+    for (const name of ['nx', '@nx/devkit', '@nx/eslint', '@nx/eslint-plugin']) {
+      if (dev[name] !== undefined) dev[name] = nx;
+    }
+    for (const name of ['@typescript-eslint/eslint-plugin', '@typescript-eslint/parser']) {
+      if (dev[name] !== undefined) dev[name] = tsEslint;
+    }
+    json.devDependencies = dev;
+    return json;
+  });
+  updateJson(tree, 'package.json', (json) => {
+    if (json.devDependencies?.['eslint-plugin-unused-imports'] !== undefined) {
+      json.devDependencies['eslint-plugin-unused-imports'] = unusedImportsVersion(tree);
+    }
+    return json;
+  });
 }
 
 export default async function presetGenerator(
@@ -105,6 +134,7 @@ export default async function presetGenerator(
         }).`,
       );
     }
+    alignWorkspaceStack(tree, options.angular);
     ensureAngularDependencies(tree, { major: options.angular });
   }
 

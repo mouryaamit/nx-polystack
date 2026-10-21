@@ -9,7 +9,8 @@ import {
   sourceNxVersion,
 } from './workspace-source';
 
-export const SUPPORTED_NX_MAJORS = [15, 16, 17];
+/** Nx majors of source workspaces (the plugin itself runs on Nx 17–22). */
+export const SUPPORTED_NX_MAJORS = [15, 16, 17, 18, 19, 20, 21, 22];
 
 export function detectNxWorkspace(sourceDir: string): Detection {
   if (!sourceExists(sourceDir, 'nx.json')) return { confidence: 0, reasons: ['no nx.json'] };
@@ -19,7 +20,7 @@ export function detectNxWorkspace(sourceDir: string): Detection {
   let confidence = 0.95;
   if (major === undefined || !SUPPORTED_NX_MAJORS.includes(major)) {
     confidence = 0.5;
-    reasons.push(`Nx ${major ?? '?'} is outside the supported 15–17`);
+    reasons.push(`Nx ${major ?? '?'} is outside the supported 15–22`);
   }
   let projects: SourceProject[];
   try {

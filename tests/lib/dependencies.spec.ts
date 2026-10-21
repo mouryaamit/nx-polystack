@@ -4,6 +4,7 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import {
   addMissingDependencies,
   ensureLintDependencies,
+  lintDependencies,
   majorOf,
 } from '../../src/lib/utils/dependencies';
 
@@ -96,5 +97,13 @@ describe('ensureLintDependencies', () => {
       return j;
     });
     expect(ensureLintDependencies(tree)).toBeUndefined();
+  });
+});
+
+describe('lintDependencies', () => {
+  it('uses typescript-eslint 5 up to Nx 17 and 7 from Nx 18', () => {
+    expect(lintDependencies('17.0.6')['@typescript-eslint/parser']).toBe('^5.62.0');
+    expect(lintDependencies('~18.3.5')['@typescript-eslint/eslint-plugin']).toBe('^7.18.0');
+    expect(lintDependencies('22.7.12')['@nx/eslint']).toBe('22.7.12');
   });
 });

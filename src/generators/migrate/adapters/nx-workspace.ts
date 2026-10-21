@@ -681,6 +681,16 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
     );
   }
 
+  // Nx 18+ can infer targets from nx.json plugins; those targets are not in project.json.
+  const plugins = inferencePlugins(readSourceJson<Json>(sourceDir, 'nx.json'));
+  if (plugins.length > 0) {
+    data.notes.push(
+      `The source's nx.json infers targets with plugins (${plugins.map(code).join(', ')}). ` +
+        'Inferred targets are not in project.json, so they were not copied: add them to the ' +
+        "migrated projects' project.json (or the plugins to the workspace nx.json).",
+    );
+  }
+
   const sourceNx = sourceNxVersion(sourceDir);
   const workspaceNx = declaredVersion(tree, 'nx');
   if (sourceNx && workspaceNx && majorOf(sourceNx) !== majorOf(workspaceNx)) {
@@ -1304,4 +1314,13 @@ function baseUrlForImports(tree: Tree, sourceDir: string, data: WorkspaceReportD
         `\`"${wsBase}"\`. Imports that go through the source baseUrl may not resolve.`,
     );
   }
+}
+
+/** Plugin names in an nx.json `plugins` list (strings or `{ plugin }` objects). */
+export function inferencePlugins(nxJson: Json | undefined): string[] {
+  const list = nxJson?.['plugins'];
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((p) => (typeof p === 'string' ? p : (p as Json | null)?.['plugin']))
+    .filter((p): p is string => typeof p === 'string');
 }

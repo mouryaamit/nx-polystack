@@ -12,7 +12,7 @@ export const ANGULAR_MAJOR = 15;
  * Angular majors the generators write for: `pstack new --angular=<major>`, and `pstack app` / `:lib`
  * fill in packages for a workspace on one of them. One major is added per public release.
  */
-export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16];
+export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16, 17];
 
 /** Versions the generators add for one Angular major (only where a package is missing). */
 export interface AngularGeneratorVersions {
@@ -25,9 +25,9 @@ export interface AngularGeneratorVersions {
   capacitor: string;
 }
 
-const ZONE_JS: Record<number, string> = { 15: '~0.12.0', 16: '~0.13.0' };
+const ZONE_JS: Record<number, string> = { 15: '~0.12.0', 16: '~0.13.0', 17: '~0.14.0' };
 /** @types/node the major's TypeScript can parse (a latest one uses newer syntax: TS1139). */
-const TYPES_NODE: Record<number, string> = { 15: '~18.16.9', 16: '~20.10.0' };
+const TYPES_NODE: Record<number, string> = { 15: '~18.16.9', 16: '~20.10.0', 17: '~20.10.0' };
 
 export function angularGeneratorVersions(major: number): AngularGeneratorVersions {
   if (major === 15) {
@@ -66,10 +66,13 @@ export function angularGeneratorVersions(major: number): AngularGeneratorVersion
  * 15 when there is none or the major is not one the generators support.
  */
 export function workspaceGeneratorVersions(tree: Tree): AngularGeneratorVersions {
+  return angularGeneratorVersions(workspaceGeneratorMajor(tree));
+}
+
+/** The workspace's Angular major when the generators support it, else 15 (the default). */
+export function workspaceGeneratorMajor(tree: Tree): number {
   const major = majorOf(declaredVersion(tree, '@angular/core') ?? '');
-  return angularGeneratorVersions(
-    major !== undefined && GENERATOR_ANGULAR_MAJORS.includes(major) ? major : ANGULAR_MAJOR,
-  );
+  return major !== undefined && GENERATOR_ANGULAR_MAJORS.includes(major) ? major : ANGULAR_MAJOR;
 }
 
 /** Full runtime set for a workspace that has no Angular yet. */

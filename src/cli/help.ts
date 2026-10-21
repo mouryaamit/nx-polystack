@@ -24,7 +24,7 @@ COMMANDS
   migrate     Copy an existing project into the workspace, source never modified: a standalone
               Angular CLI, Ionic/Capacitor or Flutter app (apps/<name>), the apps and libraries
               of a multi-project Angular CLI repo (apps/, libs/), the Angular, Ionic and
-              Flutter projects of an Nx 15-17 workspace (same paths, names and aliases), or the
+              Flutter projects of an Nx 15-22 workspace (same paths, names and aliases), or the
               app and TypeScript library packages of an npm, Yarn or pnpm workspaces repo
               (apps/, libs/)
   encryption  Show or change the env encryption settings of release builds (nx.json
@@ -55,7 +55,7 @@ OPTIONS — new / preset
   --llm=<tools>                AI-assistant files, as pstack llm: claude | agents | copilot
                                (codex, openai-gpt → agents; comma-separated)
   --projectDescription=<text>  Short project description
-  --angular=<major>            Start on this Angular: 15 | 16 (default: Angular 15, added by the
+  --angular=<major>            Start on this Angular: 15 | 16 | 17 (default: Angular 15, added by the
                                first Angular or Ionic app)
   --skipFormat                 Skip Prettier format pass
   --skip-install               new only — do not run npm install
