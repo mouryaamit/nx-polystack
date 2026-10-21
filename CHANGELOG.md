@@ -3,6 +3,12 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.3.1
+
+The public release of 1.3.0's changes: Angular 16 support, `pstack new --angular`, and
+`pstack upgrade angular`. 1.3.0 was never published to npm (its tag was pushed before the release was
+merged, and the tag name cannot be reused). Everything listed under 1.3.0 ships in 1.3.1.
+
 ## 1.3.0
 
 Angular 16 is supported. This is the first release of one public release per Angular major.

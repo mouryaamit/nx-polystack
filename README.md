@@ -33,7 +33,7 @@ Each release adds one Angular major and keeps every earlier one.
 | Angular | Nx     | TypeScript | Ionic | Capacitor | Node  | Status                                 |
 | ------- | ------ | ---------- | ----- | --------- | ----- | -------------------------------------- |
 | 15.2    | 17.0.6 | 4.9        | 7.8   | 5         | 20    | supported                              |
-| 16.2    | 17.0.6 | 5.1        | 7.8   | 6         | 20    | supported (1.3.0)                      |
+| 16.2    | 17.0.6 | 5.1        | 7.8   | 6         | 20    | supported (1.3.1)                      |
 | 17–21   | 18–22  | 5.4–5.9    | 7–9   | 6–8       | 20/22 | `pstack upgrade angular` only, for now |
 
 Supported means:
