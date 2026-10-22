@@ -53,7 +53,7 @@ export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<str
   },
   env: { app: '0.34.0', all: '0.34.0', from: '0.34.0', baseHref: '0.34.0', domains: '0.34.0' },
   lib: { dir: '0.19.0' },
-  csp: { import: '0.38.0', nonceSource: '1.2.5' },
+  csp: { import: '0.38.0', nonceSource: '1.2.5', env: '1.5.5' },
   infra: { lintStaged: '0.36.0' },
   migrate: {
     rollback: '0.13.0',

@@ -82,7 +82,10 @@ describe('migrate generator: standalone Flutter app', () => {
 
     it('writes the pstack app --type=flutter project.json, without the FlutterFlow export target', () => {
       const pj = readJson(tree, 'apps/notes/project.json');
-      expect(pj).toEqual(buildProjectJson('notes', { exportTarget: false, port: 4200 }));
+      expect(pj).toEqual(
+        buildProjectJson('notes', { exportTarget: false, port: 4200, htaccess: false }),
+      );
+      expect(tree.exists('apps/notes/env')).toBe(false);
       expect(pj.targets.serve.options.port).toBe(4200);
       expect(pj.tags).toEqual(['scope:app', 'type:app', 'platform:flutter']);
       expect(Object.keys(pj.targets)).toEqual([
@@ -95,12 +98,12 @@ describe('migrate generator: standalone Flutter app', () => {
     });
 
     it('keeps the existing env file and creates the missing ones empty', () => {
-      expect(readJson(tree, 'apps/notes/env/dev.json')).toEqual({
+      expect(readJson(tree, 'environments/notes/environment.dev.json')).toEqual({
         FLUTTER_ENV: 'dev',
         API_BASE_URL: 'https://dev.internal.test',
       });
-      expect(tree.read('apps/notes/env/uat.json', 'utf8')).toBe('{}\n');
-      expect(tree.read('apps/notes/env/prod.json', 'utf8')).toBe('{}\n');
+      expect(tree.read('environments/notes/environment.uat.json', 'utf8')).toBe('{}\n');
+      expect(tree.read('environments/notes/environment.prod.json', 'utf8')).toBe('{}\n');
     });
 
     it('adds the pstack app --type=flutter npm scripts', () => {
@@ -128,10 +131,10 @@ describe('migrate generator: standalone Flutter app', () => {
         'pubspec.yaml dependencies: `shared_models` has `path: ../shared_models`, outside the source repo.',
       );
       expect(report).toContain(
-        'Created empty `apps/notes/env/uat.json`, `apps/notes/env/prod.json`',
+        'Created empty `environments/notes/environment.uat.json`, `environments/notes/environment.prod.json`',
       );
       expect(report).toContain(
-        '- [ ] Fill `apps/notes/env/<env>.json` (dev, uat, prod); they are passed to Flutter with `--dart-define-from-file`',
+        '- [ ] Fill `environments/notes/environment.<env>.json` (dev, uat, prod); they are passed to Flutter with `--dart-define-from-file`',
       );
       expect(report).toContain('- [ ] `cd apps/notes && flutter pub get`');
       expect(report).toContain('- [ ] `npx nx run notes:build-web:dev`');
@@ -145,7 +148,7 @@ describe('migrate generator: standalone Flutter app', () => {
     fs.rmSync(path.join(src, 'env'), { recursive: true });
     await migrateGenerator(tree, { source: src, name: 'notes' });
     for (const env of ['dev', 'uat', 'prod']) {
-      expect(tree.read(`apps/notes/env/${env}.json`, 'utf8')).toBe('{}\n');
+      expect(tree.read(`environments/notes/environment.${env}.json`, 'utf8')).toBe('{}\n');
     }
   });
 

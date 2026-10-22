@@ -1,12 +1,15 @@
 import { Tree, formatFiles, logger, readJson, updateJson } from '@nx/devkit';
 
+import { parseAllowlist, serializeAllowlist } from '../../lib/csp/allowlist';
 import { EnvEncryptionConfig, normalizeEnvEncryption } from '../../lib/env-encryption/config';
 import { normalizeHosts } from '../../lib/env-encryption/domains';
 import { initialEnvEncryption, readEnvEncryptionBlock } from '../../lib/env-encryption/workspace';
 import { deriveEnvFile, deriveFlutterEnv } from '../../lib/env/derive';
+import { htaccessSourcePath } from '../../lib/release/htaccess';
 import { configurationFor } from '../../lib/release/plan';
 import { POLYSTACK_BUILD_EXECUTOR, RELEASE_HARDENING } from '../../lib/utils/angular-project';
 import { checkBaseHref } from '../../lib/utils/base-href';
+import { ENV_ROOT, flutterEnvFile } from '../../lib/utils/env-files';
 import { findProjects, refreshLlmBlocks } from '../../lib/utils/llm-block';
 import { addNpmScripts } from '../../lib/utils/npm-scripts';
 
@@ -30,6 +33,12 @@ interface FlutterPluginApp {
   kind: 'plugin';
   name: string;
   root: string;
+  /** Folder under environments/ holding environment.<env>.json and htaccess.<env>. */
+  envProject: string;
+  /** build-web copies htaccess.<env> into the web build (its htaccess option is not false). */
+  htaccess: boolean;
+  /** The env files are still in <root>/env/ (pstack update moves them). */
+  staleEnvDir?: string;
 }
 
 /** Flutter app using nx:run-commands with {args.env} — no configurations needed */
@@ -101,7 +110,8 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
     throw new Error(
       'env generator: no apps detected. ' +
         'Angular/Ionic apps need a build.configurations entry with fileReplacements in project.json; ' +
-        'Flutter apps need build-web/build-android/build-ios targets and an env/ directory.',
+        'Flutter apps need build-web/build-android/build-ios targets and their env files ' +
+        '(environments/<app>/environment.<env>.json).',
     );
   }
 
@@ -118,8 +128,11 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
     return plan;
   });
   const byFile = new Map<string, string[]>();
-  for (const p of angularPlans)
-    byFile.set(p.newEnvFile, [...(byFile.get(p.newEnvFile) ?? []), p.app.name]);
+  for (const p of [...angularPlans, ...flutterPlans]) {
+    for (const f of [p.newEnvFile, p.htaccess?.file]) {
+      if (f) byFile.set(f, [...(byFile.get(f) ?? []), p.app.name]);
+    }
+  }
   for (const [file, apps] of byFile) {
     if (apps.length > 1) problems.push(`${apps.join(' and ')} would all write ${file}`);
   }
@@ -152,6 +165,11 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
       placeholders: plan.hasRelease,
     });
     tree.write(plan.newEnvFile, derived.text);
+    copyHtaccess(tree, plan);
+    if (plan.htaccess) {
+      const note = copyCspEnv(tree, `${app.root}/csp-allowlist.json`, name);
+      if (note) notes.push(`${app.name}: ${note}`);
+    }
     placeholders.push(...derived.placeholders);
     notes.push(...derived.notes.map((n) => `${app.name}: ${n}`));
     if (!plan.hasRelease) {
@@ -250,6 +268,7 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
     }
     logger.info(
       `env: ${app.name}: ${plan.newEnvFile} from ${plan.sourceEnvFile}` +
+        (plan.htaccess ? `, ${plan.htaccess.file} from ${plan.htaccess.source}` : '') +
         (derived.placeholders.length ? ` (placeholders: ${derived.placeholders.join(', ')})` : ''),
     );
   }
@@ -263,7 +282,8 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
     const content = plan.sourceJson
       ? deriveFlutterEnv(source, name, apiUrl)
       : { ENV_NAME: name, API_BASE_URL: apiUrl ?? `https://${name}.example.com/api` };
-    tree.write(`${app.root}/env/${name}.json`, JSON.stringify(content, null, 2) + '\n');
+    tree.write(plan.newEnvFile, JSON.stringify(content, null, 2) + '\n');
+    copyHtaccess(tree, plan);
 
     if (app.kind === 'plugin') {
       updateJson(tree, `${app.root}/project.json`, (json: Record<string, unknown>) => {
@@ -305,9 +325,7 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
         `build:${app.name}:${name}:ios`
       ] = `cross-env NODE_ENV=production nx run ${app.name}:build-ios --args="--env=${name}"`;
     }
-    logger.info(
-      `env: ${app.name}: ${app.root}/env/${name}.json from ${plan.sourceJson ?? 'defaults'}`,
-    );
+    logger.info(`env: ${app.name}: ${plan.newEnvFile} from ${plan.sourceJson ?? 'defaults'}`);
   }
 
   addNpmScripts(tree, npmScripts, { force: false });
@@ -339,7 +357,61 @@ interface AngularPlan {
   sourceEnvFile: string;
   sourceBuildConfig: string;
   sourceRelease?: string;
+  /** htaccess.<name> copied from htaccess.prod (release builds with htaccess on). */
+  htaccess?: HtaccessPlan;
   problems: string[];
+}
+
+interface HtaccessPlan {
+  source: string;
+  file: string;
+}
+
+/**
+ * A new env's .htaccess for a build that copies one: environments/<envProject>/htaccess.<name>,
+ * copied from htaccess.prod (which must exist). Problems when the new file exists already.
+ */
+function planHtaccess(
+  tree: Tree,
+  appName: string,
+  envProject: string,
+  name: string,
+  problems: string[],
+): HtaccessPlan {
+  const source = htaccessSourcePath(envProject, 'prod');
+  const file = htaccessSourcePath(envProject, name);
+  if (!tree.exists(source)) {
+    problems.push(
+      `${appName}: ${source} not found; a new env's .htaccess is copied from it ` +
+        `(pstack csp --app=${appName} writes every env's file, or set "htaccess": false on the release target)`,
+    );
+  }
+  if (tree.exists(file)) problems.push(`${appName}: ${file} already exists`);
+  return { source, file };
+}
+
+function copyHtaccess(tree: Tree, plan: { htaccess?: HtaccessPlan }): void {
+  if (plan.htaccess) tree.write(plan.htaccess.file, tree.read(plan.htaccess.source) as Buffer);
+}
+
+/**
+ * The prod sources of csp-allowlist.json ("envs.prod") for the new env too, as its htaccess is
+ * a copy of htaccess.prod: pstack csp then renders the same file. Returns a note when copied.
+ */
+function copyCspEnv(tree: Tree, file: string, name: string): string | undefined {
+  const text = tree.read(file, 'utf-8');
+  if (text === null) return undefined;
+  let allowlist;
+  try {
+    allowlist = parseAllowlist(JSON.parse(text));
+  } catch {
+    return `${file} could not be read; its envs.prod sources (if any) were not copied to envs.${name}`;
+  }
+  const prod = allowlist.envs?.['prod'];
+  if (!prod || allowlist.envs?.[name]) return undefined;
+  allowlist.envs = { ...allowlist.envs, [name]: JSON.parse(JSON.stringify(prod)) };
+  tree.write(file, serializeAllowlist(allowlist));
+  return `${file}: envs.${name} copied from envs.prod (the CSP sources only prod adds)`;
 }
 
 /** The plan from the first source environment the app has (problems of the first when none). */
@@ -411,25 +483,41 @@ function planAngular(tree: Tree, app: AngularApp, name: string, from: string): A
     problems.push(`${app.name}: build configuration "${name}" already exists`);
   if (releaseConfigs[name])
     problems.push(`${app.name}: ${release?.name} configuration "${name}" already exists`);
+  const hasRelease = Boolean(release && release.target['executor'] === POLYSTACK_BUILD_EXECUTOR);
+  const htaccess =
+    hasRelease && releaseOptions['htaccess'] !== false
+      ? planHtaccess(tree, app.name, envProject, name, problems)
+      : undefined;
 
   return {
     app,
     from,
     noSource: !sourceBuildConfig,
-    hasRelease: Boolean(release && release.target['executor'] === POLYSTACK_BUILD_EXECUTOR),
+    hasRelease,
     envProject,
     newEnvFile,
     sourceEnvFile,
     sourceBuildConfig: sourceBuildConfig ?? 'production',
     sourceRelease,
+    htaccess,
     problems,
   };
 }
 
 interface FlutterPlan {
   app: FlutterApp;
+  newEnvFile: string;
   sourceJson?: string;
+  htaccess?: HtaccessPlan;
   problems: string[];
+}
+
+/** A Flutter app's env JSON: environments/<envProject>/environment.<env>.json (plugin apps), or the
+ * run-commands script's <root>/env/<env>.json. */
+function flutterEnvPath(app: FlutterApp, env: string): string {
+  return app.kind === 'plugin'
+    ? flutterEnvFile(app.envProject, env)
+    : `${app.root}/env/${env}.json`;
 }
 
 function planFlutter(
@@ -440,12 +528,21 @@ function planFlutter(
   explicit: boolean,
 ): FlutterPlan {
   const problems: string[] = [];
-  const file = `${app.root}/env/${name}.json`;
+  const file = flutterEnvPath(app, name);
   if (tree.exists(file)) problems.push(`${app.name}: ${file} already exists`);
-  const source = sources.map((s) => `${app.root}/env/${s}.json`).find((f) => tree.exists(f));
+  const source = sources.map((s) => flutterEnvPath(app, s)).find((f) => tree.exists(f));
   if (!source && explicit)
-    problems.push(`${app.name}: ${app.root}/env/${sources[0]}.json not found`);
+    problems.push(`${app.name}: ${flutterEnvPath(app, sources[0])} not found`);
+  let htaccess: HtaccessPlan | undefined;
+  if (app.kind === 'plugin' && app.staleEnvDir) {
+    problems.push(
+      `${app.name}: its env files are still in ${app.staleEnvDir}/; ` +
+        `pstack update moves them to ${ENV_ROOT}/${app.envProject}/`,
+    );
+    return { app, newEnvFile: file, problems };
+  }
   if (app.kind === 'plugin') {
+    if (app.htaccess) htaccess = planHtaccess(tree, app.name, app.envProject, name, problems);
     const targets = (readJson(tree, `${app.root}/project.json`).targets ?? {}) as Record<
       string,
       { configurations?: Record<string, Record<string, unknown>> }
@@ -462,7 +559,7 @@ function planFlutter(
       }
     }
   }
-  return { app, sourceJson: source, problems };
+  return { app, newEnvFile: file, sourceJson: source, htaccess, problems };
 }
 
 /** The polystack release target (any name), else a target named release. */
@@ -532,16 +629,17 @@ function detectAngularApps(tree: Tree): AngularApp[] {
 }
 
 /**
- * Flutter apps: identified by build-web/build-android/build-ios targets AND an env/ directory.
+ * Flutter apps: identified by build-web/build-android/build-ios targets and their env files.
  * Two executor styles are handled:
- *   - "plugin"       : @mouryaamit/nx-polystack:flutter-build (has configurations blocks)
- *   - "run-commands" : nx:run-commands with flutter-build.js in the command string
+ *   - "plugin"       : @mouryaamit/nx-polystack:flutter-build (has configurations blocks); env files
+ *                      in environments/<envProject>/ (build-web's envProject, else the app name)
+ *   - "run-commands" : nx:run-commands with flutter-build.js in the command string; env files in
+ *                      <root>/env/
  */
 function detectFlutterApps(tree: Tree): FlutterApp[] {
   const apps: FlutterApp[] = [];
 
   for (const { root, json: pj } of findProjects(tree, 'apps')) {
-    if (!tree.exists(`${root}/env`)) continue;
     const appName = projectNameOf(root, pj);
     const targets = (pj['targets'] ?? {}) as Record<string, unknown>;
 
@@ -553,7 +651,24 @@ function detectFlutterApps(tree: Tree): FlutterApp[] {
     });
 
     if (pluginMatch) {
-      apps.push({ kind: 'plugin', name: appName, root });
+      const web = targets['build-web'] as Record<string, unknown> | undefined;
+      const webOptions = (web?.['options'] ?? {}) as Record<string, unknown>;
+      const envProject =
+        typeof webOptions['envProject'] === 'string'
+          ? (webOptions['envProject'] as string)
+          : appName;
+      const oldEnvDir = `${root}/env`;
+      const staleEnvDir =
+        !tree.exists(`${ENV_ROOT}/${envProject}`) && tree.exists(oldEnvDir) ? oldEnvDir : undefined;
+      if (!staleEnvDir && !tree.exists(`${ENV_ROOT}/${envProject}`)) continue;
+      apps.push({
+        kind: 'plugin',
+        name: appName,
+        root,
+        envProject,
+        htaccess: Boolean(web) && webOptions['htaccess'] !== false,
+        staleEnvDir,
+      });
       continue;
     }
 
@@ -563,7 +678,7 @@ function detectFlutterApps(tree: Tree): FlutterApp[] {
       return typeof cmd === 'string' && cmd.includes('flutter-build');
     });
 
-    if (runCommandsMatch) {
+    if (runCommandsMatch && tree.exists(`${root}/env`)) {
       apps.push({ kind: 'run-commands', name: appName, root });
     }
   }

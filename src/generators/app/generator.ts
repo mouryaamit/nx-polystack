@@ -26,9 +26,11 @@ import {
   EnvLayout,
   ionicProjectTargets,
   PER_ENV_ROOT_FILE,
+  RELEASE_CONFIGURATIONS,
 } from '../../lib/utils/angular-project';
 import { parseAllowlist } from '../../lib/csp/allowlist';
-import { renderHtaccess, renderNginx } from '../../lib/csp/render';
+import { renderFlutterHtaccess, renderHtaccess, renderNginx } from '../../lib/csp/render';
+import { htaccessSourcePath } from '../../lib/release/htaccess';
 import { baseHrefTarget, checkBaseHref, setBaseHref } from '../../lib/utils/base-href';
 import { appRoot, assertDirOutsideProjects, parseDir, upTo } from '../../lib/utils/app-dir';
 import {
@@ -185,7 +187,10 @@ export default async function appGenerator(
     } catch (err) {
       throw new Error(`app generator: --cspConnectSrc: ${(err as Error).message}`);
     }
-    tree.write(`${projectPath}/src/.htaccess`, renderHtaccess(projectName, allowlist));
+    // One .htaccess per env, next to the env files; the release build copies the env's own.
+    for (const env of releaseEnvNames()) {
+      tree.write(htaccessSourcePath(projectName, env), renderHtaccess(projectName, allowlist));
+    }
     tree.write(`${projectPath}/server/nginx.conf`, renderNginx(projectName, allowlist));
 
     generateAngularEnvFiles(tree, projectName, envLayout);
@@ -263,7 +268,10 @@ export default async function appGenerator(
       tree.write(`${projectPath}/${file}`, content);
     }
 
-    generateFlutterEnvFiles(tree, projectName, { root: projectPath });
+    generateFlutterEnvFiles(tree, projectName);
+    for (const env of ['dev', 'uat', 'prod']) {
+      tree.write(htaccessSourcePath(projectName, env), renderFlutterHtaccess(projectName, env));
+    }
 
     tree.write(
       `${projectPath}/project.json`,
@@ -321,6 +329,8 @@ export interface FlutterProjectOptions {
   port?: number;
   /** Project root (default apps/<name>); :migrate keeps the source root. */
   root?: string;
+  /** false: build-web makes no .htaccess (:migrate; the source app had none). Default: on. */
+  htaccess?: boolean;
 }
 
 export function buildProjectJson(name: string, opts: FlutterProjectOptions = {}): object {
@@ -344,7 +354,11 @@ export function buildProjectJson(name: string, opts: FlutterProjectOptions = {})
       },
       'build-web': {
         executor: `${executor}:flutter-build`,
-        options: { target: 'web', dist: `dist/${root}/web` },
+        options: {
+          target: 'web',
+          dist: `dist/${root}/web`,
+          ...(opts.htaccess === false ? { htaccess: false } : {}),
+        },
         configurations: {
           dev: { env: 'dev' },
           uat: { env: 'uat' },
@@ -506,6 +520,11 @@ function scaffoldDeeplink(tree: Tree, projectName: string, deeplink: string): vo
     `libs/well-known/README.md`,
     `# Deep-link well-known files\n\nHost the files in each env folder at \`https://${domain}/.well-known/\`.\nReplace \`TEAMID\` and \`REPLACE_WITH_CERT_SHA256\` with real values before publishing.\n`,
   );
+}
+
+/** Env names of a new app's release configurations (dev, uat, prod). */
+function releaseEnvNames(): string[] {
+  return Object.values(RELEASE_CONFIGURATIONS).map((c) => c.env.toLowerCase());
 }
 
 /**

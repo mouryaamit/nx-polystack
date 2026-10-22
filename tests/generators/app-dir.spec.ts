@@ -29,8 +29,9 @@ describe('app generator --dir', () => {
     expect(build.index).toBe(`${root}/src/index.html`);
     expect(build.main).toBe(`${root}/src/main.ts`);
     expect(build.tsConfig).toBe(`${root}/tsconfig.app.json`);
-    expect(build.assets[0]).toBe(`${root}/src/.htaccess`);
-    expect(build.assets[1].input).toBe('libs/shared/assets');
+    expect(build.assets[0].input).toBe('libs/shared/assets');
+    expect(tree.exists(`${root}/src/.htaccess`)).toBe(false);
+    expect(tree.exists('environments/portal/htaccess.uat')).toBe(true);
     expect(pj.targets.clean.options.paths).toEqual([
       'dist/apps/legacy/portal',
       'coverage/apps/legacy/portal',
@@ -104,7 +105,6 @@ describe('app generator --dir', () => {
       'pubspec.yaml',
       'lib/main.dart',
       'web/index.html',
-      'env/dev.json',
       'lib/l10n/app_en.arb',
       'l10n.yaml',
       'lib/notifications.dart',
@@ -112,6 +112,8 @@ describe('app generator --dir', () => {
       expect(tree.exists(`${root}/${f}`)).toBe(true);
     }
     expect(tree.exists('apps/notes')).toBe(false);
+    expect(tree.exists('environments/notes/environment.dev.json')).toBe(true);
+    expect(tree.exists('environments/notes/htaccess.prod')).toBe(true);
   });
 
   it('pstack env and the AI-assistant block find the nested apps', async () => {
@@ -123,7 +125,8 @@ describe('app generator --dir', () => {
     await appGenerator(tree, { name: 'notes', type: 'flutter', dir: 'legacy' });
     expect(read(tree, 'CLAUDE.md')).toContain('`apps/legacy/notes`');
     await envGenerator(tree, { all: true, name: 'qa' });
-    expect(tree.exists('apps/legacy/notes/env/qa.json')).toBe(true);
+    expect(tree.exists('environments/notes/environment.qa.json')).toBe(true);
+    expect(tree.exists('environments/notes/htaccess.qa')).toBe(true);
     expect(
       readJson(tree, 'apps/legacy/portal/project.json').targets.build.configurations.qa,
     ).toBeDefined();

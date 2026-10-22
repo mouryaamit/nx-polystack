@@ -420,6 +420,12 @@ function absorb(into: MigrationReportData, from: MigrationReportData, p: Planned
   into.nextSteps.push(...from.nextSteps.filter((s) => !into.nextSteps.includes(s)));
   if (from.ionic) into.ionic = [...(into.ionic ?? []), ...from.ionic];
   if (from.moves) into.moves = [...(into.moves ?? []), ...from.moves];
+  if (from.envMoves) {
+    into.envMoves = [
+      ...(into.envMoves ?? []),
+      ...from.envMoves.map((m) => ({ ...m, label: m.label ?? code(p.name) })),
+    ];
+  }
 }
 
 /** Root merge specs: a local path inside an imported package follows it to its new folder. */

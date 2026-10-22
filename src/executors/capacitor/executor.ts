@@ -4,6 +4,8 @@ import * as path from 'path';
 
 import { ExecutorContext } from '@nx/devkit';
 
+import { removeHtaccessFiles } from '../../lib/release/htaccess';
+
 import { CapacitorExecutorSchema } from './schema.d';
 
 export type Runner = (cmd: string, opts: ExecSyncOptions) => void;
@@ -17,6 +19,11 @@ const COMMANDS = ['sync', 'open', 'add', 'copy'];
 const PLATFORMS = ['android', 'ios'];
 /** Commands that copy the web build into the native project. */
 const NEEDS_WEB_BUILD = ['sync', 'copy'];
+/** Where `cap sync` / `cap copy` put the web build in each native project (relative to the app). */
+const NATIVE_WEB_DIR: Record<string, string> = {
+  android: 'android/app/src/main/assets/public',
+  ios: 'ios/App/App/public',
+};
 
 export default async function capacitorExecutor(
   options: CapacitorExecutorSchema,
@@ -63,5 +70,12 @@ export default async function capacitorExecutor(
   }
   // --no-install: never fetch an unrelated "cap" package from the registry.
   runner(`npx --no-install cap ${command} ${platform}`, opts);
+  // The web release's .htaccess is Apache config: it has no place in the app bundle.
+  if (NEEDS_WEB_BUILD.includes(command)) {
+    const removed = removeHtaccessFiles(path.join(appDir, NATIVE_WEB_DIR[platform]));
+    if (removed.length > 0) {
+      console.log(`ℹ removed ${removed.join(', ')} from the ${platform} app's web assets`);
+    }
+  }
   return { success: true };
 }

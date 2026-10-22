@@ -172,3 +172,40 @@ export function renderNginx(app: string, a: CspAllowlist): string {
     '',
   ].join('\n');
 }
+
+/** First line of the Flutter web .htaccess `pstack app` writes (pstack never rewrites it). */
+export const FLUTTER_HTACCESS_MARKER = '# Written by pstack app for a Flutter web build';
+
+/**
+ * Apache config for a Flutter web build, the counterpart of its server/nginx.conf: SPA routing,
+ * the wasm MIME type, security headers and a CSP for the CanvasKit renderer, no-cache for the
+ * bootstrap files Flutter does not hash. One per env (environments/<app>/htaccess.<env>).
+ */
+export function renderFlutterHtaccess(app: string, env: string): string {
+  return [
+    `${FLUTTER_HTACCESS_MARKER} — ${app}, ${env}. Edit it freely; pstack does not rewrite it.`,
+    '# Needs mod_rewrite and mod_headers, and AllowOverride FileInfo (or All) for this folder.',
+    '',
+    '# Single-page app: anything that is not a file or a folder gets index.html.',
+    'RewriteEngine On',
+    'RewriteCond %{REQUEST_FILENAME} !-f',
+    'RewriteCond %{REQUEST_FILENAME} !-d',
+    'RewriteRule ^ index.html [L]',
+    '',
+    '# WebAssembly (CanvasKit renderer)',
+    'AddType application/wasm .wasm',
+    '',
+    '# Security headers. CanvasKit needs wasm-unsafe-eval and blob: workers; test before tightening.',
+    'Header always set X-Frame-Options "SAMEORIGIN"',
+    'Header always set X-Content-Type-Options "nosniff"',
+    `Header always set Referrer-Policy "${DEFAULT_REFERRER_POLICY}"`,
+    'Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"',
+    "Header always set Content-Security-Policy \"default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src blob:; frame-ancestors 'none'\"",
+    '',
+    '# Flutter does not hash these: always revalidate them.',
+    '<FilesMatch "^(index\\.html|flutter_bootstrap\\.js|flutter_service_worker\\.js|version\\.json|manifest\\.json)$">',
+    '    Header set Cache-Control "no-cache"',
+    '</FilesMatch>',
+    '',
+  ].join('\n');
+}

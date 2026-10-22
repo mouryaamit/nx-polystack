@@ -4,10 +4,12 @@ import * as path from 'path';
 import { Tree } from '@nx/devkit';
 
 import {
+  allowlistForEnv,
   buildPolicy,
   CSP_DIRECTIVES,
   CspAllowlist,
   CspDirective,
+  CspSources,
   parseAllowlist,
   serializeAllowlist,
 } from '../../lib/csp/allowlist';
@@ -19,6 +21,7 @@ import {
   renderHtaccess,
   renderNginx,
 } from '../../lib/csp/render';
+import { htaccessSourcePath } from '../../lib/release/htaccess';
 import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
 import { readProjects } from '../../lib/utils/project-json-files';
 import { flagBoolean, flagString } from '../args';
@@ -202,9 +205,26 @@ export function syncNoncePlaceholder(
   return lines;
 }
 
+interface ReleaseTargetJson {
+  executor?: string;
+  options?: { envProject?: string; htaccess?: boolean };
+  configurations?: Record<string, { env?: string } | undefined>;
+}
+
+/** The release target's env names, lower-cased (its configurations' env, else their names). */
+function releaseEnvs(release: ReleaseTargetJson): string[] {
+  return [
+    ...new Set(
+      Object.entries(release.configurations ?? {}).map(([name, c]) =>
+        String(c?.env ?? name).toLowerCase(),
+      ),
+    ),
+  ];
+}
+
 /** pstack csp --app=<project>: edit csp-allowlist.json and render .htaccess / nginx.conf from it. */
 export async function runCsp(ctx: CommandContext): Promise<number> {
-  for (const f of ['app', 'add', 'remove', 'import', 'nonceSource']) {
+  for (const f of ['app', 'add', 'remove', 'import', 'nonceSource', 'env']) {
     if (ctx.flags[f] === true) throw new CliError(`--${f} needs a value.`);
   }
   const app = flagString(ctx.flags, 'app');
@@ -214,6 +234,13 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
   const force = ctx.flags['force'] !== undefined && flagBoolean(ctx.flags, 'force');
   const nonceSourceFlag = flagString(ctx.flags, 'nonceSource');
   const importFlag = flagString(ctx.flags, 'import');
+  const envFlag = flagString(ctx.flags, 'env')?.toLowerCase();
+  if (envFlag !== undefined && importFlag !== undefined) {
+    throw new CliError('--import merges into the sources of every env; it does not take --env.');
+  }
+  if (envFlag !== undefined && adds.length + removes.length === 0) {
+    throw new CliError('--env changes the sources of one env: give --add and/or --remove too.');
+  }
   const imported = importFlag === undefined ? undefined : readImportSource(importFlag, ctx.cwd);
   let parsedImport: ReturnType<typeof readPolicy> | undefined;
   if (imported) {
@@ -235,8 +262,9 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
     }
     const project = projects.find((p) => p.name === app);
     if (!project) throw new CliError(`No project named "${app}".`);
-    const targets = (project.json['targets'] ?? {}) as Record<string, { executor?: string }>;
-    if (!Object.values(targets).some((t) => t.executor === POLYSTACK_BUILD_EXECUTOR)) {
+    const targets = (project.json['targets'] ?? {}) as Record<string, ReleaseTargetJson>;
+    const release = Object.values(targets).find((t) => t.executor === POLYSTACK_BUILD_EXECUTOR);
+    if (!release) {
       throw new CliError(
         `"${app}" has no release target (${POLYSTACK_BUILD_EXECUTOR}); pstack csp is for Angular and Ionic apps.`,
       );
@@ -250,12 +278,28 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
     } catch (err) {
       throw new CliError(`${listFile}: ${(err as Error).message}`);
     }
+    const envs = releaseEnvs(release);
+    if (envFlag !== undefined && !envs.includes(envFlag)) {
+      throw new CliError(
+        `--env=${envFlag}: ${app} has no "${envFlag}" release configuration (envs: ${envs.join(
+          ', ',
+        )}).`,
+      );
+    }
+    const copySources = (src: CspSources): CspSources =>
+      Object.fromEntries(Object.entries(src).map(([k, v]) => [k, [...(v as string[])]]));
     const edited: CspAllowlist = {
       ...allowlist,
-      sources: Object.fromEntries(
-        Object.entries(allowlist.sources).map(([k, v]) => [k, [...(v as string[])]]),
+      sources: copySources(allowlist.sources),
+      envs: Object.fromEntries(
+        Object.entries(allowlist.envs ?? {}).map(([e, src]) => [e, copySources(src)]),
       ),
     };
+    // --env: --add/--remove change that env's own sources.
+    const target: CspSources = envFlag
+      ? ((edited.envs as Record<string, CspSources>)[envFlag] ??= {})
+      : edited.sources;
+    const where = envFlag ? `envs.${envFlag} ` : '';
     let importLines: string[] = [];
     let importAdded = false;
     if (imported && parsedImport) {
@@ -265,14 +309,14 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
       importLines = importReport(imported.label, parsedImport.format, result, parsedImport.notes);
     }
     for (const { directive, source } of adds) {
-      edited.sources[directive] = [...(edited.sources[directive] ?? []), source];
+      target[directive] = [...(target[directive] ?? []), source];
     }
     for (const { directive, source } of removes) {
-      const before = edited.sources[directive] ?? [];
+      const before = target[directive] ?? [];
       if (!before.includes(source)) {
-        out.push(`Note: ${directive} has no "${source}"; nothing removed.`);
+        out.push(`Note: ${where}${directive} has no "${source}"; nothing removed.`);
       }
-      edited.sources[directive] = before.filter((s) => s !== source);
+      target[directive] = before.filter((s) => s !== source);
     }
     if (nonceSourceFlag !== undefined) edited.nonceSource = nonceSourceFlag;
     let checked: CspAllowlist;
@@ -299,15 +343,39 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
         .filter(([, v]) => (v as string[]).length > 0)
         .map(([k, v]) => `  ${k.padEnd(16)}${(v as string[]).join(' ')}`),
       `  policy          ${buildPolicy(checked).replace(/\{N\}/g, '<nonce>')}`,
+      ...Object.entries(checked.envs ?? {}).flatMap(([env, src]) => [
+        `  ${env} adds:`,
+        ...Object.entries(src).map(([k, v]) => `    ${k.padEnd(14)}${(v as string[]).join(' ')}`),
+        `    policy        ${buildPolicy(allowlistForEnv(checked, env)).replace(
+          /\{N\}/g,
+          '<nonce>',
+        )}`,
+      ]),
     );
+    for (const env of Object.keys(checked.envs ?? {})) {
+      if (!envs.includes(env)) {
+        out.push(`Note: envs.${env} is not a release env of ${app}; no htaccess uses it.`);
+      }
+    }
 
     let htaccessKept = false;
+    // One .htaccess per release env (environments/<envProject>/htaccess.<env>); none when the
+    // release target has htaccess: false.
+    const htaccessFiles: [string, string][] =
+      release.options?.htaccess === false
+        ? []
+        : envs.map((env) => [
+            htaccessSourcePath(release.options?.envProject ?? app, env),
+            renderHtaccess(app, allowlistForEnv(checked, env)),
+          ]);
     for (const [file, text] of [
-      [`${project.root}/src/.htaccess`, renderHtaccess(app, checked)],
+      ...htaccessFiles,
       [`${project.root}/server/nginx.conf`, renderNginx(app, checked)],
     ] as const) {
       const state = fileState(tree, file, text);
-      if (state === 'hand-written' && !force && file.endsWith('.htaccess')) htaccessKept = true;
+      if (state === 'hand-written' && !force && file !== `${project.root}/server/nginx.conf`) {
+        htaccessKept = true;
+      }
       if (state === 'hand-written' && !force) {
         out.push(
           `  ${file}: hand-written, kept (--force replaces it)` +
@@ -326,7 +394,7 @@ export async function runCsp(ctx: CommandContext): Promise<number> {
     // expect something else, so the target is left alone then.
     if (htaccessKept) {
       out.push(
-        '  release nonce.placeholder not synced: src/.htaccess is hand-written (--force replaces it)',
+        '  release nonce.placeholder not synced: a .htaccess is hand-written (--force replaces it)',
       );
     } else {
       out.push(

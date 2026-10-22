@@ -11,7 +11,8 @@ import {
   majorOf,
   nxVersion,
 } from '../../../lib/utils/dependencies';
-import { generateFlutterEnvFiles } from '../../../lib/utils/env-files';
+import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt';
+import { generateFlutterEnvFiles, moveFlutterEnvFiles } from '../../../lib/utils/env-files';
 import { nodeRangeAllowsMajor, workspaceNodeMajor } from '../../../lib/utils/node-engine';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { nextFreePort, usedServePorts } from '../../../lib/utils/serve-port';
@@ -351,9 +352,11 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
       if (!tags.some((t) => t.startsWith(prefix))) tags.push(tag);
     };
     const notes: string[] = [];
+    let releaseAdded = false;
 
     if (kind === 'angular-app' || kind === 'ionic-app') {
       const releases = addReleaseTarget(targets, p.name, (w) => notes.push(w), root);
+      releaseAdded = releases.length > 0;
       // Only the release target this run added; a source's own release target stays as it was.
       if (releases.length > 0) shapeReleaseTarget(targets, p, buildScripts, notes);
       const main = mainOf(targets);
@@ -375,6 +378,7 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
           exportTarget: false,
           root,
           port: nextFreePort(usedServePorts(tree).map((u) => u.port)),
+          htaccess: false,
         }) as { targets: Json }
       ).targets;
       // A clean target of the source is kept.
@@ -390,11 +394,11 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
       }
       addTag('type:', 'type:app');
       addTag('platform:', 'platform:flutter');
-      const created = generateFlutterEnvFiles(tree, p.name, {
-        keepExisting: true,
-        empty: true,
-        root,
-      });
+      const moved = moveFlutterEnvFiles(tree, root, p.name);
+      if (moved.moved.length > 0) {
+        notes.push(`env files moved to ${code(`environments/${p.name}/`)}`);
+      }
+      const created = generateFlutterEnvFiles(tree, p.name, { keepExisting: true, empty: true });
       if (created.length > 0) {
         notes.push(
           `created empty ${created.map(code).join(', ')}; fill them (they are passed to Flutter ` +
@@ -417,6 +421,15 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
     }
     for (const input of namedInputsOf(targets)) usedInputs.add(input);
     writeJson(tree, `${root}/project.json`, config);
+    if (releaseAdded) htaccessNote(adoptHtaccess(tree, `${root}/project.json`), p.name, notes);
+    // Env files inside the project (apps and libraries) go to environments/<name>/.
+    if (kind !== 'flutter-app') {
+      (data.envMoves ??= []).push({
+        projectJson: `${root}/project.json`,
+        envProject: p.name,
+        label: code(p.name),
+      });
+    }
     if (dropped.size > 0) {
       notes.push(
         `dropped references to projects that were not copied: ${[...dropped]

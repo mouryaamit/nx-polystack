@@ -92,7 +92,8 @@ describe('migrate --dir', () => {
     const pj = readJson(tree, 'apps/a/b/notes/project.json');
     expect(pj.sourceRoot).toBe('apps/a/b/notes/lib');
     expect(pj.targets['build-web'].options.dist).toBe('dist/apps/a/b/notes/web');
-    expect(tree.exists('apps/a/b/notes/env/dev.json')).toBe(true);
+    expect(tree.exists('environments/notes/environment.dev.json')).toBe(true);
+    expect(tree.exists('apps/a/b/notes/env')).toBe(false);
     expect(tree.exists('apps/notes')).toBe(false);
   });
 
@@ -108,7 +109,7 @@ describe('migrate --dir', () => {
       dir: 'legacy',
     });
     await envGenerator(tree, { all: true, name: 'qa' });
-    expect(tree.exists('apps/legacy/notes/env/qa.json')).toBe(true);
+    expect(tree.exists('environments/notes/environment.qa.json')).toBe(true);
     expect(
       readJson(tree, 'apps/legacy/portal/project.json').targets.build.configurations.qa,
     ).toBeDefined();

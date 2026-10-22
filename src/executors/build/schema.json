@@ -132,6 +132,11 @@
       "type": "object",
       "description": "non-DEV: javascript-obfuscator options on top of the obfuscate preset, e.g. { \"stringArrayThreshold\": 0.3 }. Options that need eval, lock domains, rename globals or properties, or change the target cannot be set."
     },
+    "htaccess": {
+      "type": "boolean",
+      "default": true,
+      "description": "Copy environments/<envProject>/htaccess.<env> (env lower-cased) into the served root as .htaccess; the build fails before it starts when that file is missing, and any other .htaccess in the output is removed. false: the output has no .htaccess."
+    },
     "baseHref": {
       "type": "string",
       "description": "URL base href forwarded to the Angular builder (e.g. /my-app/)."

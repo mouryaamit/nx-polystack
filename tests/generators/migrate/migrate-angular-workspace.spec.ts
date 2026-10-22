@@ -152,6 +152,11 @@ describe('migrate generator: multi-project Angular CLI workspace', () => {
     expect(eslint.overrides[1].extends).toEqual(['plugin:@nx/angular-template']);
     expect(tree.read('docs/migrations/field-workspace.md', 'utf8')).toContain(
       '`apps/old-portal/src/app/util.ts`',
+    ); // Each app's env files go to environments/<app>/.
+    expect(tree.exists('environments/old-portal/environment.prod.ts')).toBe(true);
+    expect(tree.exists('environments/old-admin/environment.prod.ts')).toBe(true);
+    expect(tree.read('apps/old-portal/src/app/util.ts', 'utf8')).toContain(
+      "from '@env/old-portal/environment'",
     );
   });
 

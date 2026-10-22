@@ -234,6 +234,8 @@ OPTIONS — csp (--app required; writes the server files that are missing or wer
   --app=<project>              Angular/Ionic app
   --add=<dir>:<src>[,…]        Add sources, e.g. script-src:https://www.googletagmanager.com
   --remove=<dir>:<src>[,…]     Remove sources
+  --env=<env>                  --add/--remove change that release env's sources ("envs" in
+                               csp-allowlist.json), which only its htaccess.<env> gets
   --import=<file|policy>       Merge an existing policy into csp-allowlist.json: a CSP header value,
                                .htaccess / nginx.conf, or JSON (directive → sources); refused
                                sources ('unsafe-inline', 'unsafe-eval', http:, …) are listed, not
@@ -314,6 +316,7 @@ EXAMPLES
   nx run portal:clean
   pstack csp --app=portal --add=connect-src:https://api.example.com
   pstack csp --app=portal --import=apps/portal/src/.htaccess --dry-run
+  pstack csp --app=portal --env=uat --add=connect-src:https://uat-api.example.com
   pstack hardening --app=portal
   pstack hardening --app=portal --configuration=uat --obfuscate=light --sri
   pstack update

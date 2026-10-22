@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import { Tree, updateJson } from '@nx/devkit';
 
+import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { setProjectTags } from '../../../lib/utils/nx-targets';
@@ -370,6 +371,13 @@ export function migrateAngularApp(
     angularMajor,
   });
   writeJson(tree, `${projectRoot}/project.json`, pj.projectJson);
+  if (pj.releaseConfigurations.length > 0) {
+    const notes: string[] = [];
+    htaccessNote(adoptHtaccess(tree, `${projectRoot}/project.json`), name, notes);
+    data.notes.push(...notes.map((n) => n[0].toUpperCase() + n.slice(1) + '.'));
+  }
+  // Env files go to environments/<name>/ like every polystack app's (moved after import rewriting).
+  (data.envMoves ??= []).push({ projectJson: `${projectRoot}/project.json`, envProject: name });
   setProjectTags(tree, projectRoot, opts.tags ?? ['scope:app', 'type:app', 'platform:web']);
   data.notes.push(...pj.warnings.map((w) => `project.json: ${w}`));
   const label = opts.notesLabel ? `${opts.notesLabel} ` : '';
@@ -415,15 +423,12 @@ export function migrateAngularApp(
   );
   data.sourceScripts = { ...(sourcePkg?.scripts ?? {}) };
 
-  // 7. Environments: kept as they are.
+  // 7. Environments: in environments/<name>/ (moved above).
   data.nextSteps.push(
     `\`npx nx build ${name}\``,
     `\`npx nx lint ${name}\``,
-    `Environments: the app keeps its own \`environment*.ts\` files and fileReplacements. ` +
-      `\`pstack env --name=<env>\` adds a new environment to every app, this one included. ` +
-      'For build-time env encryption (`nx run ' +
-      `${name}:release:<env>\`), move the files to \`environments/${name}/environment.<env>.ts\` ` +
-      '(the `pstack app` layout) and point fileReplacements there.',
+    `Environments: the app's env files are in \`environments/${name}/\`. ` +
+      `\`pstack env --name=<env>\` adds a new environment to every app, this one included.`,
   );
   return { data, releaseConfigurations: pj.releaseConfigurations };
 }

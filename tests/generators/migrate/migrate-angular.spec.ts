@@ -577,10 +577,11 @@ describe('migrate generator: standalone Angular CLI app', () => {
       expect(pj.targets.build.options.outputPath).toBe('dist/apps/portal');
       expect(pj.targets.build.configurations.production.fileReplacements).toEqual([
         {
-          replace: 'apps/portal/src/environments/environment.ts',
-          with: 'apps/portal/src/environments/environment.prod.ts',
+          replace: 'environments/portal/environment.ts',
+          with: 'environments/portal/environment.prod.ts',
         },
       ]);
+      expect(pj.targets.release.options.envProject).toBe('portal');
       expect(pj.targets.serve.configurations.development.browserTarget).toBe(
         'portal:build:development',
       );
@@ -664,15 +665,24 @@ describe('migrate generator: standalone Angular CLI app', () => {
       });
     });
 
-    it('does not add tsconfig paths when the source has none', () => {
+    it('adds only the @env/* alias to tsconfig paths when the source has none', () => {
       expect(readJson(tree, 'tsconfig.base.json').compilerOptions.paths).toEqual({
         '@acme/ui': ['libs/shared/ui/src/index.ts'],
+        '@env/*': ['environments/*'],
       });
     });
 
-    it('keeps the source environments where they are', () => {
-      expect(tree.exists('apps/portal/src/environments/environment.prod.ts')).toBe(true);
-      expect(tree.exists('environments/portal')).toBe(false);
+    it('moves the env files to environments/portal/ and imports them through @env/', () => {
+      expect(tree.exists('apps/portal/src/environments')).toBe(false);
+      expect(tree.exists('environments/portal/environment.ts')).toBe(true);
+      expect(tree.exists('environments/portal/environment.prod.ts')).toBe(true);
+      expect(tree.read('apps/portal/src/app/app.component.ts', 'utf8')).toContain(
+        "import { environment } from '@env/portal/environment';",
+      );
+      const report = tree.read('docs/migrations/portal.md', 'utf8') as string;
+      expect(report).toContain(
+        'Env files moved from `apps/portal/src/environments/` to `environments/portal/`',
+      );
     });
 
     it('writes a deterministic report', () => {
@@ -720,6 +730,7 @@ describe('migrate generator: standalone Angular CLI app', () => {
       expect(readJson(tree, 'tsconfig.base.json').compilerOptions.paths).toEqual({
         '@acme/ui': ['libs/shared/ui/src/index.ts'],
         '@app/core/*': ['apps/portal/src/app/core/*'],
+        '@env/*': ['environments/*'],
       });
       const report = tree.read('docs/migrations/portal.md', 'utf8')!;
       expect(report).toContain('Added to `tsconfig.base.json`: `@app/core/*`.');
@@ -741,7 +752,7 @@ describe('migrate generator: standalone Angular CLI app', () => {
       );
     });
 
-    it('rewrites imports that relied on the source baseUrl to relative paths', async () => {
+    it('rewrites imports that relied on the source baseUrl (env files end up behind @env/)', async () => {
       const src = fixtureCopy('angular15-app');
       put(
         src,
@@ -750,7 +761,7 @@ describe('migrate generator: standalone Angular CLI app', () => {
       );
       await migrateGenerator(tree, { source: src, name: 'portal' });
       expect(tree.read('apps/portal/src/app/feature.ts', 'utf8')).toBe(
-        "import { environment } from '../environments/environment';\nimport { of } from 'rxjs';\n",
+        "import { environment } from '@env/portal/environment';\nimport { of } from 'rxjs';\n",
       );
       const report = tree.read('docs/migrations/portal.md', 'utf8') as string;
       expect(report).not.toContain('These files import through it');

@@ -14,7 +14,16 @@
     "env": {
       "type": "string",
       "default": "dev",
-      "description": "Environment tier \u2014 selects <project root>/env/<env>.json for --dart-define-from-file."
+      "description": "Environment (dev, uat, prod or a custom one): environments/<envProject>/environment.<env>.json is passed with --dart-define-from-file; the build fails when it is missing."
+    },
+    "envProject": {
+      "type": "string",
+      "description": "Folder under environments/ with this app's env files and .htaccess sources. Default: the project name."
+    },
+    "htaccess": {
+      "type": "boolean",
+      "default": true,
+      "description": "Web builds: copy environments/<envProject>/htaccess.<env> into the output as .htaccess; the build fails before it starts when that file is missing, and any other .htaccess is removed. false: no .htaccess. Ignored for apk / ios."
     },
     "dist": {
       "type": "string",

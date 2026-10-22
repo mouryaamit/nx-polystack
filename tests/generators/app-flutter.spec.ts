@@ -32,11 +32,15 @@ describe('app generator --type=flutter', () => {
     expect(manifest.name).toBe('Consumer App');
   });
 
-  it('creates env/{dev,uat,prod}.json', async () => {
+  it('creates environments/<app>/environment.{dev,uat,prod}.json and htaccess.<env>', async () => {
     await appGenerator(tree, { name: 'consumer-app', type: 'flutter' });
-    expect(tree.exists('apps/consumer-app/env/dev.json')).toBe(true);
-    expect(tree.exists('apps/consumer-app/env/uat.json')).toBe(true);
-    expect(tree.exists('apps/consumer-app/env/prod.json')).toBe(true);
+    expect(tree.exists('apps/consumer-app/env')).toBe(false);
+    for (const env of ['dev', 'uat', 'prod']) {
+      expect(tree.exists(`environments/consumer-app/environment.${env}.json`)).toBe(true);
+      const ht = tree.read(`environments/consumer-app/htaccess.${env}`, 'utf-8') as string;
+      expect(ht).toContain('# Written by pstack app for a Flutter web build');
+      expect(ht).toContain('RewriteRule ^ index.html [L]');
+    }
   });
 
   it('generates project.json with all 5 targets', async () => {

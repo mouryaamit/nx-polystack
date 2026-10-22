@@ -105,8 +105,10 @@ describe('migrate generator: Nx workspace', () => {
     });
     expect(mobile.targets.analyze.executor).toBe('nx:run-commands');
     expect(mobile.tags).toEqual(['scope:mobile', 'type:app', 'platform:flutter']);
-    expect(tree.read('apps/mobile/env/dev.json', 'utf8')).toContain('dev.acme.test');
-    expect(tree.read('apps/mobile/env/uat.json', 'utf8')).toBe('{}\n');
+    expect(tree.read('environments/mobile/environment.dev.json', 'utf8')).toContain(
+      'dev.acme.test',
+    );
+    expect(tree.read('environments/mobile/environment.uat.json', 'utf8')).toBe('{}\n');
 
     expect(json(tree, 'apps/portal/.eslintrc.json').overrides[0]).toEqual({
       files: ['*.ts'],

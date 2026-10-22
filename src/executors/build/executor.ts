@@ -18,6 +18,11 @@ import { injectBuildMeta } from '../../lib/helpers/inject-meta';
 import { injectCspNonce, resolveNonceSettings } from '../../lib/helpers/inject-nonce';
 import { injectSri } from '../../lib/helpers/inject-sri';
 import { stripExif, stripExifSummary } from '../../lib/helpers/strip-exif';
+import {
+  placeHtaccess,
+  removeHtaccessFiles,
+  requireHtaccessSource,
+} from '../../lib/release/htaccess';
 import { resolveCiContext } from '../../lib/utils/ci-resolve';
 import { BuildExecutorSchema } from './schema.d';
 
@@ -89,6 +94,12 @@ export default async function buildExecutor(
     throw new Error(`build executor: ${(err as Error).message}`);
   }
   hardening.warnings.forEach((w) => console.warn(`⚠ ${w}`));
+
+  // The env's Apache config, checked before anything is built (no fallback to another env).
+  const htaccessSource =
+    options.htaccess === false
+      ? undefined
+      : requireHtaccessSource(repoRoot, projectName, envProject, env);
 
   const ciCtx = resolveCiContext();
   // Checked before the Angular build, so a bad buildMeta option fails fast.
@@ -238,6 +249,23 @@ export default async function buildExecutor(
     }
     if (chunkSri && prepared.keyParts) {
       noteExternalScripts(path.join(checkRoot, 'index.html'));
+    }
+  }
+
+  // The env's .htaccess is the only one in the output (htaccess: false: none at all).
+  if (fs.existsSync(distDir)) {
+    if (htaccessSource) {
+      const removed = placeHtaccess(htaccessSource, distDir, checkRoot);
+      console.log(
+        `ℹ htaccess: ${path.relative(repoRoot, htaccessSource)} → ` +
+          `${path.relative(repoRoot, path.join(checkRoot, '.htaccess'))}` +
+          (removed.length > 0 ? ` (removed from the build: ${removed.join(', ')})` : ''),
+      );
+    } else {
+      const removed = removeHtaccessFiles(distDir);
+      if (removed.length > 0) {
+        console.log(`ℹ htaccess: off; removed ${removed.join(', ')} from the output`);
+      }
     }
   }
 

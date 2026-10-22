@@ -1,4 +1,5 @@
 import {
+  allowlistForEnv,
   buildPolicy,
   parseAllowlist,
   serializeAllowlist,
@@ -164,5 +165,52 @@ describe('server config renderers', () => {
     expect(t).toContain('add_header Cache-Control "public, max-age=31536000, immutable";');
     expect(t).not.toContain('sub_filter_types');
     expect(t).not.toContain('{N}');
+  });
+});
+
+describe('csp allowlist envs (per-env sources)', () => {
+  const raw = {
+    'connect-src': ['https://api.example.com'],
+    envs: {
+      uat: { 'connect-src': ['https://uat-api.example.com', 'https://api.example.com'] },
+      prod: { 'img-src': ['https://cdn.example.com'], 'frame-src': [] },
+    },
+  };
+
+  it('parses envs and merges an env into the base sources without duplicates', () => {
+    const a = parseAllowlist(raw);
+    expect(a.envs).toEqual({
+      uat: { 'connect-src': ['https://uat-api.example.com', 'https://api.example.com'] },
+      prod: { 'img-src': ['https://cdn.example.com'] },
+    });
+    const uat = allowlistForEnv(a, 'UAT');
+    expect(uat.sources['connect-src']).toEqual([
+      'https://api.example.com',
+      'https://uat-api.example.com',
+    ]);
+    expect(uat.envs).toBeUndefined();
+    expect(buildPolicy(uat)).toContain(
+      "connect-src 'self' https://api.example.com https://uat-api.example.com",
+    );
+    // An env without its own sources renders the base policy.
+    expect(buildPolicy(allowlistForEnv(a, 'dev'))).toBe(buildPolicy(a));
+  });
+
+  it('serializes envs last, sorted, directives in table order', () => {
+    const text = serializeAllowlist(parseAllowlist(raw));
+    expect(Object.keys(JSON.parse(text))).toEqual(['connect-src', 'envs']);
+    expect(Object.keys(JSON.parse(text).envs)).toEqual(['prod', 'uat']);
+    expect(parseAllowlist(JSON.parse(text))).toEqual(parseAllowlist(raw));
+  });
+
+  it('refuses bad env names, options inside an env and unsafe sources', () => {
+    expect(() => parseAllowlist({ envs: { UAT: {} } })).toThrow('"UAT" is not an env name');
+    expect(() => parseAllowlist({ envs: { uat: { 'nonce-source': 'env:X' } } })).toThrow(
+      'an env adds sources only',
+    );
+    expect(() => parseAllowlist({ envs: { uat: { 'script-src': ["'unsafe-inline'"] } } })).toThrow(
+      'envs.uat.script-src',
+    );
+    expect(() => parseAllowlist({ envs: [] })).toThrow('"envs" must be an object');
   });
 });

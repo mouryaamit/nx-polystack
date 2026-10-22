@@ -353,8 +353,9 @@ describe('pstack migrate', () => {
       );
       const on = workspace();
       await runMigrate(makeCtx({ cwd: on, flags: { source: src, name: 'portal' } }));
+      // Imports rewritten: the env files moved to environments/portal/, imported through @env/.
       expect(fs.readFileSync(path.join(on, 'apps/portal/src/app/feature.ts'), 'utf8')).toContain(
-        "'../environments/environment'",
+        "'@env/portal/environment'",
       );
       const off = workspace();
       await runMigrate(
@@ -362,6 +363,13 @@ describe('pstack migrate', () => {
       );
       expect(fs.readFileSync(path.join(off, 'apps/portal/src/app/feature.ts'), 'utf8')).toContain(
         "'src/environments/environment'",
+      );
+      // Without import rewriting the env files stay, and the report says where they belong.
+      expect(fs.existsSync(path.join(off, 'apps/portal/src/environments/environment.ts'))).toBe(
+        true,
+      );
+      expect(fs.readFileSync(path.join(off, 'docs/migrations/portal.md'), 'utf8')).toContain(
+        'Env files were left in the project (imports are not rewritten with --no-rewrite-imports)',
       );
       await expect(
         runMigrate(

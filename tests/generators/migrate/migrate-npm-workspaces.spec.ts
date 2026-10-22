@@ -69,6 +69,10 @@ describe('migrate generator: Yarn / npm workspaces', () => {
     expect(web.targets.build.options.outputPath).toBe('dist/apps/web');
     expect(web.targets.release).toBeDefined();
     expect(readJson(tree, 'apps/web/tsconfig.json').extends).toBe('../../tsconfig.base.json');
+    // Env files go to environments/web/ like every polystack app's.
+    expect(tree.exists('environments/web/environment.prod.ts')).toBe(true);
+    expect(tree.exists('apps/web/src/environments/environment.prod.ts')).toBe(false);
+    expect(web.targets.release.options.envProject).toBe('web');
 
     expect(tree.exists('libs/utils/src/greet.ts')).toBe(true);
     expect(tree.exists('libs/utils/package.json')).toBe(false);

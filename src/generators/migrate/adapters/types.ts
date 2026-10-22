@@ -113,6 +113,12 @@ export interface MigrationReportData {
   ionic?: IonicReport[];
   /** Copied folders (filled by recordCopy), for import rewriting. */
   moves?: ImportMove[];
+  /**
+   * Projects whose env files the generator moves to environments/<envProject>/ after import
+   * rewriting (so imports through the source baseUrl are relative by then). `label` prefixes the
+   * report note.
+   */
+  envMoves?: { projectJson: string; envProject: string; label?: string }[];
   /** What import rewriting did (set by the generator). */
   imports?: ImportRewriteResult;
   /** Installs added packages; runs after the files are written. */

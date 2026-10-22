@@ -44,6 +44,7 @@ function workspace(): string {
     path.join(ws, 'environments/portal/environment.uat.ts'),
     "export const environment = { production: false, envName: 'uat' };\n",
   );
+  fs.writeFileSync(path.join(ws, 'environments/portal/htaccess.prod'), '# portal prod\n');
   return ws;
 }
 
@@ -59,6 +60,9 @@ describe('pstack env', () => {
     await runEnv(makeCtx({ cwd: ws, flags: { name: 'qa', app: 'portal', production: 'false' } }));
     expect(fs.readFileSync(path.join(ws, 'environments/portal/environment.qa.ts'), 'utf8')).toMatch(
       /envName: ["']qa["']/,
+    );
+    expect(fs.readFileSync(path.join(ws, 'environments/portal/htaccess.qa'), 'utf8')).toBe(
+      '# portal prod\n',
     );
     const pj = JSON.parse(fs.readFileSync(path.join(ws, 'apps/portal/project.json'), 'utf8'));
     expect(pj.targets.release.configurations.qa).toEqual({

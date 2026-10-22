@@ -7,6 +7,12 @@ import { ExecutorContext } from '@nx/devkit';
 import { generatorInfo } from '../../lib/helpers/build-gen';
 import { injectBuildMeta } from '../../lib/helpers/inject-meta';
 import { stripExif, stripExifSummary } from '../../lib/helpers/strip-exif';
+import {
+  ENVIRONMENTS_DIR,
+  placeHtaccess,
+  removeHtaccessFiles,
+  requireHtaccessSource,
+} from '../../lib/release/htaccess';
 import { resolveCiContext } from '../../lib/utils/ci-resolve';
 
 import { FlutterBuildExecutorSchema } from './schema.d';
@@ -34,11 +40,27 @@ export default async function flutterBuildExecutor(
   const configuredRoot = context.projectsConfigurations?.projects?.[projectName]?.root;
   const projectDir = path.join(repoRoot, configuredRoot ?? path.join('apps', projectName));
 
-  const envFile = path.join(projectDir, 'env', `${env}.json`);
-  const dartDefine = fs.existsSync(envFile) ? `--dart-define-from-file=env/${env}.json` : '';
-  if (!dartDefine) {
-    console.log(`ℹ No env file at ${envFile} — skipping --dart-define-from-file`);
+  // Env values: environments/<envProject>/environment.<env>.json (every env file of the
+  // workspace lives under environments/). A missing file fails: the app would build without them.
+  const envProject = options.envProject ?? projectName;
+  const envRel = `${ENVIRONMENTS_DIR}/${envProject}/environment.${env}.json`;
+  const envFile = path.join(repoRoot, envRel);
+  if (!fs.existsSync(envFile)) {
+    const old = path.join(projectDir, 'env', `${env}.json`);
+    throw new Error(
+      `flutter-build: ${projectName}: ${envRel} not found` +
+        (fs.existsSync(old)
+          ? ` (the app still has ${path.relative(
+              repoRoot,
+              old,
+            )}; pstack update moves the env files to ${ENVIRONMENTS_DIR}/${envProject}/).`
+          : '. Create it with the values for --dart-define-from-file ({} for none).'),
+    );
   }
+  const dartDefine = `--dart-define-from-file=${path
+    .relative(projectDir, envFile)
+    .split(path.sep)
+    .join('/')}`;
 
   const execOpts: ExecSyncOptions = { stdio: 'inherit', cwd: projectDir };
 
@@ -53,6 +75,11 @@ export default async function flutterBuildExecutor(
   }
   // Checked before the Flutter build, so a bad buildMeta option fails fast.
   const gen = generatorInfo(repoRoot, options.buildMeta);
+  // Web: the env's Apache config, checked before building (no fallback to another env).
+  const htaccessSource =
+    target === 'web' && options.htaccess !== false
+      ? requireHtaccessSource(repoRoot, projectName, envProject, env)
+      : undefined;
 
   const outRel = path.relative(projectDir, path.join(repoRoot, dist));
   const baseHrefArg = baseHref ? `--base-href ${baseHref}` : '';
@@ -102,6 +129,20 @@ export default async function flutterBuildExecutor(
       },
     });
     console.log(`ℹ ${stripExifSummary(exif)}`);
+  }
+
+  // Web: the env's .htaccess is the only one in the output (htaccess: false: none at all).
+  if (target === 'web' && fs.existsSync(outDir)) {
+    if (htaccessSource) {
+      const removed = placeHtaccess(htaccessSource, outDir, outDir);
+      console.log(
+        `ℹ htaccess: ${path.relative(repoRoot, htaccessSource)} → ${path.join(dist, '.htaccess')}` +
+          (removed.length > 0 ? ` (removed: ${removed.join(', ')})` : ''),
+      );
+    } else {
+      const removed = removeHtaccessFiles(outDir);
+      if (removed.length > 0) console.log(`ℹ htaccess: off; removed ${removed.join(', ')}`);
+    }
   }
 
   // Web: the same build meta as Angular release builds (env, time, branch, commit, tool).

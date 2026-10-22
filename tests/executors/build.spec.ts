@@ -25,6 +25,14 @@ try {
 }
 const withTerser = hasTerser ? describe : describe.skip;
 
+/** environments/web/htaccess.<env> for every env the tests build (htaccess is on by default). */
+function writeHtaccessSources(root: string): void {
+  fs.mkdirSync(path.join(root, 'environments', 'web'), { recursive: true });
+  for (const env of ['dev', 'uat', 'prod', 'qa']) {
+    fs.writeFileSync(path.join(root, 'environments', 'web', `htaccess.${env}`), `# ${env}\n`);
+  }
+}
+
 const makeContext = (projectName: string, root: string): ExecutorContext =>
   ({ projectName, root, isVerbose: false } as unknown as ExecutorContext);
 
@@ -39,6 +47,7 @@ describe('buildExecutor', () => {
       path.join(tmpDir, 'tools', 'config', 'encrypt-keys.json'),
       JSON.stringify({ _default: ['password', 'key'], web: ['password', 'key'] }),
     );
+    writeHtaccessSources(tmpDir);
     runner = jest.fn();
   });
 
@@ -492,6 +501,82 @@ describe('buildExecutor', () => {
   });
 });
 
+describe('buildExecutor htaccess', () => {
+  let tmpDir: string;
+  const ctx = (): ExecutorContext =>
+    ({
+      projectName: 'web',
+      targetName: 'release',
+      root: tmpDir,
+      isVerbose: false,
+    } as unknown as ExecutorContext);
+  const base = { type: 'angular' as const, outputPath: 'dist/apps/web', envProject: 'web' };
+  /** An Angular build that copied the old src/.htaccess and a stray copy under assets/. */
+  const angularBuild = (served: string): Runner =>
+    jest.fn(() => {
+      const dir = path.join(tmpDir, served);
+      fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'index.html'), '<html><head></head><body></body></html>');
+      fs.writeFileSync(path.join(dir, '.htaccess'), '# generic\n');
+      fs.writeFileSync(path.join(dir, 'assets', '.htaccess.bak'), '# old\n');
+    });
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nx-build-htaccess-'));
+    const envDir = path.join(tmpDir, 'environments', 'web');
+    fs.mkdirSync(envDir, { recursive: true });
+    for (const env of ['uat', 'prod']) {
+      fs.writeFileSync(
+        path.join(envDir, `environment.${env}.ts`),
+        'export const environment = {};',
+      );
+    }
+    fs.writeFileSync(path.join(envDir, 'environment.ts'), 'export const environment = {};');
+    fs.writeFileSync(path.join(envDir, 'htaccess.uat'), '# uat\n');
+    fs.writeFileSync(path.join(envDir, 'htaccess.prod'), '# prod\n');
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("puts the env's file in the served root and removes every other .htaccess", async () => {
+    await buildExecutor({ ...base, env: 'UAT' }, ctx(), angularBuild('dist/apps/web'));
+    const dist = path.join(tmpDir, 'dist/apps/web');
+    expect(fs.readFileSync(path.join(dist, '.htaccess'), 'utf8')).toBe('# uat\n');
+    expect(fs.existsSync(path.join(dist, 'assets', '.htaccess.bak'))).toBe(false);
+  });
+
+  it('uses browser/ with the application builder', async () => {
+    await buildExecutor({ ...base, env: 'PROD' }, ctx(), angularBuild('dist/apps/web/browser'));
+    const dist = path.join(tmpDir, 'dist/apps/web');
+    expect(fs.readFileSync(path.join(dist, 'browser', '.htaccess'), 'utf8')).toBe('# prod\n');
+    expect(fs.existsSync(path.join(dist, '.htaccess'))).toBe(false);
+  });
+
+  it('fails before building when the env has no file, naming app, env and path', async () => {
+    const runner = angularBuild('dist/apps/web');
+    await expect(buildExecutor({ ...base, env: 'DEV' }, ctx(), runner)).rejects.toThrow(
+      'web: the dev build needs environments/web/htaccess.dev (htaccess is on), and it does not exist',
+    );
+    expect(runner).not.toHaveBeenCalled();
+    // No fallback to another env's file.
+    expect(fs.existsSync(path.join(tmpDir, 'dist'))).toBe(false);
+  });
+
+  it('htaccess: false needs no file and leaves no .htaccess in the output', async () => {
+    await buildExecutor(
+      { ...base, env: 'DEV', htaccess: false },
+      ctx(),
+      angularBuild('dist/apps/web'),
+    );
+    const dist = path.join(tmpDir, 'dist/apps/web');
+    expect(fs.existsSync(path.join(dist, '.htaccess'))).toBe(false);
+    expect(fs.existsSync(path.join(dist, 'assets', '.htaccess.bak'))).toBe(false);
+  });
+});
+
 describe('buildExecutor aes-gcm', () => {
   let tmpDir: string;
   let runner: jest.MockedFunction<Runner>;
@@ -516,6 +601,7 @@ describe('buildExecutor aes-gcm', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nx-build-gcm-'));
+    writeHtaccessSources(tmpDir);
     envDir = path.join(tmpDir, 'environments', 'web');
     fs.mkdirSync(envDir, { recursive: true });
     fs.writeFileSync(
@@ -712,6 +798,7 @@ describe('buildExecutor release hardening', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nx-harden-'));
+    writeHtaccessSources(tmpDir);
     fs.writeFileSync(
       path.join(tmpDir, 'nx.json'),
       JSON.stringify({

@@ -1,6 +1,11 @@
 export interface FlutterBuildExecutorSchema {
   target?: 'web' | 'apk' | 'ios';
-  env?: 'dev' | 'uat' | 'prod';
+  /** Env name (dev, uat, prod or a custom one): environments/<envProject>/environment.<env>.json. */
+  env?: string;
+  /** Folder under environments/ with this app's env files (default: the project name). */
+  envProject?: string;
+  /** Web builds: copy environments/<envProject>/htaccess.<env> as .htaccess (default true). */
+  htaccess?: boolean;
   dist?: string;
   baseHref?: string;
   serve?: boolean;
