@@ -92,6 +92,11 @@
       "version": "1.2.7",
       "description": "Import env files through the @env/* tsconfig alias instead of a relative path into environments/ (refused by @nx/enforce-module-boundaries from Nx 18 on)",
       "implementation": "./src/migrations/env-import-alias/env-import-alias"
+    },
+    "env-files-layout": {
+      "version": "1.5.2",
+      "description": "Move per-environment files into environments/<project>/: the .htaccess an app's build copied becomes htaccess.<env> per release env (htaccess: false when it had none), Flutter env JSON moves to environment.<env>.json, and Flutter targets on tools/scripts/flutter/flutter-build.js move to the plugin executor",
+      "implementation": "./src/migrations/env-files-layout/env-files-layout"
     }
   }
 }

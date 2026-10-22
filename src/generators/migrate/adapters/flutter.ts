@@ -2,7 +2,11 @@ import * as path from 'path';
 
 import { Tree } from '@nx/devkit';
 
-import { generateFlutterEnvFiles } from '../../../lib/utils/env-files';
+import {
+  flutterEnvFile,
+  generateFlutterEnvFiles,
+  moveFlutterEnvFiles,
+} from '../../../lib/utils/env-files';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { nextFreePort, usedServePorts } from '../../../lib/utils/serve-port';
 import { buildNpmScripts, buildProjectJson } from '../../app/generator';
@@ -168,23 +172,33 @@ function migrateFlutter(tree: Tree, ctx: MigrationContext): MigrationReportData 
         exportTarget: false,
         root: projectRoot,
         port: nextFreePort(usedServePorts(tree).map((u) => u.port)),
+        htaccess: false,
       }),
       null,
       2,
     ) + '\n',
   );
 
-  // The app's own env/*.json are kept; missing ones are empty (no made-up values).
-  const created = generateFlutterEnvFiles(tree, name, {
-    root: projectRoot,
-    keepExisting: true,
-    empty: true,
-  });
+  // The app's own env/*.json move to environments/<name>/ (where every env file lives); missing
+  // ones are created empty (no made-up values).
+  const moved = moveFlutterEnvFiles(tree, projectRoot, name);
+  if (moved.moved.length > 0) {
+    data.notes.push(
+      `Env files moved to \`environments/${name}/\`: ` +
+        moved.moved.map(([from, to]) => `\`${from}\` → \`${to}\``).join(', ') +
+        '.',
+    );
+  }
+  const created = generateFlutterEnvFiles(tree, name, { keepExisting: true, empty: true });
   if (created.length > 0) {
     data.notes.push(
       `Created empty ${created.map((f) => `\`${f}\``).join(', ')}; existing env files were kept.`,
     );
   }
+  data.notes.push(
+    'Web builds make no `.htaccess` (`htaccess: false` on build-web: the app had none). For one, ' +
+      `add \`environments/${name}/htaccess.<env>\` for each env and remove the option.`,
+  );
 
   addNpmScripts(tree, buildNpmScripts(name, { exportTarget: false }), { force: false });
 
@@ -217,7 +231,7 @@ function migrateFlutter(tree: Tree, ctx: MigrationContext): MigrationReportData 
   }
 
   data.nextSteps.push(
-    `Fill \`${projectRoot}/env/<env>.json\` (dev, uat, prod); they are passed to Flutter with ` +
+    `Fill \`${flutterEnvFile(name, '<env>')}\` (dev, uat, prod); they are passed to Flutter with ` +
       '`--dart-define-from-file`',
     `\`cd ${projectRoot} && flutter pub get\``,
     `\`npx nx run ${name}:build-web:dev\``,

@@ -32,8 +32,18 @@ export const DEFAULT_NONCE_SOURCE = 'mod_unique_id';
 /** SSI scope in .htaccess: index = IncludesNOEXEC on index.html only; html = Includes on every .html. */
 export type SsiScope = 'index' | 'html';
 
+export type CspSources = Partial<Record<CspDirective, string[]>>;
+
+/** An env name in csp-allowlist.json "envs" (as pstack env names them: lowercase kebab-case). */
+export const CSP_ENV_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
 export interface CspAllowlist {
-  sources: Partial<Record<CspDirective, string[]>>;
+  sources: CspSources;
+  /**
+   * Sources one env adds to `sources`, in that env's .htaccess only
+   * (environments/<app>/htaccess.<env>); nginx.conf uses `sources`.
+   */
+  envs?: Record<string, CspSources>;
   permissionsPolicy: string;
   /** "mod_unique_id" (UNIQUE_ID with "@" replaced, via SetEnvIfExpr) or "env:NAME" (used as is). */
   nonceSource?: string;
@@ -144,19 +154,36 @@ export function parseAllowlist(raw: unknown): CspAllowlist {
         )}, permissions-policy, ${Object.keys(OPTION_KEYS).join(', ')})`,
       );
     }
-    if (!Array.isArray(value) || !value.every((v) => typeof v === 'string')) {
-      throw new Error(`csp-allowlist.json "${key}" must be a list of sources`);
-    }
-    const directive = key as CspDirective;
-    const sources: string[] = [];
-    for (const v of value as string[]) {
-      const source = v.trim();
-      const problem = sourceProblem(directive, source);
-      if (problem) throw new Error(`csp-allowlist.json "${key}": "${source}" — ${problem}`);
-      if (!sources.includes(source)) sources.push(source);
-    }
-    out.sources[directive] = sources;
+    out.sources[key as CspDirective] = parseSources(key, key as CspDirective, value);
   }
+  return out;
+}
+
+/** A directive's list of sources, checked and without duplicates; `where` names it in errors. */
+function parseSources(where: string, directive: CspDirective, value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every((v) => typeof v === 'string')) {
+    throw new Error(`csp-allowlist.json "${where}" must be a list of sources`);
+  }
+  const sources: string[] = [];
+  for (const v of value as string[]) {
+    const source = v.trim();
+    const problem = sourceProblem(directive, source);
+    if (problem) throw new Error(`csp-allowlist.json "${where}": "${source}" — ${problem}`);
+    if (!sources.includes(source)) sources.push(source);
+  }
+  return sources;
+}
+
+/** The allowlist one env's .htaccess is rendered from: the base sources plus that env's. */
+export function allowlistForEnv(a: CspAllowlist, env: string): CspAllowlist {
+  const extra = a.envs?.[env.toLowerCase()];
+  const merged: CspSources = { ...a.sources };
+  for (const [d, list] of Object.entries(extra ?? {}) as [CspDirective, string[]][]) {
+    const base = merged[d] ?? [];
+    merged[d] = [...base, ...list.filter((s) => !base.includes(s))];
+  }
+  const out: CspAllowlist = { ...a, sources: merged };
+  delete out.envs;
   return out;
 }
 
@@ -206,6 +233,35 @@ const OPTION_KEYS: Record<string, (value: unknown, out: CspAllowlist) => void> =
     }
     out.extraHeaders = entries as [string, string][];
   },
+  envs: (v, out) => {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+      fail('envs', 'must be an object of env name → { directive: [sources] }');
+    }
+    const envs: Record<string, CspSources> = {};
+    for (const [env, directives] of Object.entries(v as Record<string, unknown>)) {
+      if (!CSP_ENV_NAME.test(env)) {
+        fail('envs', `: "${env}" is not an env name (lowercase kebab-case, e.g. uat, ppd)`);
+      }
+      if (directives === null || typeof directives !== 'object' || Array.isArray(directives)) {
+        fail(`envs.${env}`, 'must be an object of directive → list of sources');
+      }
+      const sources: CspSources = {};
+      for (const [key, list] of Object.entries(directives as Record<string, unknown>)) {
+        if (!(key in CSP_DIRECTIVES)) {
+          fail(
+            `envs.${env}`,
+            `: "${key}" is not a directive (an env adds sources only: ${Object.keys(
+              CSP_DIRECTIVES,
+            ).join(', ')})`,
+          );
+        }
+        const parsed = parseSources(`envs.${env}.${key}`, key as CspDirective, list);
+        if (parsed.length > 0) sources[key as CspDirective] = parsed;
+      }
+      if (Object.keys(sources).length > 0) envs[env] = sources;
+    }
+    if (Object.keys(envs).length > 0) out.envs = envs;
+  },
   ssi: (v, out) => {
     if (v !== 'index' && v !== 'html') {
       fail('ssi', 'must be "index" (IncludesNOEXEC on index.html) or "html" (Includes on .html)');
@@ -229,6 +285,16 @@ export function serializeAllowlist(a: CspAllowlist): string {
   }
   if (a.unsetHeaders?.length) obj['unset-headers'] = a.unsetHeaders;
   if (a.extraHeaders?.length) obj['extra-headers'] = Object.fromEntries(a.extraHeaders);
+  const envs: Record<string, Record<string, string[]>> = {};
+  for (const env of Object.keys(a.envs ?? {}).sort()) {
+    const sources: Record<string, string[]> = {};
+    for (const d of Object.keys(CSP_DIRECTIVES) as CspDirective[]) {
+      const list = a.envs?.[env]?.[d];
+      if (list && list.length > 0) sources[d] = list;
+    }
+    if (Object.keys(sources).length > 0) envs[env] = sources;
+  }
+  if (Object.keys(envs).length > 0) obj['envs'] = envs;
   return JSON.stringify(obj, null, 2) + '\n';
 }
 

@@ -85,7 +85,8 @@ export function angularBuildTarget(
       polyfills: ['zone.js'],
       tsConfig: `${root}/tsconfig.app.json`,
       inlineStyleLanguage: 'scss',
-      assets: [`${root}/src/.htaccess`],
+      // .htaccess is per env (environments/<app>/htaccess.<env>): the release build adds it.
+      assets: [],
       styles: [`${root}/src/styles.scss`],
       scripts: [],
     },

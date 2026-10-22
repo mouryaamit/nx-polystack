@@ -81,6 +81,30 @@ describe('capacitor executor', () => {
     expect(runner.mock.calls[0][0]).toBe('npm install');
   });
 
+  it('removes the web release .htaccess from the native web assets after sync and copy', async () => {
+    const native = {
+      android: 'android/app/src/main/assets/public',
+      ios: 'ios/App/App/public',
+    } as const;
+    for (const platform of ['android', 'ios'] as const) {
+      const dir = native[platform];
+      runner.mockImplementation(() => {
+        fs.mkdirSync(path.join(appDir(), dir), { recursive: true });
+        fs.writeFileSync(path.join(appDir(), dir, '.htaccess'), '# web only');
+        fs.writeFileSync(path.join(appDir(), dir, 'index.html'), '<html></html>');
+      });
+      for (const command of ['sync', 'copy'] as const) {
+        await capacitorExecutor({ command, platform }, ctx(), runner);
+        expect(fs.existsSync(path.join(appDir(), dir, '.htaccess'))).toBe(false);
+        expect(fs.existsSync(path.join(appDir(), dir, 'index.html'))).toBe(true);
+      }
+    }
+    // The web release itself keeps its .htaccess.
+    fs.writeFileSync(path.join(root, 'dist', 'apps', 'field', '.htaccess'), '# web');
+    await capacitorExecutor({ command: 'sync', platform: 'android' }, ctx(), runner);
+    expect(fs.existsSync(path.join(root, 'dist', 'apps', 'field', '.htaccess'))).toBe(true);
+  });
+
   it('honours a custom webDir', async () => {
     fs.mkdirSync(path.join(root, 'out', 'field'), { recursive: true });
     fs.rmSync(path.join(root, 'dist', 'apps', 'field'), { recursive: true });

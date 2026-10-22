@@ -3,6 +3,123 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.6.0
+
+Every per-environment file of a project now lives in `environments/<project>/`, web release builds
+use an Apache config per environment, and CSP sources can differ per environment.
+
+- **`.htaccess` per environment:** `environments/<app>/htaccess.<env>` for each release env. A
+  release build (Angular and Ionic `release`, Flutter `build-web`) removes every `.htaccess` from
+  the output and copies that env's file into the served folder; a missing file stops the build.
+  The `htaccess` option (default `true`) turns it off. Capacitor `sync`/`copy` removes `.htaccess`
+  from the native bundles.
+- **Flutter env files:** `environments/<app>/environment.<env>.json` instead of
+  `apps/<app>/env/<env>.json`; `flutter-build` takes any env name and an `envProject` option.
+- **Per-env CSP sources:** `csp-allowlist.json` takes `envs`, the sources one release env adds.
+  `pstack csp --app=<app> --env=<env> --add=…` / `--remove=…` edit them; only that env's
+  `htaccess.<env>` gets them, `nginx.conf` keeps the base sources.
+- **Generators:** `pstack app` writes the new layout for Angular, Ionic and Flutter;
+  `pstack app --from` copies and re-renders every env's file; `pstack env --name=<env>` copies
+  `htaccess.prod` and the `envs.prod` CSP sources to the new env.
+- **`pstack migrate`** moves env files into `environments/<name>/` for every Angular and Ionic app
+  and library it brings in (fileReplacements, the release `envProject` and imports follow), moves
+  a Flutter app's env files, and turns a `.htaccess` build asset into per-env files.
+- **`pstack update`** moves existing workspaces to the new layout (migration `env-files-layout`):
+  `.htaccess` assets become `htaccess.<env>` files (`"htaccess": false` for apps that built none),
+  Flutter env files move, Flutter targets on the earlier `tools/scripts/flutter/flutter-build.js`
+  commands become the plugin's `flutter-build` targets, and npm scripts, GitHub workflows and
+  Jenkinsfiles that still name an old path are listed. Existing files are never replaced.
+
+Checked by:
+
+- new Angular 15, 16, 17 and 18 workspaces with generated apps, an Ionic app and a library: build,
+  lint, test and release builds;
+- migrated `ng new` and Ionic sources with environment files, and `create-nx-workspace` sources,
+  on each of those majors: env files moved, build, lint and release builds;
+- a Flutter web release build reading `environments/<app>/environment.uat.json`, with and without
+  `htaccess.uat`.
+
+The 1.5.1 to 1.5.5 entries below were development releases leading to this one.
+
+## 1.5.5
+
+- **Per-env CSP sources:** `csp-allowlist.json` takes `envs`, the sources one release env adds,
+  e.g. `"envs": { "uat": { "connect-src": ["https://uat-api.example.com"] } }`. Only that env's
+  `environments/<app>/htaccess.<env>` gets them; `nginx.conf` (one per app) keeps the base sources.
+  `pstack csp --app=<app> --env=<env> --add=…` / `--remove=…` edit them (the env must be a release
+  configuration of the app); `pstack csp` lists each env's sources and policy.
+- `pstack env --name=<env>` copies `envs.prod` to the new env along with `htaccess.prod`, so
+  `pstack csp` renders the same file.
+- `pstack app --from` renders each copied `htaccess.<env>` with that env's sources.
+
+## 1.5.4
+
+- **`pstack migrate` moves env files into `environments/<name>/`**, the layout `pstack app` uses,
+  for every Angular and Ionic app and library it brings in (Angular CLI apps and workspaces, Ionic
+  apps, Nx and npm/pnpm/Yarn workspaces): the `environment*.ts` files of the folder the
+  fileReplacements use, with the fileReplacements, the release target's `envProject` and the
+  imports pointed at them (imports then go through `@env/<name>/…`). Build-time env encryption
+  (`nx run <app>:release:<env>`) now works on a migrated app without moving files by hand. Nothing
+  moves when a file exists already in `environments/<name>/`, when the fileReplacements use more
+  than one folder, or with `--no-rewrite-imports`; the report says so.
+- `env-files-layout` (the `pstack update` migration of 1.5.2) leaves the root tsconfig's `paths`
+  in their order.
+
+## 1.5.3
+
+- `env-files-layout` (the 1.5.2 `pstack update` migration) also lists direct calls of
+  `tools/scripts/flutter/flutter-build.js --project=<app>` for apps whose env files moved: that
+  script reads `apps/<app>/env/<env>.json` and skips a missing file without an error. Use
+  `nx run <app>:build-android:<env> --obfuscate` (or `build-ios`) instead.
+- The `project.json` files it changes keep the workspace's Prettier style.
+
+## 1.5.2
+
+- **`pstack update` moves existing workspaces to the 1.5.1 env-file layout** (migration
+  `env-files-layout`):
+  - the `.htaccess` an Angular or Ionic app's build copied becomes `environments/<app>/htaccess.<env>`
+    for each release env (identical copies) and leaves the build assets; an app that built none
+    gets `"htaccess": false`; apps already on env files are kept, with a note for envs that have no
+    file;
+  - Flutter env files move from `apps/<app>/env/<env>.json` to
+    `environments/<app>/environment.<env>.json`, and `build-web` gets `"htaccess": false`;
+  - Flutter targets on `node tools/scripts/flutter/flutter-build.js … --env={args.env}` (the form
+    earlier workspaces had) become the plugin's `flutter-build` targets
+    (`nx run <app>:build-web:<env>`);
+  - existing files are never replaced; npm scripts, GitHub workflows and Jenkinsfiles that still
+    name an old path or pass `--args` to a converted target are listed, not rewritten.
+- The release target's `.htaccess` asset is found on the target its `buildTarget` names, not only
+  on `build`.
+
+## 1.5.1
+
+Every per-environment file of a project now lives in `environments/<project>/`, and web release
+builds use an Apache config per environment.
+
+- **`.htaccess` per environment:** `environments/<app>/htaccess.<env>` for each release env
+  (`htaccess.dev`, `htaccess.uat`, `htaccess.prod`). A release build (Angular and Ionic
+  `release`, Flutter `build-web`) removes every `.htaccess` from the output and copies that env's
+  file into the served folder as `.htaccess`. A missing file stops the build, naming the app, the
+  env and the expected path; there is no fallback. Plain `nx build` adds none. The new `htaccess`
+  option (default `true`) turns it off. Capacitor `sync`/`copy` removes `.htaccess` from the native
+  bundles.
+- **Flutter env files:** `environments/<app>/environment.<env>.json` instead of
+  `apps/<app>/env/<env>.json`; `flutter-build` takes any env name and an `envProject` option.
+  Flutter apps get `htaccess.<env>` files for their web builds.
+- **`pstack app`** writes the new layout for Angular, Ionic and Flutter; the build target no
+  longer ships `src/.htaccess` as an asset. **`pstack app --from`** copies and re-renders every
+  env's file.
+- **`pstack csp`** writes every release env's `htaccess.<env>` (none with `htaccess: false`).
+- **`pstack env --name=<env>`** copies `htaccess.prod` to `htaccess.<env>` for builds that use
+  one, and refuses when `htaccess.prod` is missing or `htaccess.<env>` exists.
+- **`pstack migrate`** moves a migrated Flutter app's env files into `environments/`, and turns a
+  migrated Angular app's `.htaccess` asset into per-env files (`htaccess: false` when it had none).
+
+Existing workspaces: `pstack update` does not move existing apps to this layout yet; that
+migration comes in the next release. Until then a release build of an app made before 1.5.1 needs
+`environments/<app>/htaccess.<env>` (or `"htaccess": false`), and Flutter apps need their env
+files moved by hand.
+
 ## 1.5.0
 
 Angular 18 is supported, the third release of one public release per Angular major.

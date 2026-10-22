@@ -41,6 +41,11 @@ export interface BuildExecutorSchema {
   obfuscate?: 'off' | 'light' | 'medium' | 'strong';
   /** non-DEV: javascript-obfuscator options on top of the preset (a CSP-safe subset). */
   obfuscateOptions?: Record<string, unknown>;
+  /**
+   * Copy environments/<envProject>/htaccess.<env> into the served root as .htaccess (default
+   * true; the build fails when the file is missing). false: no .htaccess in the output.
+   */
+  htaccess?: boolean;
   baseHref?: string;
   /** aes-gcm: where the per-build key's shares go. */
   keySplit?: 'meta-bundle' | 'meta-bundle-asset';

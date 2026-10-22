@@ -2,6 +2,7 @@ import * as path from 'path';
 
 import { GeneratorCallback, installPackagesTask, Tree, updateJson } from '@nx/devkit';
 
+import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt';
 import { ngPackagrDependencies } from '../../../lib/utils/angular-deps';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import { addMissingDependencies, declaredVersion } from '../../../lib/utils/dependencies';
@@ -317,6 +318,17 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
     });
     if (kind === 'lib') useNxPackageBuild(pj.projectJson, p.newRoot);
     writeJson(tree, `${p.newRoot}/project.json`, pj.projectJson);
+    if (pj.releaseConfigurations.length > 0) {
+      const notes: string[] = [];
+      htaccessNote(adoptHtaccess(tree, `${p.newRoot}/project.json`), p.name, notes);
+      data.notes.push(...notes.map((n) => `${code(p.name)}: ${n}`));
+    }
+    // Env files (apps and libraries) go to environments/<name>/.
+    (data.envMoves ??= []).push({
+      projectJson: `${p.newRoot}/project.json`,
+      envProject: p.name,
+      label: code(p.name),
+    });
     data.notes.push(...pj.warnings.map((w) => `${code(p.name)} project.json: ${w}`));
     data.angularNotes.push(...pj.angularNotes.map((n) => `${code(p.name)} ${n}`));
     data.angularNotes.push(...angularCodeNotes(tree, p.newRoot, copy.copied, code(p.name)));

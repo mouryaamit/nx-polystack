@@ -39,6 +39,9 @@ function workspace(build: Record<string, unknown> = {}): string {
 }
 const read = (ws: string, rel: string) =>
   fs.readFileSync(path.join(ws, 'apps/portal', rel), 'utf8');
+/** The uat .htaccess pstack csp writes (the test release target has one env, uat). */
+const HT = 'environments/portal/htaccess.uat';
+const readHt = (ws: string) => fs.readFileSync(path.join(ws, HT), 'utf8');
 const out = () => (console.log as jest.Mock).mock.calls.map((c) => String(c[0])).join('\n');
 const run = (ws: string, flags: Record<string, string | boolean>) =>
   runCsp(makeCtx({ cwd: ws, flags: { app: 'portal', ...flags } }));
@@ -60,14 +63,98 @@ describe('pstack csp', () => {
   it('writes missing files, then reports them in sync', async () => {
     const ws = workspace();
     await run(ws, {});
-    expect(read(ws, 'src/.htaccess').startsWith(GENERATED_MARKER)).toBe(true);
+    expect(readHt(ws).startsWith(GENERATED_MARKER)).toBe(true);
     expect(read(ws, 'server/nginx.conf')).toContain('https://api.example.com');
-    expect(out()).toContain('apps/portal/src/.htaccess: written');
+    expect(out()).toContain(`${HT}: written`);
     expect(out()).toMatch(/policy\s+default-src 'self'; script-src 'self' 'nonce-<nonce>'/);
     (console.log as jest.Mock).mockClear();
     await run(ws, {});
-    expect(out()).toContain('apps/portal/src/.htaccess: in sync');
+    expect(out()).toContain(`${HT}: in sync`);
     expect(out()).toContain('apps/portal/server/nginx.conf: in sync');
+  });
+
+  it('writes one file per release env, and none for a release target with htaccess: false', async () => {
+    const ws = workspace();
+    const pjFile = path.join(ws, 'apps/portal/project.json');
+    const pj = JSON.parse(fs.readFileSync(pjFile, 'utf8'));
+    pj.targets.release.configurations = { dev: { env: 'DEV' }, ppd: { env: 'PPD' } };
+    writeJson(pjFile, pj);
+    await run(ws, {});
+    for (const env of ['dev', 'ppd']) {
+      expect(fs.existsSync(path.join(ws, `environments/portal/htaccess.${env}`))).toBe(true);
+    }
+    expect(fs.existsSync(path.join(ws, HT))).toBe(false);
+
+    const off = workspace();
+    const offFile = path.join(off, 'apps/portal/project.json');
+    const offPj = JSON.parse(fs.readFileSync(offFile, 'utf8'));
+    offPj.targets.release.options = { htaccess: false };
+    writeJson(offFile, offPj);
+    await run(off, {});
+    expect(fs.existsSync(path.join(off, 'environments/portal'))).toBe(false);
+    expect(fs.readFileSync(path.join(off, 'apps/portal/server/nginx.conf'), 'utf8')).toContain(
+      'https://api.example.com',
+    );
+  });
+
+  describe('--env (per-env sources)', () => {
+    const threeEnvs = () => {
+      const ws = workspace();
+      const pjFile = path.join(ws, 'apps/portal/project.json');
+      const pj = JSON.parse(fs.readFileSync(pjFile, 'utf8'));
+      pj.targets.release.configurations = {
+        dev: { env: 'DEV' },
+        uat: { env: 'UAT' },
+        prod: { env: 'PROD' },
+      };
+      writeJson(pjFile, pj);
+      return ws;
+    };
+    const ht = (ws: string, env: string) =>
+      fs.readFileSync(path.join(ws, `environments/portal/htaccess.${env}`), 'utf8');
+
+    it('adds a source to one env only: its htaccess has it, the others and nginx.conf do not', async () => {
+      const ws = threeEnvs();
+      await run(ws, { env: 'uat', add: 'connect-src:https://uat-api.example.com' });
+      const list = JSON.parse(read(ws, 'csp-allowlist.json'));
+      expect(list['connect-src']).toEqual(['https://api.example.com']);
+      expect(list.envs).toEqual({ uat: { 'connect-src': ['https://uat-api.example.com'] } });
+      expect(ht(ws, 'uat')).toContain('https://uat-api.example.com');
+      expect(ht(ws, 'uat')).toContain('https://api.example.com');
+      expect(ht(ws, 'prod')).not.toContain('uat-api');
+      expect(ht(ws, 'dev')).not.toContain('uat-api');
+      expect(read(ws, 'server/nginx.conf')).not.toContain('uat-api');
+      expect(out()).toContain('uat adds:');
+      // Removing it again drops the env from the file.
+      (console.log as jest.Mock).mockClear();
+      await run(ws, { env: 'UAT', remove: 'connect-src:https://uat-api.example.com' });
+      expect(JSON.parse(read(ws, 'csp-allowlist.json')).envs).toBeUndefined();
+      expect(ht(ws, 'uat')).toBe(ht(ws, 'prod'));
+    });
+
+    it('refuses an env the app does not release, --env with --import, and --env alone', async () => {
+      const ws = threeEnvs();
+      await expect(
+        run(ws, { env: 'qa', add: 'connect-src:https://x.example.com' }),
+      ).rejects.toThrow(
+        '--env=qa: portal has no "qa" release configuration (envs: dev, uat, prod).',
+      );
+      await expect(
+        run(ws, { env: 'uat', import: "connect-src 'self' https://x.example.com" }),
+      ).rejects.toThrow('--import merges into the sources of every env; it does not take --env.');
+      await expect(run(ws, { env: 'uat' })).rejects.toThrow('give --add and/or --remove too');
+    });
+
+    it('notes envs in the allowlist that are not release envs', async () => {
+      const ws = threeEnvs();
+      writeJson(path.join(ws, 'apps/portal/csp-allowlist.json'), {
+        envs: { sit: { 'img-src': ['https://img.example.com'] } },
+      });
+      await run(ws, {});
+      expect(out()).toContain(
+        'Note: envs.sit is not a release env of portal; no htaccess uses it.',
+      );
+    });
   });
 
   it('adds and removes sources, then re-renders generated files', async () => {
@@ -81,11 +168,9 @@ describe('pstack csp', () => {
       'script-src': ['https://www.googletagmanager.com'],
       'img-src': ['https://cdn.example.com'],
     });
-    expect(read(ws, 'src/.htaccess')).toContain(
-      "'nonce-%{CSP_NONCE}e' https://www.googletagmanager.com",
-    );
-    expect(read(ws, 'src/.htaccess')).not.toContain('https://api.example.com');
-    expect(out()).toContain('apps/portal/src/.htaccess: updated');
+    expect(readHt(ws)).toContain("'nonce-%{CSP_NONCE}e' https://www.googletagmanager.com");
+    expect(readHt(ws)).not.toContain('https://api.example.com');
+    expect(out()).toContain(`${HT}: updated`);
     await run(ws, { remove: 'connect-src:https://nope.example.com' });
     expect(out()).toContain('connect-src has no "https://nope.example.com"; nothing removed.');
   });
@@ -93,30 +178,31 @@ describe('pstack csp', () => {
   it('dry run says what would be written; CRLF files are still in sync', async () => {
     const ws = workspace();
     await runCsp(makeCtx({ cwd: ws, flags: { app: 'portal' }, dryRun: true }));
-    expect(out()).toContain('apps/portal/src/.htaccess: would be written');
-    expect(fs.existsSync(path.join(ws, 'apps/portal/src/.htaccess'))).toBe(false);
+    expect(out()).toContain(`${HT}: would be written`);
+    expect(fs.existsSync(path.join(ws, HT))).toBe(false);
     await run(ws, {});
-    const file = path.join(ws, 'apps/portal/src/.htaccess');
+    const file = path.join(ws, HT);
     fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/\n/g, '\r\n'));
     (console.log as jest.Mock).mockClear();
     await run(ws, {});
-    expect(out()).toContain('apps/portal/src/.htaccess: in sync');
+    expect(out()).toContain(`${HT}: in sync`);
   });
 
   it('keeps hand-written files unless --force', async () => {
     const ws = workspace();
     fs.mkdirSync(path.join(ws, 'apps/portal/src'), { recursive: true });
-    fs.writeFileSync(path.join(ws, 'apps/portal/src/.htaccess'), 'FallbackResource /index.html\n');
+    fs.mkdirSync(path.dirname(path.join(ws, HT)), { recursive: true });
+    fs.writeFileSync(path.join(ws, HT), 'FallbackResource /index.html\n');
     await run(ws, {});
-    expect(read(ws, 'src/.htaccess')).toBe('FallbackResource /index.html\n');
-    expect(out()).toContain('apps/portal/src/.htaccess: hand-written, kept (--force replaces it)');
+    expect(readHt(ws)).toBe('FallbackResource /index.html\n');
+    expect(out()).toContain(`${HT}: hand-written, kept (--force replaces it)`);
     await run(ws, { add: 'img-src:https://cdn.example.com' });
     expect(out()).toContain(
       'hand-written, kept (--force replaces it) — it does not have this change',
     );
     await run(ws, { force: true });
-    expect(read(ws, 'src/.htaccess').startsWith(GENERATED_MARKER)).toBe(true);
-    expect(out()).toContain('apps/portal/src/.htaccess: replaced');
+    expect(readHt(ws).startsWith(GENERATED_MARKER)).toBe(true);
+    expect(out()).toContain(`${HT}: replaced`);
   });
 
   it('warns when an optimised build inlines critical CSS', async () => {
@@ -145,7 +231,7 @@ describe('pstack csp', () => {
     await expect(run(ws, { add: 'script-src:https://ok.com,script-src:*' })).rejects.toThrow(
       `"script-src": "*" — "*" allows any host`,
     );
-    expect(fs.existsSync(path.join(ws, 'apps/portal/src/.htaccess'))).toBe(false);
+    expect(fs.existsSync(path.join(ws, HT))).toBe(false);
     expect(JSON.parse(read(ws, 'csp-allowlist.json'))).toEqual({
       'connect-src': ['https://api.example.com'],
     });
@@ -200,8 +286,8 @@ describe('pstack csp --import (NX-49)', () => {
     );
     expect(out()).toContain('Refused (the strict policy does not allow them):');
     expect(out()).toContain("  - script-src 'unsafe-inline': quoted keywords");
-    expect(read(ws, 'src/.htaccess')).toContain(GENERATED_MARKER);
-    expect(read(ws, 'src/.htaccess')).toContain('https://tags.example.com');
+    expect(readHt(ws)).toContain(GENERATED_MARKER);
+    expect(readHt(ws)).toContain('https://tags.example.com');
   });
 
   it('takes a policy inline, and a JSON file from the caller folder; --dry-run writes nothing', async () => {
@@ -290,7 +376,7 @@ describe('pstack csp --import (NX-49)', () => {
       const ws = workspace();
       writeJson(path.join(ws, 'apps', 'portal', 'csp-allowlist.json'), legacyList);
       await run(ws, {});
-      const ht = read(ws, 'src/.htaccess');
+      const ht = readHt(ws);
       expect(ht).not.toContain('SetEnvIfExpr');
       expect(ht).not.toMatch(/mod_unique_id|mod_setenvif/);
       expect(ht).toContain("'nonce-%{UNIQUE_ID}e'");
@@ -326,10 +412,10 @@ describe('pstack csp --import (NX-49)', () => {
     it('--nonce-source sets the key; the default output keeps mod_unique_id', async () => {
       const ws = workspace();
       await run(ws, {});
-      expect(read(ws, 'src/.htaccess')).toContain("SetEnvIfExpr \"reqenv('UNIQUE_ID')");
+      expect(readHt(ws)).toContain("SetEnvIfExpr \"reqenv('UNIQUE_ID')");
       await run(ws, { nonceSource: 'env:UNIQUE_ID' });
       expect(JSON.parse(read(ws, 'csp-allowlist.json'))['nonce-source']).toBe('env:UNIQUE_ID');
-      expect(read(ws, 'src/.htaccess')).not.toContain('SetEnvIfExpr');
+      expect(readHt(ws)).not.toContain('SetEnvIfExpr');
       await expect(run(ws, { nonceSource: 'env:bad name' })).rejects.toThrow(/nonce-source/);
     });
 
@@ -350,7 +436,7 @@ describe('pstack csp --import (NX-49)', () => {
       rel = JSON.parse(read(ws, 'project.json')).targets.release;
       expect(rel.options.nonce).toBeUndefined();
       expect(rel.configurations.prod.nonce).toEqual({ tags: 'legacy' });
-      expect(read(ws, 'src/.htaccess')).toContain('SetEnvIfExpr');
+      expect(readHt(ws)).toContain('SetEnvIfExpr');
     });
 
     it('--dry-run reports the placeholder change without writing it', async () => {
@@ -370,7 +456,7 @@ describe('pstack csp --import (NX-49)', () => {
         h,
         'https://www.googletagmanager.com',
       ]);
-      expect(read(ws, 'src/.htaccess')).toContain(h);
+      expect(readHt(ws)).toContain(h);
       expect(out()).toContain('script-src-elem was merged into script-src');
     });
 

@@ -34,16 +34,17 @@ describe('generateFlutterEnvFiles', () => {
     tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
   });
 
-  it('creates dev.json, uat.json, prod.json under apps/<name>/env/', () => {
+  it('creates environment.{dev,uat,prod}.json under environments/<name>/', () => {
     generateFlutterEnvFiles(tree, 'flutter-app');
-    expect(tree.exists('apps/flutter-app/env/dev.json')).toBe(true);
-    expect(tree.exists('apps/flutter-app/env/uat.json')).toBe(true);
-    expect(tree.exists('apps/flutter-app/env/prod.json')).toBe(true);
+    for (const env of ['dev', 'uat', 'prod']) {
+      expect(tree.exists(`environments/flutter-app/environment.${env}.json`)).toBe(true);
+    }
+    expect(tree.exists('apps/flutter-app/env')).toBe(false);
   });
 
   it('emits valid JSON with FLUTTER_ENV key', () => {
     generateFlutterEnvFiles(tree, 'flutter-app');
-    const dev = JSON.parse(tree.read('apps/flutter-app/env/dev.json')!.toString());
+    const dev = JSON.parse(tree.read('environments/flutter-app/environment.dev.json')!.toString());
     expect(dev.FLUTTER_ENV).toBe('dev');
   });
 });

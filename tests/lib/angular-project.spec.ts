@@ -41,12 +41,12 @@ describe('angular-project helpers', () => {
     ]);
   });
 
-  it('ships .htaccess as an asset and gives each configuration its own budgets', () => {
+  it('ships no .htaccess asset (release builds add the env file) and gives each configuration its own budgets', () => {
     const raw = angularBuildTarget('portal') as {
       options: { assets: unknown[] };
       configurations: Record<string, { budgets: object[] }>;
     };
-    expect(raw.options.assets).toEqual(['apps/portal/src/.htaccess']);
+    expect(raw.options.assets).toEqual([]);
     expect(raw.configurations.production.budgets).not.toBe(raw.configurations.uat.budgets);
     expect(raw.configurations.production.budgets[0]).not.toBe(raw.configurations.uat.budgets[0]);
   });

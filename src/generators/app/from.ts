@@ -3,8 +3,14 @@ import * as path from 'path';
 
 import { names, readJson, Tree, updateJson } from '@nx/devkit';
 
-import { parseAllowlist, serializeAllowlist } from '../../lib/csp/allowlist';
-import { GENERATED_MARKER, renderHtaccess, renderNginx } from '../../lib/csp/render';
+import { allowlistForEnv, parseAllowlist, serializeAllowlist } from '../../lib/csp/allowlist';
+import {
+  FLUTTER_HTACCESS_MARKER,
+  GENERATED_MARKER,
+  renderFlutterHtaccess,
+  renderHtaccess,
+  renderNginx,
+} from '../../lib/csp/render';
 import { emptyEnvironmentText, emptyJson } from '../../lib/env/empty';
 import { configurationFor, FLUTTER_BUILD_EXECUTOR } from '../../lib/release/plan';
 import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
@@ -17,6 +23,7 @@ import {
 } from '../../lib/utils/app-dir';
 import { baseHrefTarget, checkBaseHref, setBaseHref } from '../../lib/utils/base-href';
 import { createIgnore, Ignore } from '../../lib/utils/devkit-deps';
+import { flutterEnvNames } from '../../lib/utils/env-files';
 import { refreshLlmBlocks } from '../../lib/utils/llm-block';
 import { addNpmScripts } from '../../lib/utils/npm-scripts';
 import { scanProjects } from '../../lib/utils/project-json-files';
@@ -177,10 +184,12 @@ export function describeBaseApp(tree: Tree, from: string): BaseApp {
     const envFiles: Record<string, string[]> = {};
     for (const e of envs) {
       const env = String(configs[e]?.['env'] ?? e).toLowerCase();
-      envFiles[e] =
-        e === devEnv || DEV_NAMES.includes(env)
+      envFiles[e] = [
+        ...(e === devEnv || DEV_NAMES.includes(env)
           ? ['environment.ts', 'environment.dev.ts']
-          : [`environment.${env}.ts`];
+          : [`environment.${env}.ts`]),
+        `htaccess.${env}`,
+      ];
     }
     return {
       name: from,
@@ -198,27 +207,28 @@ export function describeBaseApp(tree: Tree, from: string): BaseApp {
   }
 
   const flutter = Object.values(targets).some((t) => t.executor === FLUTTER_EXECUTOR);
-  if (flutter && tree.exists(`${root}/env`)) {
-    const envs = tree
-      .children(`${root}/env`)
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => f.slice(0, -'.json'.length));
-    const devEnv = envs.find((e) => DEV_NAMES.includes(e)) ?? 'dev';
+  const flutterEnvs = flutter ? flutterEnvNames(tree, from) : [];
+  if (flutterEnvs.length > 0) {
+    const devEnv = flutterEnvs.find((e) => DEV_NAMES.includes(e)) ?? 'dev';
     return {
       name: from,
       type: 'flutter',
       root,
       dir,
-      envs: devFirst(envs.includes(devEnv) ? envs : [devEnv, ...envs], devEnv),
+      envs: devFirst(flutterEnvs.includes(devEnv) ? flutterEnvs : [devEnv, ...flutterEnvs], devEnv),
       devEnv,
       baseHref,
       tags,
+      envProject: from,
+      envFiles: Object.fromEntries(
+        flutterEnvs.map((e) => [e, [`environment.${e}.json`, `htaccess.${e}`]]),
+      ),
     };
   }
   throw new Error(
     `"${from}" is not an app pstack builds: an Angular/Ionic app with a ` +
       `${POLYSTACK_BUILD_EXECUTOR} release target, or a Flutter app with flutter-build targets ` +
-      'and an env/ folder.',
+      `and env files in environments/${from}/ (pstack update moves an older app's env/ folder there).`,
   );
 }
 
@@ -577,7 +587,7 @@ export function appFrom(tree: Tree, o: AppFromOptions): AppFromResult {
     result.copied.push(dest);
   }
 
-  // Angular/Ionic env files live in environments/<envProject>/.
+  // Env files (Angular, Ionic and Flutter) and .htaccess sources live in environments/<envProject>/.
   if (base.envProject) copyAngularEnvFiles(tree, base, name, result);
 
   // Server configs written by pstack: render them again for the new app.
@@ -591,13 +601,22 @@ export function appFrom(tree: Tree, o: AppFromOptions): AppFromResult {
       allowlist = undefined;
     }
     if (allowlist) {
-      for (const [file, render] of [
-        [`${root}/src/.htaccess`, renderHtaccess],
-        [`${root}/server/nginx.conf`, renderNginx],
-      ] as const) {
-        if (tree.exists(file) && (tree.read(file, 'utf-8') ?? '').includes(GENERATED_MARKER)) {
-          tree.write(file, render(name, allowlist));
-        }
+      const generated = (file: string) =>
+        tree.exists(file) && (tree.read(file, 'utf-8') ?? '').includes(GENERATED_MARKER);
+      for (const file of htaccessFiles(tree, name)) {
+        // htaccess.<env>: rendered with that env's own sources ("envs" in the allowlist).
+        const env = file.slice(file.lastIndexOf('/htaccess.') + '/htaccess.'.length);
+        if (generated(file))
+          tree.write(file, renderHtaccess(name, allowlistForEnv(allowlist, env)));
+      }
+      if (generated(`${root}/server/nginx.conf`)) {
+        tree.write(`${root}/server/nginx.conf`, renderNginx(name, allowlist));
+      }
+    }
+  } else {
+    for (const file of htaccessFiles(tree, name)) {
+      if ((tree.read(file, 'utf-8') ?? '').startsWith(FLUTTER_HTACCESS_MARKER)) {
+        tree.write(file, renderFlutterHtaccess(name, file.slice(file.lastIndexOf('.') + 1)));
       }
     }
   }
@@ -741,7 +760,20 @@ function copyAngularEnvFiles(tree: Tree, base: BaseApp, name: string, r: AppFrom
     const dest = `environments/${name}/${file}`;
     if (leftOutFiles.has(file)) continue;
     const text = tree.read(src, 'utf-8') ?? '';
-    // Helper files (types, shared parts) are copied as they are.
+    // Flutter env values: every value emptied.
+    if (/^environment\..+\.json$/.test(file)) {
+      let json: unknown;
+      try {
+        json = JSON.parse(text || '{}');
+      } catch (err) {
+        throw new Error(`${src} is not valid JSON: ${(err as Error).message}`);
+      }
+      tree.write(dest, JSON.stringify(emptyJson(json), null, 2) + '\n');
+      r.envFiles.push(dest);
+      continue;
+    }
+    // Helper files (types, shared parts) and .htaccess sources are copied as they are (generated
+    // .htaccess files are rendered again for the new app below).
     if (!/\benvironment\b\s*(?::[^=]*)?=/.test(text)) {
       tree.write(dest, text);
       r.copied.push(dest);
@@ -759,6 +791,16 @@ function copyAngularEnvFiles(tree: Tree, base: BaseApp, name: string, r: AppFrom
     r.expressions.push(...emptied.expressions.map((k) => `${dest}: ${k}`));
     r.unkeyed.push(...emptied.unkeyed.map((k) => `${dest}: ${k}`));
   }
+}
+
+/** environments/<name>/htaccess.<env> files. */
+function htaccessFiles(tree: Tree, name: string): string[] {
+  const dir = `environments/${name}`;
+  if (!tree.exists(dir)) return [];
+  return tree
+    .children(dir)
+    .filter((f) => /^htaccess\.[^.]+$/.test(f))
+    .map((f) => `${dir}/${f}`);
 }
 
 /** nx.json pstack.envEncryption.keys.<base> (key names only) → keys.<name>. */
@@ -883,9 +925,7 @@ export function appFromReport(r: AppFromResult): string {
   }
   lines.push('Next:');
   lines.push(
-    `  - fill in the env files (every value is empty except production): ${
-      r.base.type === 'flutter' ? `${r.root}/env/*.json` : `environments/${r.name}/`
-    }`,
+    `  - fill in the env files (every value is empty except production): ${`environments/${r.name}/`}`,
   );
   if (r.base.type !== 'flutter') {
     lines.push(

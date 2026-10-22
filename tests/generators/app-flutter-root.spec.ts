@@ -30,12 +30,12 @@ describe('Flutter project json and env files with a root', () => {
     expect(pj.targets.export.options.dest).toBe('apps/mobile/app');
   });
 
-  it('writes env files under the root', () => {
+  it('writes env files under environments/<project>, wherever the app lives', () => {
     const tree = createTreeWithEmptyWorkspace();
-    expect(generateFlutterEnvFiles(tree, 'x', { empty: true, root: 'clients/mobile' })).toEqual([
-      'clients/mobile/env/dev.json',
-      'clients/mobile/env/uat.json',
-      'clients/mobile/env/prod.json',
+    expect(generateFlutterEnvFiles(tree, 'x', { empty: true })).toEqual([
+      'environments/x/environment.dev.json',
+      'environments/x/environment.uat.json',
+      'environments/x/environment.prod.json',
     ]);
   });
 });

@@ -6,6 +6,19 @@ import { ExecutorContext } from '@nx/devkit';
 
 import flutterBuildExecutor, { Runner } from '../../src/executors/flutter-build/executor';
 
+/** environments/<project>/environment.<env>.json and htaccess.<env> for dev, uat and prod. */
+function writeEnvs(root: string, project = 'my-app'): void {
+  const dir = path.join(root, 'environments', project);
+  fs.mkdirSync(dir, { recursive: true });
+  for (const env of ['dev', 'uat', 'prod']) {
+    fs.writeFileSync(
+      path.join(dir, `environment.${env}.json`),
+      JSON.stringify({ FLUTTER_ENV: env }),
+    );
+    fs.writeFileSync(path.join(dir, `htaccess.${env}`), `# ${env}\n`);
+  }
+}
+
 const makeContext = (projectName: string, root: string): ExecutorContext =>
   ({ projectName, root, isVerbose: false } as unknown as ExecutorContext);
 
@@ -17,11 +30,8 @@ describe('flutterBuildExecutor', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flutter-build-'));
     projectDir = path.join(tmpDir, 'apps', 'my-app');
-    fs.mkdirSync(path.join(projectDir, 'env'), { recursive: true });
-    fs.writeFileSync(
-      path.join(projectDir, 'env', 'dev.json'),
-      JSON.stringify({ FLUTTER_ENV: 'dev' }),
-    );
+    fs.mkdirSync(projectDir, { recursive: true });
+    writeEnvs(tmpDir);
     runner = jest.fn();
   });
 
@@ -40,7 +50,9 @@ describe('flutterBuildExecutor', () => {
       expect.any(Object),
     );
     expect(runner).toHaveBeenCalledWith(
-      expect.stringContaining('--dart-define-from-file=env/dev.json'),
+      expect.stringContaining(
+        '--dart-define-from-file=../../environments/my-app/environment.dev.json',
+      ),
       expect.any(Object),
     );
   });
@@ -130,18 +142,72 @@ describe('flutterBuildExecutor', () => {
     );
   });
 
-  it('skips --dart-define-from-file when env file does not exist', async () => {
+  it('fails when the env file is missing, and names the old location when it is there', async () => {
     const ctx = makeContext('my-app', tmpDir);
-    const result = await flutterBuildExecutor(
-      { target: 'web', env: 'prod', dist: 'dist/apps/my-app' },
-      ctx,
-      runner,
-    );
-    expect(result.success).toBe(true);
-    expect(runner).toHaveBeenCalledWith(
-      expect.not.stringContaining('--dart-define-from-file'),
-      expect.any(Object),
-    );
+    await expect(
+      flutterBuildExecutor({ target: 'web', env: 'qa', dist: 'dist/apps/my-app' }, ctx, runner),
+    ).rejects.toThrow('flutter-build: my-app: environments/my-app/environment.qa.json not found.');
+    fs.mkdirSync(path.join(projectDir, 'env'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, 'env', 'qa.json'), '{}');
+    await expect(
+      flutterBuildExecutor({ target: 'web', env: 'qa', dist: 'dist/apps/my-app' }, ctx, runner),
+    ).rejects.toThrow('the app still has apps/my-app/env/qa.json; pstack update moves');
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  describe('htaccess', () => {
+    const out = () => path.join(tmpDir, 'dist', 'apps', 'my-app');
+    beforeEach(() => {
+      runner.mockImplementation(() => {
+        fs.mkdirSync(path.join(out(), 'assets'), { recursive: true });
+        fs.writeFileSync(path.join(out(), 'index.html'), '<html><head></head><body></body></html>');
+        fs.writeFileSync(path.join(out(), 'assets', '.htaccess'), '# stray\n');
+      });
+      jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    });
+    afterEach(() => jest.restoreAllMocks());
+
+    it("web: the env's file is the only .htaccess in the output", async () => {
+      await flutterBuildExecutor(
+        { target: 'web', env: 'uat', dist: 'dist/apps/my-app' },
+        makeContext('my-app', tmpDir),
+        runner,
+      );
+      expect(fs.readFileSync(path.join(out(), '.htaccess'), 'utf8')).toBe('# uat\n');
+      expect(fs.existsSync(path.join(out(), 'assets', '.htaccess'))).toBe(false);
+    });
+
+    it('web: fails before building when the env has no file', async () => {
+      fs.rmSync(path.join(tmpDir, 'environments', 'my-app', 'htaccess.prod'));
+      await expect(
+        flutterBuildExecutor(
+          { target: 'web', env: 'prod', dist: 'dist/apps/my-app' },
+          makeContext('my-app', tmpDir),
+          runner,
+        ),
+      ).rejects.toThrow('my-app: the prod build needs environments/my-app/htaccess.prod');
+      expect(runner).not.toHaveBeenCalled();
+    });
+
+    it('web: htaccess false leaves none; apk and ios never need one', async () => {
+      await flutterBuildExecutor(
+        { target: 'web', env: 'dev', dist: 'dist/apps/my-app', htaccess: false },
+        makeContext('my-app', tmpDir),
+        runner,
+      );
+      expect(fs.existsSync(path.join(out(), '.htaccess'))).toBe(false);
+      expect(fs.existsSync(path.join(out(), 'assets', '.htaccess'))).toBe(false);
+      fs.rmSync(path.join(tmpDir, 'environments', 'my-app', 'htaccess.dev'));
+      for (const target of ['apk', 'ios'] as const) {
+        await expect(
+          flutterBuildExecutor(
+            { target, env: 'dev', dist: 'dist/apps/my-app' },
+            makeContext('my-app', tmpDir),
+            runner,
+          ),
+        ).resolves.toEqual({ success: true });
+      }
+    });
   });
 
   it('runs in the project root from the project configuration', async () => {
@@ -155,13 +221,15 @@ describe('flutterBuildExecutor', () => {
       },
     } as unknown as ExecutorContext;
     await flutterBuildExecutor(
-      { target: 'web', env: 'dev', dist: 'dist/apps/my-app/web' },
+      { target: 'web', env: 'dev', dist: 'dist/apps/my-app/web', envProject: 'my-app' },
       context,
       runner,
     );
     expect(runner.mock.calls[0][1].cwd).toBe(projectDir);
     expect(runner.mock.calls[0][0]).toContain('--output ../../dist/apps/my-app/web');
-    expect(runner.mock.calls[0][0]).toContain('--dart-define-from-file=env/dev.json');
+    expect(runner.mock.calls[0][0]).toContain(
+      '--dart-define-from-file=../../environments/my-app/environment.dev.json',
+    );
   });
 
   it('serves on the configured port (default 4200)', async () => {
@@ -251,6 +319,7 @@ describe('flutterBuildExecutor build meta (NX-85)', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flutter-meta-'));
     fs.mkdirSync(path.join(tmpDir, 'apps', 'my-app'), { recursive: true });
+    writeEnvs(tmpDir);
     fs.mkdirSync(path.join(tmpDir, 'node_modules', 'nx'), { recursive: true });
     fs.writeFileSync(
       path.join(tmpDir, 'node_modules', 'nx', 'package.json'),

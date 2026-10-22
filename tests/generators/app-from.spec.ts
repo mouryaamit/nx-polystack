@@ -144,8 +144,12 @@ describe('pstack app --from (NX-66)', () => {
       expect(read(tree, 'apps/partner-portal/src/index.html')).toContain(
         '<title>Partner Portal</title>',
       );
-      expect(read(tree, 'apps/partner-portal/src/.htaccess')).toContain('partner-portal');
-      expect(read(tree, 'apps/partner-portal/src/.htaccess')).not.toMatch(/\bweb\b/);
+      for (const env of ['dev', 'uat', 'prod']) {
+        const ht = read(tree, `environments/partner-portal/htaccess.${env}`);
+        expect(ht).toContain('partner-portal');
+        expect(ht).not.toMatch(/\bweb\b/);
+      }
+      expect(tree.exists('apps/partner-portal/src/.htaccess')).toBe(false);
       expect(json(tree, 'nx.json').pstack.envEncryption.keys['partner-portal']).toEqual([
         'password',
       ]);
@@ -162,6 +166,18 @@ describe('pstack app --from (NX-66)', () => {
         line: 1,
         text: '// web home',
       });
+    });
+
+    it("renders each htaccess.<env> with that env's own CSP sources", () => {
+      const list = json(tree, 'apps/web/csp-allowlist.json');
+      list.envs = { uat: { 'connect-src': ['https://uat-api.example.com'] } };
+      tree.write('apps/web/csp-allowlist.json', JSON.stringify(list));
+      appFrom(tree, { from: 'web', name: 'partner-portal' });
+      expect(read(tree, 'environments/partner-portal/htaccess.uat')).toContain(
+        'https://uat-api.example.com',
+      );
+      expect(read(tree, 'environments/partner-portal/htaccess.prod')).not.toContain('uat-api');
+      expect(read(tree, 'apps/partner-portal/server/nginx.conf')).not.toContain('uat-api');
     });
 
     it('leaves out environments (dev always kept) with their configurations and scripts', () => {
@@ -364,11 +380,14 @@ describe('pstack app --from (NX-66)', () => {
     expect(read(tree, 'apps/notes-lite/lib/home.dart')).toBe(
       "import 'package:notes_lite/src/x.dart';\n",
     );
-    expect(json(tree, 'apps/notes-lite/env/prod.json')).toEqual({
+    expect(json(tree, 'environments/notes-lite/environment.prod.json')).toEqual({
       FLUTTER_ENV: '',
       API_BASE_URL: '',
     });
-    expect(tree.exists('apps/notes-lite/env/uat.json')).toBe(false);
+    expect(tree.exists('environments/notes-lite/environment.uat.json')).toBe(false);
+    expect(read(tree, 'environments/notes-lite/htaccess.prod')).toContain('notes-lite');
+    expect(tree.exists('environments/notes-lite/htaccess.uat')).toBe(false);
+    expect(tree.exists('apps/notes-lite/env')).toBe(false);
     expect(tree.exists('apps/notes-lite/build')).toBe(false);
     const pj = json(tree, 'apps/notes-lite/project.json');
     expect(Object.keys(pj.targets['build-web'].configurations)).toEqual(['dev', 'prod']);

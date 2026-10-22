@@ -131,7 +131,7 @@ describe('app generator options (NX-43)', () => {
       expect(tree.exists('libs/shared')).toBe(false);
       expect(tree.exists('libs/assets/project.json')).toBe(false);
       const pj = readJson(tree, 'apps/portal/project.json');
-      expect(pj.targets.build.options.assets[1].input).toBe('libs/assets');
+      expect(pj.targets.build.options.assets[0].input).toBe('libs/assets');
       expect(pj.targets.build.options.stylePreprocessorOptions.includePaths).toEqual([
         'libs/styles',
       ]);
@@ -230,7 +230,7 @@ describe('app generator options (NX-43)', () => {
       expect(readJson(tree, 'libs/styles/project.json').name).toBe('shared-styles');
       const build = readJson(tree, 'apps/portal/project.json').targets.build.options;
       expect(build.stylePreprocessorOptions.includePaths).toEqual(['libs/styles']);
-      expect(build.assets[1].input).toBe('libs/assets');
+      expect(build.assets[0].input).toBe('libs/assets');
     });
 
     it('treats equivalent asset inputs and include paths as already wired', async () => {
@@ -267,9 +267,7 @@ describe('app generator options (NX-43)', () => {
         );
       }
       expect(read(tree, 'environments/environment.ts')).toContain('Replaced at build time');
-      expect(read(tree, 'apps/portal/src/main.ts')).toContain(
-        "from '@env/environment'",
-      );
+      expect(read(tree, 'apps/portal/src/main.ts')).toContain("from '@env/environment'");
       const configs = readJson(tree, 'apps/portal/project.json').targets.build.configurations;
       const repl = (c: string) => configs[c].fileReplacements;
       expect(repl('development')).toEqual([
@@ -288,9 +286,7 @@ describe('app generator options (NX-43)', () => {
       await appGenerator(tree, { name: 'portal', type: 'ionic', envLayout: 'per-env' });
       await appGenerator(tree, { name: 'admin', type: 'angular' });
       expect(read(tree, 'environments/environment.ts')).toContain('custom: true');
-      expect(read(tree, 'apps/admin/src/main.ts')).toContain(
-        "from '@env/admin/environment'",
-      );
+      expect(read(tree, 'apps/admin/src/main.ts')).toContain("from '@env/admin/environment'");
       expect(tree.exists('environments/admin/environment.ts')).toBe(true);
       const dev = readJson(tree, 'apps/admin/project.json').targets.build.configurations
         .development;

@@ -136,13 +136,14 @@ function seedWorkspace(tree: Tree): void {
     JSON.stringify(flutterPluginProjectJson('plugin-flutter')),
   );
   tree.write(
-    'apps/plugin-flutter/env/dev.json',
+    'environments/plugin-flutter/environment.dev.json',
     JSON.stringify({ ENV_NAME: 'dev', API_BASE_URL: 'https://dev.example.com/api' }),
   );
   tree.write(
-    'apps/plugin-flutter/env/uat.json',
+    'environments/plugin-flutter/environment.uat.json',
     JSON.stringify({ ENV_NAME: 'uat', API_BASE_URL: 'https://uat.example.com/api' }),
   );
+  tree.write('environments/plugin-flutter/htaccess.prod', '# plugin-flutter prod\n');
 }
 
 describe('env generator', () => {
@@ -497,7 +498,7 @@ describe('env generator: scope, source and options', () => {
   it('adds the environment to the named apps only', async () => {
     await envGenerator(t, { name: 'qa', projects: ['portal', 'mobile'] });
     expect(t.exists('environments/portal/environment.qa.ts')).toBe(true);
-    expect(t.exists('apps/mobile/env/qa.json')).toBe(true);
+    expect(t.exists('environments/mobile/environment.qa.json')).toBe(true);
     expect(t.exists('environments/admin/environment.qa.ts')).toBe(false);
     expect(pj('admin').targets.release.configurations.qa).toBeUndefined();
     // Copied from uat: base href and hardening come along.
@@ -599,7 +600,7 @@ describe('env generator: scope, source and options', () => {
       'prod',
       'uat',
     ]);
-    expect(t.exists('apps/late-mobile/env/qa.json')).toBe(false);
+    expect(t.exists('environments/late-mobile/environment.qa.json')).toBe(false);
   });
 
   it('turns secret fields into placeholders for apps with a release target', async () => {
@@ -641,12 +642,78 @@ describe('env generator: scope, source and options', () => {
   it('flutter: an explicit --from must exist, and an existing configuration is a problem', async () => {
     await expect(
       envGenerator(t, { name: 'qa', projects: ['mobile'], from: 'staging' }),
-    ).rejects.toThrow(/mobile: apps\/mobile\/env\/staging\.json not found/);
+    ).rejects.toThrow(/mobile: environments\/mobile\/environment\.staging\.json not found/);
     const json = pj('mobile');
     json.targets['build-ios'].configurations.qa = { env: 'qa' };
     t.write('apps/mobile/project.json', JSON.stringify(json));
     await expect(envGenerator(t, { name: 'qa', projects: ['mobile'] })).rejects.toThrow(
       'mobile: build-ios configuration "qa" already exists',
+    );
+  });
+
+  it('copies htaccess.prod to htaccess.<env> for web release builds', async () => {
+    t.write('environments/portal/htaccess.prod', '# portal prod rules\n');
+    t.write('environments/mobile/htaccess.prod', '# mobile prod rules\n');
+    await envGenerator(t, { name: 'ppd', projects: ['portal', 'mobile'] });
+    expect(t.read('environments/portal/htaccess.ppd', 'utf-8')).toBe('# portal prod rules\n');
+    expect(t.read('environments/mobile/htaccess.ppd', 'utf-8')).toBe('# mobile prod rules\n');
+  });
+
+  it('copies the prod-only CSP sources (envs.prod) to the new env, keeping an existing one', async () => {
+    t.write(
+      'apps/portal/csp-allowlist.json',
+      JSON.stringify({
+        'connect-src': ['https://api.example.com'],
+        envs: { prod: { 'img-src': ['https://cdn.example.com'] } },
+      }),
+    );
+    t.write('apps/admin/csp-allowlist.json', JSON.stringify({ envs: { ppd: {}, uat: {} } }));
+    await envGenerator(t, { name: 'ppd', projects: ['portal', 'admin'] });
+    expect(readJson(t, 'apps/portal/csp-allowlist.json').envs).toEqual({
+      ppd: { 'img-src': ['https://cdn.example.com'] },
+      prod: { 'img-src': ['https://cdn.example.com'] },
+    });
+    // No envs.prod: nothing to copy, the file is left as it was.
+    expect(readJson(t, 'apps/admin/csp-allowlist.json')).toEqual({ envs: { ppd: {}, uat: {} } });
+  });
+
+  it('needs htaccess.prod to copy, and never replaces an existing htaccess.<env>', async () => {
+    t.delete('environments/portal/htaccess.prod');
+    t.write('environments/mobile/htaccess.qa', '# hand-written\n');
+    const err = await envGenerator(t, { name: 'qa', projects: ['portal', 'mobile'] }).catch(
+      (e: Error) => e,
+    );
+    expect((err as Error).message).toContain(
+      '- portal: environments/portal/htaccess.prod not found',
+    );
+    expect((err as Error).message).toContain(
+      '- mobile: environments/mobile/htaccess.qa already exists',
+    );
+    expect(t.exists('environments/portal/environment.qa.ts')).toBe(false);
+    expect(t.read('environments/mobile/htaccess.qa', 'utf-8')).toBe('# hand-written\n');
+  });
+
+  it('writes no htaccess.<env> for builds with htaccess: false', async () => {
+    const portal = pj('portal');
+    portal.targets.release.options.htaccess = false;
+    t.write('apps/portal/project.json', JSON.stringify(portal));
+    const mobile = pj('mobile');
+    mobile.targets['build-web'].options.htaccess = false;
+    t.write('apps/mobile/project.json', JSON.stringify(mobile));
+    t.delete('environments/portal/htaccess.prod');
+    await envGenerator(t, { name: 'qa', projects: ['portal', 'mobile'] });
+    expect(t.exists('environments/portal/htaccess.qa')).toBe(false);
+    expect(t.exists('environments/mobile/htaccess.qa')).toBe(false);
+    expect(t.exists('environments/portal/environment.qa.ts')).toBe(true);
+  });
+
+  it('tells a Flutter app still on apps/<app>/env/ to run pstack update', async () => {
+    t.rename('environments/mobile/environment.dev.json', 'apps/mobile/env/dev.json');
+    t.rename('environments/mobile/environment.uat.json', 'apps/mobile/env/uat.json');
+    t.rename('environments/mobile/environment.prod.json', 'apps/mobile/env/prod.json');
+    for (const f of t.children('environments/mobile')) t.delete(`environments/mobile/${f}`);
+    await expect(envGenerator(t, { name: 'qa', projects: ['mobile'] })).rejects.toThrow(
+      'mobile: its env files are still in apps/mobile/env/; pstack update moves them to environments/mobile/',
     );
   });
 

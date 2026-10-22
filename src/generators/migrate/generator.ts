@@ -5,6 +5,7 @@ import { GeneratorCallback, logger, Tree } from '@nx/devkit';
 
 import { readPackageVersion, selfPackageRoot } from '../../cli/context';
 import { applyEnvAlias, EnvAliasReport } from '../../lib/utils/env-alias';
+import { applyEnvMoves } from '../../lib/utils/env-move';
 import { refreshLlmBlocks, workspaceProjectNames } from '../../lib/utils/llm-block';
 
 import {
@@ -456,6 +457,7 @@ async function migrateOne(
       otherMoves: batch?.otherMoves,
     });
   }
+  applyEnvMoves(rec.tree, data, ctx.rewriteImports);
   applyBatchHooks(rec.tree, data, batch);
   if (dir && knipMissesNestedApps(tree)) {
     data.notes.push(
@@ -546,6 +548,7 @@ async function migrateWorkspace(
       otherMoves: batch?.otherMoves,
     });
   }
+  applyEnvMoves(rec.tree, data, ctx.rewriteImports);
   applyBatchHooks(rec.tree, data, batch);
   const reportArgs = {
     name,

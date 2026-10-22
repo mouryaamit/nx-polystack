@@ -5,6 +5,7 @@ import { logger, readJson, Tree } from '@nx/devkit';
 import { readPackageVersion, selfPackageRoot } from '../../cli/context';
 
 import { declaredVersion, nxVersion } from './dependencies';
+import { flutterEnvNames } from './env-files';
 import { workspaceNpmScope } from './workspace';
 
 /**
@@ -249,12 +250,21 @@ const NON_ENV_CONFIGS = new Set(['development']);
 /**
  * Environment names for one app:
  * - Angular/Ionic: `release` configurations, else `build` configurations minus `development`;
- * - Flutter: `build-web` configurations, else the names of `env/*.json` files.
+ * - Flutter: `build-web` configurations, else its environments/<name>/environment.<env>.json files,
+ *   else (hand-written run-commands apps) the names of its `env/*.json` files.
  */
-function appEnvironments(tree: Tree, root: string, type: LlmAppType, targets: Targets): string[] {
+function appEnvironments(
+  tree: Tree,
+  name: string,
+  root: string,
+  type: LlmAppType,
+  targets: Targets,
+): string[] {
   if (type === 'flutter') {
     const fromTarget = configs(targets['build-web']);
     if (fromTarget.length) return fromTarget;
+    const fromEnvRoot = flutterEnvNames(tree, name);
+    if (fromEnvRoot.length) return fromEnvRoot;
     const dir = `${root}/env`;
     if (!tree.exists(dir) || tree.isFile(dir)) return [];
     return tree
@@ -349,7 +359,7 @@ export function scanWorkspace(tree: Tree): LlmWorkspace {
     const targets = targetsOf(p);
     const name = projectName(p);
     const type = appType(tree, p.root, targets);
-    appEnvironments(tree, p.root, type, targets).forEach((e) => envs.add(e));
+    appEnvironments(tree, name, p.root, type, targets).forEach((e) => envs.add(e));
     return {
       name,
       type,
