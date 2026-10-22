@@ -63,6 +63,8 @@ export interface IonicReport {
   ionic?: string;
   /** @capacitor/core version in the source. */
   capacitor?: string;
+  /** Capacitor major the workspace generates Ionic apps with (default 5). */
+  workspaceCapacitor?: number;
   /** Packages written to apps/<app>/package.json, sorted. */
   nativePackages: string[];
   /** Native packages also kept at the root: the copied code imports them (the web build needs them). */

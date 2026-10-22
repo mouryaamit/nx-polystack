@@ -331,8 +331,10 @@ function ionicBlock(i: IonicReport): string {
   if (i.capacitor) {
     lines.push(
       `- Capacitor: ${code(i.capacitor)}${
-        majorOf(i.capacitor) !== 5
-          ? ' (the workspace generates Capacitor 5 apps; this app keeps its version)'
+        majorOf(i.capacitor) !== (i.workspaceCapacitor ?? 5)
+          ? ` (the workspace generates Capacitor ${
+              i.workspaceCapacitor ?? 5
+            } apps; this app keeps its version)`
           : ''
       }`,
     );

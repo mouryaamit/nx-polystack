@@ -15,6 +15,7 @@ import {
 import {
   ANGULAR_VERSION,
   ensureAngularDependencies,
+  PROVIDE_HTTP_CLIENT_MAJOR,
   workspaceGeneratorMajor,
   workspaceGeneratorVersions,
 } from '../../lib/utils/angular-deps';
@@ -153,8 +154,9 @@ export default async function appGenerator(
   if (type === 'angular' || type === 'ionic') {
     const vars = {
       name: projectName,
-      // Capacitor for the workspace's Angular (5 on 15, 6 on 16); Angular itself is added below.
+      // Capacitor for the workspace's Angular (5 on 15, 6 on 16–17, 7 on 18); Angular itself is added below.
       capacitorVersion: workspaceGeneratorVersions(tree).capacitor,
+      provideHttp: workspaceGeneratorMajor(tree) >= PROVIDE_HTTP_CLIENT_MAJOR,
       className,
       title,
       appId,

@@ -61,6 +61,28 @@ describe('app generator --type=ionic', () => {
     expect(appPkg.devDependencies['@capacitor/cli']).toBe('^6.0.0');
   });
 
+  it('on an Angular 18 workspace: Ionic 8.7, Capacitor 7 and provideHttpClient', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~18.2.14' },
+        devDependencies: { nx: '19.8.14' },
+      }),
+    );
+    await appGenerator(tree, { name: 'field-ops', type: 'ionic' });
+    const pkg = readJson(tree, 'package.json');
+    expect(pkg.dependencies['@ionic/angular']).toBe('~8.7.11');
+    expect(pkg.devDependencies.typescript).toBe('~5.5.4');
+    const appPkg = readJson(tree, 'apps/field-ops/package.json');
+    expect(appPkg.dependencies['@capacitor/core']).toBe('^7.0.0');
+    expect(appPkg.devDependencies['@capacitor/cli']).toBe('^7.0.0');
+    const mod = tree.read('apps/field-ops/src/app/app.module.ts', 'utf8') ?? '';
+    expect(mod).not.toContain('HttpClientModule');
+    expect(mod).toContain('provideHttpClient(withInterceptorsFromDi())');
+    expect(mod).toContain('{ provide: RouteReuseStrategy, useClass: IonicRouteStrategy }');
+  });
+
   it('uses --appId when given', async () => {
     await appGenerator(tree, { name: 'field-ops', type: 'ionic', appId: 'com.acme.field' });
     expect(tree.read('apps/field-ops/capacitor.config.ts', 'utf8')).toContain(

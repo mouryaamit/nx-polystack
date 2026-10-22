@@ -37,6 +37,12 @@ import { BuildScriptInfo, readBuildScripts } from '../nx/build-scripts';
 import { detectNxWorkspace } from '../nx/detect';
 import { applySourceEnvEncryption, swapEnvSecretModules } from '../nx/env-encryption';
 import {
+  eslintrcForFlatConfig,
+  FLAT_ESLINT_FILE,
+  FLAT_ESLINT_PACKAGE,
+  workspaceUsesEslintrc,
+} from '../nx/flat-eslint';
+import {
   depConstraints,
   executorsOf,
   nxPluginPackage,
@@ -303,8 +309,19 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
   const sourcePkg = sourceRootPackage(sourceDir).pkg;
   const npmProjects = plan.projects.some((p) => NPM_KINDS.has(p.source.kind));
 
+  // A workspace on .eslintrc.json (ESLint 8) does not take the source's flat config: a root
+  // eslint.config.js would switch every project's lint to it.
+  const eslintrc = workspaceUsesEslintrc(tree);
   // Folders the projects use that are not projects (assets, styles, environments, tools).
-  const shared = findSharedFolders(ctx, plan, npmProjects ? sourcePkg?.scripts : undefined);
+  let shared = findSharedFolders(ctx, plan, npmProjects ? sourcePkg?.scripts : undefined);
+  if (eslintrc && shared.rootFiles.some((f) => FLAT_ESLINT_FILE.test(f.path))) {
+    const flat = shared.rootFiles.filter((f) => FLAT_ESLINT_FILE.test(f.path)).map((f) => f.path);
+    shared = { ...shared, rootFiles: shared.rootFiles.filter((f) => !flat.includes(f.path)) };
+    data.notes.push(
+      `Not copied: ${flat.map(code).join(', ')} (ESLint flat config). The workspace lints with ` +
+        '`.eslintrc.json`, so the copied projects get `.eslintrc.json` files instead.',
+    );
+  }
   copySharedFolders(tree, ctx, shared, data);
   const buildScripts = readBuildScripts(
     sourceDir,
@@ -437,6 +454,16 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
         `\`pstack env\` only updates apps directly under \`apps/\`; add new env files to ` +
           `${code(`${root}/env`)} and configurations to its build targets by hand`,
       );
+    }
+    if (eslintrc) {
+      const converted = convertFlatEslint(tree, root, copy.copied);
+      if (converted.length > 0) {
+        notes.push(
+          `its ESLint flat config (${converted.map(code).join(', ')}) was replaced by ` +
+            `${code(`${root}/.eslintrc.json`)} (the workspace's format, Nx defaults and the ` +
+            'selector prefixes); add any custom rules it had',
+        );
+      }
     }
     for (const f of copy.copied.filter((c) => ESLINTRC.test(c))) {
       const file = `${root}/${f}`;
@@ -574,16 +601,28 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
         classify: (spec) => classifyWorkspaceSpec(spec, sourceDir, roots),
         copiedLabel: 'copied projects',
         angular: sourceDependency(sourcePkg, '@angular/core') !== undefined,
-        skip: {
-          test: (pkgName) =>
-            /^(@nrwl\/|@nx\/|@nxext\/|nx$)/.test(pkgName) ||
-            (ionicApps.length > 0 && isNative(pkgName) && !importedAnywhere.has(pkgName)),
-          reason:
-            ionicApps.length > 0
-              ? "the source's Nx packages (the workspace keeps its own Nx version) and native " +
-                "packages no copied code imports (they are in the Ionic apps' own package.json)"
-              : "the source's Nx packages; the workspace keeps its own Nx version",
-        },
+        skip: [
+          {
+            test: (pkgName) =>
+              /^(@nrwl\/|@nx\/|@nxext\/|nx$)/.test(pkgName) ||
+              (ionicApps.length > 0 && isNative(pkgName) && !importedAnywhere.has(pkgName)),
+            reason:
+              ionicApps.length > 0
+                ? "the source's Nx packages (the workspace keeps its own Nx version) and native " +
+                  "packages no copied code imports (they are in the Ionic apps' own package.json)"
+                : "the source's Nx packages; the workspace keeps its own Nx version",
+          },
+          ...(eslintrc
+            ? [
+                {
+                  test: (pkgName: string) => FLAT_ESLINT_PACKAGE.test(pkgName),
+                  reason:
+                    "the source's ESLint flat-config packages; the workspace lints with " +
+                    '`.eslintrc.json` and its own ESLint and typescript-eslint',
+                },
+              ]
+            : []),
+        ],
       },
       data,
     );
@@ -977,6 +1016,35 @@ function copyRootFiles(
         'Compare them with the source.',
     );
   }
+}
+
+/**
+ * Replaces a copied project's flat ESLint config (eslint.config.js at the project root) with an
+ * .eslintrc.json for the workspace; nested flat configs are removed. Returns the files replaced.
+ */
+function convertFlatEslint(tree: Tree, root: string, copied: string[]): string[] {
+  const flat = copied.filter((f) => FLAT_ESLINT_FILE.test(f));
+  if (flat.length === 0) return [];
+  const own = flat.find((f) => !f.includes('/'));
+  const rc = `${root}/.eslintrc.json`;
+  if (own && !tree.exists(rc)) {
+    writeJson(tree, rc, eslintrcForFlatConfig(tree.read(`${root}/${own}`, 'utf8') ?? '', root));
+  }
+  for (const f of flat) tree.delete(`${root}/${f}`);
+  const pj = `${root}/project.json`;
+  if (tree.exists(pj)) {
+    updateJson(tree, pj, (json) => {
+      for (const target of Object.values((json.targets ?? {}) as Record<string, Json>)) {
+        const options = target['options'] as Json | undefined;
+        const config = options?.['eslintConfig'];
+        if (typeof config === 'string' && FLAT_ESLINT_FILE.test(config)) {
+          delete (options as Json)['eslintConfig'];
+        }
+      }
+      return json;
+    });
+  }
+  return flat.map((f) => `${root}/${f}`);
 }
 
 const mainOf = (targets: Json): string | undefined => {
