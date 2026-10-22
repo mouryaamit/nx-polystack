@@ -1,13 +1,16 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
-import { HttpClientModule } from '@angular/common/http';
-
+<% if (provideHttp) { %>import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+<% } else { %>import { HttpClientModule } from '@angular/common/http';
+<% } %>
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 
 @NgModule({
   declarations: [AppComponent],
-  imports: [BrowserModule, HttpClientModule, AppRoutingModule],
-  bootstrap: [AppComponent],
+<% if (provideHttp) { %>  imports: [BrowserModule, AppRoutingModule],
+  providers: [provideHttpClient(withInterceptorsFromDi())],
+<% } else { %>  imports: [BrowserModule, HttpClientModule, AppRoutingModule],
+<% } %>  bootstrap: [AppComponent],
 })
 export class AppModule {}

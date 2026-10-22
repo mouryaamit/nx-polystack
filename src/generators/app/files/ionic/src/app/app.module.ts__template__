@@ -1,5 +1,6 @@
-import { HttpClientModule } from '@angular/common/http';
-import { NgModule } from '@angular/core';
+<% if (provideHttp) { %>import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+<% } else { %>import { HttpClientModule } from '@angular/common/http';
+<% } %>import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { RouteReuseStrategy } from '@angular/router';
 import { IonicModule, IonicRouteStrategy } from '@ionic/angular';
@@ -9,8 +10,13 @@ import { AppComponent } from './app.component';
 
 @NgModule({
   declarations: [AppComponent],
-  imports: [BrowserModule, HttpClientModule, IonicModule.forRoot(), AppRoutingModule],
+<% if (provideHttp) { %>  imports: [BrowserModule, IonicModule.forRoot(), AppRoutingModule],
+  providers: [
+    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+    provideHttpClient(withInterceptorsFromDi()),
+  ],
+<% } else { %>  imports: [BrowserModule, HttpClientModule, IonicModule.forRoot(), AppRoutingModule],
   providers: [{ provide: RouteReuseStrategy, useClass: IonicRouteStrategy }],
-  bootstrap: [AppComponent],
+<% } %>  bootstrap: [AppComponent],
 })
 export class AppModule {}

@@ -108,11 +108,11 @@ describe('app generator --type=angular', () => {
   it('leaves an Angular major the generators do not support alone (adds only terser)', async () => {
     tree.write(
       'package.json',
-      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~18.2.0' } }),
+      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~19.2.0' } }),
     );
     await appGenerator(tree, { name: 'my-app', type: 'angular' });
     const pkg = JSON.parse(tree.read('package.json')!.toString());
-    expect(pkg.dependencies).toEqual({ '@angular/core': '~18.2.0' });
+    expect(pkg.dependencies).toEqual({ '@angular/core': '~19.2.0' });
     expect(pkg.devDependencies).toEqual({ terser: '^5.16.0' });
   });
 
@@ -140,6 +140,33 @@ describe('app generator --type=angular', () => {
     expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~17.3.12');
     expect(pkg.devDependencies['@nx/angular']).toBe('18.3.5');
     expect(pkg.devDependencies.typescript).toBe('~5.4.5');
+  });
+
+  it('uses HttpClientModule below Angular 18 and provideHttpClient from 18', async () => {
+    await appGenerator(tree, { name: 'old', type: 'angular' });
+    const old = tree.read('apps/old/src/app/app.module.ts', 'utf8') ?? '';
+    expect(old).toContain('imports: [BrowserModule, HttpClientModule, AppRoutingModule]');
+    expect(old).not.toContain('provideHttpClient');
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~18.2.14' },
+        devDependencies: { nx: '19.8.14' },
+      }),
+    );
+    await appGenerator(tree, { name: 'my-app', type: 'angular' });
+    const mod = tree.read('apps/my-app/src/app/app.module.ts', 'utf8') ?? '';
+    expect(mod).not.toContain('HttpClientModule');
+    expect(mod).toMatch(
+      /import \{\s*provideHttpClient,\s*withInterceptorsFromDi,?\s*\} from '@angular\/common\/http';/,
+    );
+    expect(mod).toContain('imports: [BrowserModule, AppRoutingModule]');
+    expect(mod).toContain('providers: [provideHttpClient(withInterceptorsFromDi())]');
+    const pkg = JSON.parse(tree.read('package.json')!.toString());
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~18.2.14');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~18.4.3');
+    expect(pkg.devDependencies.typescript).toBe('~5.5.4');
   });
 
   it('adds @mouryaamit/<name> path alias to tsconfig.base.json', async () => {

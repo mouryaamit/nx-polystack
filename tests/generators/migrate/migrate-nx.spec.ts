@@ -472,4 +472,77 @@ describe('migrate generator: Nx workspace', () => {
       'a project named "admin" already exists',
     );
   });
+  describe('ESLint flat config sources (Nx 19+)', () => {
+    const ROOT_FLAT =
+      "const nx = require('@nx/eslint-plugin');\n" +
+      "module.exports = [...nx.configs['flat/base'], ...nx.configs['flat/typescript']];\n";
+    const APP_FLAT =
+      "const nx = require('@nx/eslint-plugin');\n" +
+      "const baseConfig = require('../../eslint.config.js');\n" +
+      'module.exports = [\n' +
+      '  ...baseConfig,\n' +
+      "  ...nx.configs['flat/angular'],\n" +
+      "  ...nx.configs['flat/angular-template'],\n" +
+      '  {\n' +
+      "    files: ['**/*.ts'],\n" +
+      '    rules: {\n' +
+      "      '@angular-eslint/directive-selector': ['error', { type: 'attribute', prefix: 'acme', style: 'camelCase' }],\n" +
+      "      '@angular-eslint/component-selector': ['error', { type: 'element', prefix: 'acme', style: 'kebab-case' }],\n" +
+      '    },\n' +
+      '  },\n' +
+      '];\n';
+
+    function flatSource(): string {
+      const src = fixtureCopy('nx16-workspace');
+      fs.rmSync(path.join(src, '.eslintrc.json'));
+      fs.rmSync(path.join(src, 'apps/portal/.eslintrc.json'));
+      put(src, 'eslint.config.js', ROOT_FLAT);
+      put(src, 'apps/portal/eslint.config.js', APP_FLAT);
+      const pkg = readJsonFile<{ devDependencies: Record<string, string> }>(src, 'package.json');
+      pkg.devDependencies = {
+        ...pkg.devDependencies,
+        'typescript-eslint': '^8.0.0',
+        '@eslint/js': '^9.8.0',
+        'angular-eslint': '^18.3.0',
+      };
+      putJson(src, 'package.json', pkg);
+      return src;
+    }
+
+    it('gives the projects .eslintrc.json in an .eslintrc workspace and leaves the flat config out', async () => {
+      tree.write('.eslintrc.json', '{ "root": true }\n');
+      await migrateGenerator(tree, { source: flatSource(), projects: 'portal' });
+      expect(tree.exists('eslint.config.js')).toBe(false);
+      expect(tree.exists('apps/portal/eslint.config.js')).toBe(false);
+      const rc = json(tree, 'apps/portal/.eslintrc.json');
+      expect(rc.extends).toEqual(['../../.eslintrc.json']);
+      expect(rc.overrides[0].extends).toEqual([
+        'plugin:@nx/angular',
+        'plugin:@angular-eslint/template/process-inline-templates',
+      ]);
+      expect(rc.overrides[0].rules['@angular-eslint/component-selector'][1].prefix).toBe('acme');
+      expect(rc.overrides[0].rules['@angular-eslint/directive-selector'][1].prefix).toBe('acme');
+      expect(rc.overrides[1]).toEqual({
+        files: ['*.html'],
+        extends: ['plugin:@nx/angular-template'],
+        rules: {},
+      });
+      const dev = json(tree, 'package.json').devDependencies;
+      for (const name of ['typescript-eslint', '@eslint/js', 'angular-eslint']) {
+        expect(dev[name]).toBeUndefined();
+      }
+      const report = tree.read('docs/migrations/source.md', 'utf8') ?? '';
+      expect(report).toContain('ESLint flat config');
+      expect(report).toContain('`apps/portal/.eslintrc.json`');
+    });
+
+    it('keeps the flat config in a workspace that lints with eslint.config.js', async () => {
+      tree.write('eslint.config.js', 'module.exports = [];\n');
+      await migrateGenerator(tree, { source: flatSource(), projects: 'portal' });
+      expect(tree.read('apps/portal/eslint.config.js', 'utf8')).toContain('flat/angular');
+      expect(tree.exists('apps/portal/.eslintrc.json')).toBe(false);
+      expect(tree.read('eslint.config.js', 'utf8')).toBe('module.exports = [];\n');
+      expect(json(tree, 'package.json').devDependencies['typescript-eslint']).toBe('^8.0.0');
+    });
+  });
 });

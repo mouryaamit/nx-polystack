@@ -91,6 +91,7 @@ describe('applyIonicShape', () => {
       project: 'a',
       packagePath: 'apps/a/package.json',
       ionic: '^7.0.0',
+      workspaceCapacitor: 5,
       capacitor: '5.7.0',
       nativePackages: ['@capacitor/cli', '@capacitor/core', 'cordova-plugin-device'],
       alsoAtRoot: [],

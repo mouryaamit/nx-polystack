@@ -116,4 +116,37 @@ describe('report: Ionic section', () => {
     );
     expect(md).toContain('- Native packages (in `apps/a/package.json`): none');
   });
+  it('compares Capacitor with the major the workspace generates', () => {
+    const block = (capacitor: string, workspaceCapacitor?: number) => {
+      const data = emptyReportData();
+      data.ionic = [
+        {
+          project: 'field',
+          packagePath: 'apps/field/package.json',
+          ionic: '^8.0.0',
+          capacitor,
+          workspaceCapacitor,
+          nativePackages: [],
+          alsoAtRoot: [],
+          otherApps: [],
+          platforms: [],
+          cordovaPlugins: [],
+          droppedTargets: [],
+        },
+      ];
+      return renderReport({
+        name: 'field',
+        adapterId: 'ionic',
+        adapterLabel: 'standalone Ionic Angular app',
+        detection: { confidence: 0.95, reasons: ['x'] },
+        forced: false,
+        source: '../field',
+        data,
+      });
+    };
+    expect(block('^7.0.0', 7)).toContain('- Capacitor: `^7.0.0`\n');
+    expect(block('^6.0.0', 7)).toContain(
+      '- Capacitor: `^6.0.0` (the workspace generates Capacitor 7 apps; this app keeps its version)',
+    );
+  });
 });

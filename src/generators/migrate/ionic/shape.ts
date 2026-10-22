@@ -3,8 +3,9 @@ import * as path from 'path';
 
 import { GeneratorCallback, readJson, Tree, updateJson } from '@nx/devkit';
 
+import { workspaceGeneratorVersions } from '../../../lib/utils/angular-deps';
 import { CAPACITOR_EXECUTOR, POLYSTACK_BUILD_EXECUTOR } from '../../../lib/utils/angular-project';
-import { addMissingDependencies, declaredVersion } from '../../../lib/utils/dependencies';
+import { addMissingDependencies, declaredVersion, majorOf } from '../../../lib/utils/dependencies';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import type { IonicReport } from '../adapters/types';
 import { importSpecifiers } from '../nx/selection';
@@ -102,6 +103,7 @@ export function applyIonicShape(tree: Tree, input: IonicShapeInput): IonicShapeR
     packagePath: `${appRoot}/package.json`,
     ionic,
     capacitor: sourceDependency(input.sourcePkg, '@capacitor/core'),
+    workspaceCapacitor: majorOf(workspaceGeneratorVersions(tree).capacitor),
     nativePackages: [],
     alsoAtRoot: [],
     otherApps: [],

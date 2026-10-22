@@ -3,6 +3,45 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.5.0
+
+Angular 18 is supported, the third release of one public release per Angular major.
+
+- **New workspaces on 18:** `pstack new --angular=18` starts on Angular 18.2, Nx 19.8, TypeScript 5.5
+  and angular-eslint 18.4.
+- **Generators on 18:** apps, Ionic apps and libraries get Angular 18 packages, Ionic 8.7 and
+  Capacitor 7. New apps on 18 provide HttpClient with `provideHttpClient(withInterceptorsFromDi())`.
+- **Migration on 18:** `pstack migrate` brings in Angular CLI apps, Ionic 8 apps and Nx workspaces on 18. Nx sources that use ESLint flat config get `.eslintrc.json` files in an `.eslintrc` workspace.
+
+Checked by:
+
+- a new Angular 18 workspace with generated apps, an Ionic app and a library: build, lint, test and
+  release builds;
+- migrated `ng new` 18, Ionic 8 and `create-nx-workspace` 19.8 sources: build, lint and release
+  builds.
+
+The 1.4.1 and 1.4.2 entries below were development releases leading to this one.
+
+## 1.4.2
+
+- `pstack migrate` of an Nx workspace that uses ESLint flat config (`eslint.config.js`, the Nx 19+
+  default) into a workspace on `.eslintrc.json`: the source's root `eslint.config.js` is no longer
+  copied (it switched every project's lint to it), each copied project gets an `.eslintrc.json`
+  (Nx defaults plus its selector prefixes) instead of its `eslint.config.js`, and the flat-config
+  packages (`typescript-eslint`, `angular-eslint`, `@eslint/js`, …) are not added. The report
+  lists what was replaced.
+
+## 1.4.1
+
+- `pstack new --angular=18` starts a workspace on Angular 18.2 with Nx 19.8, TypeScript 5.5 and
+  angular-eslint 18.4.
+- On an Angular 18 workspace, `pstack app`, `pstack lib` and `pstack migrate` add the Angular 18
+  packages. Ionic apps get Ionic 8.7 and Capacitor 7.
+- New apps on Angular 18 provide HttpClient with `provideHttpClient(withInterceptorsFromDi())`
+  (Angular 18 deprecates `HttpClientModule`). Apps on earlier majors are unchanged.
+- The migration report compares an Ionic app's Capacitor with the major the workspace generates
+  (it always said 5).
+
 ## 1.4.0
 
 Angular 17 is supported, the second release of one public release per Angular major.
