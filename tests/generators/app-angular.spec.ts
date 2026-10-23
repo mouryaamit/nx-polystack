@@ -108,11 +108,11 @@ describe('app generator --type=angular', () => {
   it('leaves an Angular major the generators do not support alone (adds only terser)', async () => {
     tree.write(
       'package.json',
-      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~19.2.0' } }),
+      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~20.3.0' } }),
     );
     await appGenerator(tree, { name: 'my-app', type: 'angular' });
     const pkg = JSON.parse(tree.read('package.json')!.toString());
-    expect(pkg.dependencies).toEqual({ '@angular/core': '~19.2.0' });
+    expect(pkg.dependencies).toEqual({ '@angular/core': '~20.3.0' });
     expect(pkg.devDependencies).toEqual({ terser: '^5.16.0' });
   });
 
@@ -167,6 +167,34 @@ describe('app generator --type=angular', () => {
     expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~18.2.14');
     expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~18.4.3');
     expect(pkg.devDependencies.typescript).toBe('~5.5.4');
+  });
+
+  it('marks the NgModule-declared root component standalone: false from Angular 19', async () => {
+    await appGenerator(tree, { name: 'old', type: 'angular' });
+    expect(tree.read('apps/old/src/app/app.component.ts', 'utf8')).not.toContain('standalone');
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~19.2.25' },
+        devDependencies: { nx: '20.8.4' },
+      }),
+    );
+    await appGenerator(tree, { name: 'my-app', type: 'angular' });
+    expect(tree.read('apps/my-app/src/app/app.component.ts', 'utf8')).toContain(
+      '  standalone: false,\n})',
+    );
+    const lintRules = (app: string) =>
+      JSON.parse(tree.read(`apps/${app}/.eslintrc.json`, 'utf8') ?? '{}').overrides[0].rules;
+    expect(lintRules('old')['@angular-eslint/prefer-standalone']).toBeUndefined();
+    expect(lintRules('my-app')['@angular-eslint/prefer-standalone']).toBe('off');
+    const mod = tree.read('apps/my-app/src/app/app.module.ts', 'utf8') ?? '';
+    expect(mod).toContain('declarations: [AppComponent]');
+    expect(mod).toContain('providers: [provideHttpClient(withInterceptorsFromDi())]');
+    const pkg = JSON.parse(tree.read('package.json')!.toString());
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~19.2.25');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~19.8.1');
+    expect(pkg.devDependencies.typescript).toBe('~5.8.3');
   });
 
   it('adds @mouryaamit/<name> path alias to tsconfig.base.json', async () => {

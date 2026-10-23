@@ -83,6 +83,27 @@ describe('app generator --type=ionic', () => {
     expect(mod).toContain('{ provide: RouteReuseStrategy, useClass: IonicRouteStrategy }');
   });
 
+  it('on an Angular 19 workspace: Ionic 8.7, Capacitor 7 and a standalone: false root', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~19.2.25' },
+        devDependencies: { nx: '20.8.4' },
+      }),
+    );
+    await appGenerator(tree, { name: 'field-ops', type: 'ionic' });
+    const pkg = readJson(tree, 'package.json');
+    expect(pkg.dependencies['@ionic/angular']).toBe('~8.7.11');
+    expect(pkg.devDependencies.typescript).toBe('~5.8.3');
+    expect(readJson(tree, 'apps/field-ops/package.json').dependencies['@capacitor/core']).toBe(
+      '^7.0.0',
+    );
+    expect(tree.read('apps/field-ops/src/app/app.component.ts', 'utf8')).toContain(
+      'standalone: false',
+    );
+  });
+
   it('uses --appId when given', async () => {
     await appGenerator(tree, { name: 'field-ops', type: 'ionic', appId: 'com.acme.field' });
     expect(tree.read('apps/field-ops/capacitor.config.ts', 'utf8')).toContain(

@@ -45,7 +45,8 @@ let nextId = 0;
   templateUrl: './session-warning.component.html',
   styleUrls: ['./session-warning.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-})
+<% if (standaloneFalse) { %>  standalone: false,
+<% } %>})
 export class SessionWarningComponent {
   /** Overrides of the default (English) texts. */
   @Input() texts: Partial<SessionWarningTexts> = {};

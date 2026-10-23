@@ -6,6 +6,8 @@ import {
   ANGULAR_VERSION,
   ensureAngularDependencies,
   ngPackagrDependencies,
+  STANDALONE_FALSE_MAJOR,
+  workspaceGeneratorMajor,
 } from '../../lib/utils/angular-deps';
 import {
   addMissingDependencies,
@@ -61,6 +63,8 @@ export function writeAngularLib(
     ...templateVars(o),
     prefixCamel: names(o.prefix).propertyName,
     componentSuffixes: opts.componentSuffixes ?? null,
+    // Read before ensureAngularDependencies: a workspace without Angular gets 15 (no flag needed).
+    standaloneFalse: workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR,
     ...(opts.vars ?? {}),
   };
   const build = opts.build ?? (o.variant as AngularLibBuild);

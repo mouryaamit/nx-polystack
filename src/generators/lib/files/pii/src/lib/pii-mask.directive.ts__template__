@@ -8,7 +8,7 @@ import { PII_MASK_OPTIONS } from './pii-mask.options';
  * Writes the masked value as the element's text (never HTML), replacing its content: use it on
  * an empty element. `[piiReveal]="true"` (a real boolean) shows the value unmasked.
  */
-@Directive({ selector: '[<%= prefixCamel %>PiiMask]' })
+@Directive({ selector: '[<%= prefixCamel %>PiiMask]'<% if (standaloneFalse) { %>, standalone: false<% } %> })
 export class PiiMaskDirective implements OnChanges {
   @Input('<%= prefixCamel %>PiiMask') value: unknown;
   @Input() piiFormat = '';

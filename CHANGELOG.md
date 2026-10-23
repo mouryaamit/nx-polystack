@@ -3,6 +3,48 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.7.0
+
+Angular 19 is supported, the fourth release of one public release per Angular major.
+
+- **New workspaces on 19:** `pstack new --angular=19` starts on Angular 19.2, Nx 20.8, TypeScript 5.8,
+  angular-eslint 19.8 and zone.js 0.15.
+- **Generators on 19:** apps, Ionic apps and libraries get Angular 19 packages, Ionic 8.7 and
+  Capacitor 7. Angular 19 makes components, directives and pipes standalone by default; generated
+  code keeps its NgModules, marks their declarations `standalone: false` (as Angular's own migration
+  does) and turns off angular-eslint 19's `prefer-standalone` in their `.eslintrc.json`.
+- **Migration on 19:** `pstack migrate` brings in Angular CLI apps, Ionic 8 apps and Nx workspaces on
+  19 (Nx 20.8). An NgModule app migrated into a 19 workspace gets the same `prefer-standalone`
+  setting.
+
+Checked by:
+
+- a new Angular 19 workspace with generated apps, an Ionic app and a library: build, lint, test and
+  release builds;
+- migrated `ng new` 19 (with environment files), Ionic 8 and `create-nx-workspace` 20.8 sources:
+  env files moved, build, lint and release builds.
+
+The 1.6.1 and 1.6.2 entries below were development releases leading to this one.
+
+## 1.6.2
+
+- Generated apps and libraries on Angular 19 turn off angular-eslint 19's
+  `@angular-eslint/prefer-standalone` in their `.eslintrc.json`: with 1.6.1 their NgModule
+  declarations (`standalone: false`) failed `lint`. Nx 20.2's own migration does the same for
+  upgraded workspaces.
+- `pstack migrate` into an Angular 19 workspace does the same in the `.eslintrc.json` it generates
+  for an app whose code declares `standalone: false`.
+
+## 1.6.1
+
+- `pstack new --angular=19` starts a workspace on Angular 19.2 with Nx 20.8, TypeScript 5.8,
+  angular-eslint 19.8 and zone.js 0.15.
+- On an Angular 19 workspace, `pstack app`, `pstack lib` and `pstack migrate` add the Angular 19
+  packages. Ionic apps get Ionic 8.7 and Capacitor 7.
+- Angular 19 makes components, directives and pipes standalone by default. Generated apps and
+  libraries on 19 keep their NgModules and mark what those declare `standalone: false`, as Angular's
+  own migration does. Earlier majors are unchanged.
+
 ## 1.6.0
 
 Every per-environment file of a project now lives in `environments/<project>/`, web release builds

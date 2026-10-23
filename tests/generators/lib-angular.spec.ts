@@ -34,6 +34,37 @@ describe('lib generator --type=angular', () => {
     expect(tree.exists(`${ROOT}/src/lib/ui/ui.component.scss`)).toBe(true);
   });
 
+  it('marks declared components, directives and pipes standalone: false from Angular 19', async () => {
+    await libGenerator(tree, { name: 'ui', type: 'angular' });
+    expect(tree.read(`${ROOT}/src/lib/ui/ui.component.ts`, 'utf8')).not.toContain('standalone');
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        name: '@acme/source',
+        dependencies: { '@angular/core': '~19.2.25' },
+        devDependencies: { nx: '20.8.4' },
+      }),
+    );
+    await libGenerator(tree, { name: 'cards', type: 'angular' });
+    expect(tree.read('libs/shared/cards/src/lib/cards/cards.component.ts', 'utf8')).toContain(
+      '  standalone: false,\n})',
+    );
+    const lintRules = (lib: string) =>
+      JSON.parse(tree.read(`libs/shared/${lib}/.eslintrc.json`, 'utf8') ?? '{}').overrides[0].rules;
+    expect(lintRules('ui')['@angular-eslint/prefer-standalone']).toBeUndefined();
+    expect(lintRules('cards')['@angular-eslint/prefer-standalone']).toBe('off');
+    await libGenerator(tree, { name: 'pages', type: 'ionic' });
+    await libGenerator(tree, { name: 'pii', type: 'pii' });
+    await libGenerator(tree, { name: 'session', type: 'session' });
+    const sources = tree
+      .listChanges()
+      .map((c) => c.path)
+      .filter((f) => /\.(component|page|directive|pipe)\.ts$/.test(f) && !f.includes('/ui/'));
+    expect(sources.length).toBeGreaterThanOrEqual(5);
+    for (const f of sources)
+      expect([f, tree.read(f, 'utf8')]).toEqual([f, expect.stringContaining('standalone: false')]);
+  });
+
   it('writes Angular tsconfigs', async () => {
     await libGenerator(tree, { name: 'ui', type: 'angular' });
     const ts = readJson(tree, `${ROOT}/tsconfig.json`);

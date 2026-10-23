@@ -20,7 +20,8 @@
         "@angular-eslint/component-class-suffix": [
           "error",
           { "suffixes": <%- JSON.stringify(componentSuffixes) %> }
-        ]<% } %>
+        ]<% } %><% if (standaloneFalse) { %>,
+        "@angular-eslint/prefer-standalone": "off"<% } %>
       }
     },
     {

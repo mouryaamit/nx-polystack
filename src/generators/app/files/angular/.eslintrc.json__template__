@@ -16,7 +16,8 @@
         "@angular-eslint/component-selector": [
           "error",
           { "type": "element", "prefix": "app", "style": "kebab-case" }
-        ]
+        ]<% if (standaloneFalse) { %>,
+        "@angular-eslint/prefer-standalone": "off"<% } %>
       }
     },
     {

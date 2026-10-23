@@ -969,18 +969,18 @@ describe('migrate generator: standalone Angular CLI app', () => {
     });
 
     it('--force-angular proceeds, keeps the workspace Angular and flags the mismatch', async () => {
-      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~19.2.0' } }));
+      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~20.3.0' } }));
       await migrateGenerator(tree, { source: FIXTURE, name: 'portal', forceAngular: true });
       const pkg = pkgOf(tree);
-      expect(pkg.dependencies['@angular/core']).toBe('~19.2.0');
+      expect(pkg.dependencies['@angular/core']).toBe('~20.3.0');
       expect(pkg.dependencies['@angular/router']).toBeUndefined();
       expect(pkg.dependencies['zone.js']).toBe('~0.12.0');
       const report = tree.read('docs/migrations/portal.md', 'utf8')!;
       expect(report).toContain('## Angular version');
       expect(report).toContain(
-        'Angular major mismatch: the workspace has @angular/core `~19.2.0` (Angular 19)',
+        'Angular major mismatch: the workspace has @angular/core `~20.3.0` (Angular 20)',
       );
-      expect(report).toContain('Install versions matching Angular 19 for:');
+      expect(report).toContain('Install versions matching Angular 20 for:');
       expect(report).toContain(
         'Not added (they would mix Angular majors): `@angular-devkit/build-angular`, `@angular/animations`',
       );
@@ -1000,6 +1000,33 @@ describe('migrate generator: standalone Angular CLI app', () => {
       expect(pkg.dependencies['@angular/router']).toBe('^15.2.0');
       expect(tree.read('docs/migrations/portal.md', 'utf8')).toContain(
         'Same Angular major: workspace @angular/core `~15.1.0`, source `^15.2.0`.',
+      );
+    });
+
+    it('on Angular 19, an NgModule source gets prefer-standalone off in its generated ESLint config', async () => {
+      tree.write(
+        'package.json',
+        JSON.stringify({
+          dependencies: { '@angular/core': '~19.2.25' },
+          devDependencies: { nx: '20.8.4' },
+        }),
+      );
+      const src = fixtureCopy('angular15-app');
+      const pkg = readJsonFile<{ dependencies: Record<string, string> }>(src, 'package.json');
+      pkg.dependencies['@angular/core'] = '^19.2.0';
+      putJson(src, 'package.json', pkg);
+      const cmp = path.join(src, 'src/app/app.component.ts');
+      fs.writeFileSync(
+        cmp,
+        fs
+          .readFileSync(cmp, 'utf8')
+          .replace(/\}\)\nexport class/, '  standalone: false,\n})\nexport class'),
+      );
+      await migrateGenerator(tree, { source: src, name: 'portal' });
+      const eslint = readJson(tree, 'apps/portal/.eslintrc.json');
+      expect(eslint.overrides[0].rules['@angular-eslint/prefer-standalone']).toBe('off');
+      expect(tree.read('apps/portal/src/app/app.component.ts', 'utf8')).toContain(
+        'standalone: false',
       );
     });
 
