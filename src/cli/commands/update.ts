@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { loadJsonc, restoreJsonLayouts, snapshotJsonConfigs } from '../../lib/utils/json-layout';
 import { flagString } from '../args';
 import { findWorkspaceRoot, resolveLocalPlugin } from '../context';
 import { execOrThrow, gitStatus } from '../exec';
@@ -173,7 +174,17 @@ export async function runUpdate(
     return 0;
   }
 
+  // Migrations write JSON through formatFiles/writeJson, which re-lays-out whole files; put the
+  // workspace's own layout back afterwards so the diff shows only what changed.
+  const jsonc = loadJsonc(root);
+  const snapshot = jsonc ? snapshotJsonConfigs(root) : null;
   const code = deps.runLocalMigrate(local.cliPath, pin.version, target.to, root, ctx.verbose);
+  if (jsonc && snapshot) {
+    const kept = restoreJsonLayouts(root, snapshot, jsonc);
+    if (kept.length > 0) {
+      console.log(`\nKept the existing layout of ${kept.join(', ')} (only changed values moved).`);
+    }
+  }
   if (code !== 0) {
     console.error(
       `\nThe plugin is already on v${target.to}, but migrations from v${pin.version} did not all apply.\n` +

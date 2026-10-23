@@ -3,6 +3,34 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.7.2
+
+- **`pstack adopt` obfuscation**: adopt wrote `obfuscate: true`, which the release target rejects
+  (it takes a profile). It now reads the obfuscate script (its default profile and shared options)
+  and sets the closest preset plus `obfuscateOptions` for the string threshold, name style and
+  wrappers it sets differently, so the output matches the old script's. Every option adopt writes
+  is now checked against the build executor's schema in the tests.
+- **Older Nx stops early**: commands that load the plugin (`adopt`, `update`, `app`, `lib`, `env`,
+  `build`, …) stop with the `nx migrate` steps when the workspace is on Nx 15 or 16, and ask for
+  `@nx/devkit` pinned to the workspace's Nx when another major is installed. Before, npm only
+  reported a peer-dependency conflict, or the plugin failed to load. The README and the user manual
+  install `@nx/devkit` next to the plugin.
+- **`pstack update` keeps the JSON layout**: migrations write `package.json`, `nx.json`,
+  `project.json`, `tsconfig*.json` and `.eslintrc.json` through Prettier or `writeJson`, which
+  re-laid-out whole files (one-line objects spread over several lines). After the migrations,
+  `pstack update` puts each file's own layout back and keeps only the changed values.
+
+## 1.7.1
+
+- **`pstack adopt`** moves the Angular apps of a workspace that still build with the repo's own
+  scripts (`@angular-devkit/build-angular:browser` plus e.g. `tools/scripts/build.js`) to the
+  plugin's `release` target, in place: base hrefs and env folder from the existing setup, the CSP
+  nonce, HTML comment stripping and obfuscation as the script did them, `environments/<app>/htaccess.<env>`
+  from the `.htaccess` build asset, env encryption mirrored in `nx.json`, and `build:<app>:<env>`
+  (plus `:prod:secure` and `:prod:secure:sri`) pointing at `nx run <app>:release:<env>`. It keeps the
+  layout of `package.json` and `project.json` and leaves the old scripts in place. `pstack update`
+  does not do this: it only changes apps that already build through the release target.
+
 ## 1.7.0
 
 Angular 19 is supported, the fourth release of one public release per Angular major.

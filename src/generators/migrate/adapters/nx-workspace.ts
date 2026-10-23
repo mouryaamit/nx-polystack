@@ -34,7 +34,7 @@ import {
 import { applyIonicShape } from '../ionic/shape';
 import { withIonicSkip } from '../ionic/skip';
 import { classifyDependencySpec, SpecKind } from '../npm-deps';
-import { BuildScriptInfo, readBuildScripts } from '../nx/build-scripts';
+import { BuildScriptInfo, readBuildScripts, shapeReleaseTarget } from '../nx/build-scripts';
 import { detectNxWorkspace } from '../nx/detect';
 import { applySourceEnvEncryption, swapEnvSecretModules } from '../nx/env-encryption';
 import {
@@ -358,7 +358,7 @@ function migrateNxWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Workspa
       const releases = addReleaseTarget(targets, p.name, (w) => notes.push(w), root);
       releaseAdded = releases.length > 0;
       // Only the release target this run added; a source's own release target stays as it was.
-      if (releases.length > 0) shapeReleaseTarget(targets, p, buildScripts, notes);
+      if (releases.length > 0) shapeReleaseTarget(targets, p.source.name, buildScripts, notes);
       const main = mainOf(targets);
       if (main) mains.push(main);
       addTag('type:', 'type:app');
@@ -1064,53 +1064,6 @@ const mainOf = (targets: Json): string | undefined => {
   const main = (objectField(targets, 'build')['options'] as Json | undefined)?.['main'];
   return typeof main === 'string' ? main : undefined;
 };
-
-/**
- * The release target of a migrated app: the env folder its fileReplacements use
- * (environments/<x>/…), and base hrefs from the source's build scripts.
- */
-function shapeReleaseTarget(
-  targets: Json,
-  p: PlannedProject,
-  scripts: BuildScriptInfo,
-  notes: string[],
-): void {
-  const release = targets['release'];
-  if (!isObject(release) || !isObject(release['options'])) return;
-  const options = release['options'] as Json;
-  const envProject = envFolderOf(objectField(targets, 'build'));
-  if (envProject && envProject !== options['envProject']) options['envProject'] = envProject;
-  const hrefs = scripts.baseHrefs.get(p.source.name);
-  if (!hrefs) return;
-  const configurations = isObject(release['configurations'])
-    ? (release['configurations'] as Record<string, Json>)
-    : {};
-  const applied: string[] = [];
-  for (const [name, config] of Object.entries(configurations)) {
-    const href = hrefs[name] ?? hrefs['*'];
-    if (!href || href === '/' || !isObject(config)) continue;
-    config['baseHref'] = href;
-    applied.push(`${name}: ${href}`);
-  }
-  if (applied.length > 0) {
-    notes.push(`release target base hrefs from the source build scripts: ${applied.join(', ')}`);
-  }
-}
-
-/** "environments/<x>/environment.prod.ts" in the build's fileReplacements → "<x>". */
-function envFolderOf(build: Json): string | undefined {
-  const sets = [build['options'], ...Object.values(objectField(build, 'configurations'))];
-  for (const set of sets) {
-    const replacements = isObject(set) ? set['fileReplacements'] : undefined;
-    if (!Array.isArray(replacements)) continue;
-    for (const r of replacements) {
-      const w = isObject(r) ? r['with'] ?? r['replaceWith'] : undefined;
-      const m = typeof w === 'string' ? /^(?:\.\/)?environments\/([^/]+)\/[^/]+$/.exec(w) : null;
-      if (m) return m[1];
-    }
-  }
-  return undefined;
-}
 
 /**
  * The source's root package.json fields the install and the build rely on: `overrides`,

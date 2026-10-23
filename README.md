@@ -91,6 +91,7 @@ Known breakpoints when upgrading:
 | `pstack app` / `pstack lib`              | Add an application or a shared library                                     |
 | `pstack env`                             | Add an environment to some or all apps                                     |
 | `pstack migrate`                         | Copy an existing project into the workspace (the source is never modified) |
+| `pstack adopt`                           | Move apps that build with the repo's own scripts to the release target     |
 | `pstack build`                           | Build every app (or some) for one environment                              |
 | `pstack csp`                             | Edit an app's CSP allowlist and write its server config                    |
 | `pstack hardening` / `pstack encryption` | Show or change release hardening and env encryption                        |
@@ -102,7 +103,8 @@ Run `pstack --help` for every option. The full guide is the **[user manual](USER
 ## Using it as an Nx plugin
 
 ```bash
-npm i -D --save-exact @mouryaamit/nx-polystack
+# pin @nx/devkit to the workspace's nx version (17-22), e.g. @nx/devkit@17.0.6
+npm i -D --save-exact @mouryaamit/nx-polystack @nx/devkit@17.0.6
 npx nx list @mouryaamit/nx-polystack
 npx nx g @mouryaamit/nx-polystack:app --type=angular --name=portal
 ```
