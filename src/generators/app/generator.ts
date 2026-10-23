@@ -16,6 +16,7 @@ import {
   ANGULAR_VERSION,
   ensureAngularDependencies,
   PROVIDE_HTTP_CLIENT_MAJOR,
+  STANDALONE_FALSE_MAJOR,
   workspaceGeneratorMajor,
   workspaceGeneratorVersions,
 } from '../../lib/utils/angular-deps';
@@ -159,6 +160,7 @@ export default async function appGenerator(
       // Capacitor for the workspace's Angular (5 on 15, 6 on 16–17, 7 on 18); Angular itself is added below.
       capacitorVersion: workspaceGeneratorVersions(tree).capacitor,
       provideHttp: workspaceGeneratorMajor(tree) >= PROVIDE_HTTP_CLIENT_MAJOR,
+      standaloneFalse: workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR,
       className,
       title,
       appId,

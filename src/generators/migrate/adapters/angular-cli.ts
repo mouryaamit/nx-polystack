@@ -4,6 +4,7 @@ import * as path from 'path';
 import { Tree, updateJson } from '@nx/devkit';
 
 import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt';
+import { STANDALONE_FALSE_MAJOR, workspaceGeneratorMajor } from '../../../lib/utils/angular-deps';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { setProjectTags } from '../../../lib/utils/nx-targets';
@@ -634,9 +635,18 @@ export function migrateEslint(
     path.join(__dirname, '..', '..', 'app', 'files', 'angular', '.eslintrc.json__template__'),
     'utf8',
   );
+  // angular-eslint 19 makes prefer-standalone an error; NgModule declarations opt out of it.
+  const standaloneFalse =
+    workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR &&
+    copied.some(
+      (f) =>
+        f.endsWith('.ts') &&
+        /\bstandalone\s*:\s*false\b/.test(tree.read(`${ctx.projectRoot}/${f}`, 'utf8') ?? ''),
+    );
   tree.write(
     file,
     template
+      .replace(/<% if \(standaloneFalse\) \{ %>([\s\S]*?)<% \} %>/g, standaloneFalse ? '$1' : '')
       .replace(/"prefix": "app"/g, `"prefix": ${JSON.stringify(prefix)}`)
       .replace(/<%= up %>/g, upTo(ctx.projectRoot)),
   );

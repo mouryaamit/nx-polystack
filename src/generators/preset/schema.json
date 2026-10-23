@@ -79,7 +79,7 @@
     },
     "angular": {
       "type": "number",
-      "enum": [15, 16, 17, 18],
+      "enum": [15, 16, 17, 18, 19],
       "description": "Angular major to add to the workspace now. Without it, the first Angular or Ionic app adds Angular 15."
     },
     "pluginVersion": {

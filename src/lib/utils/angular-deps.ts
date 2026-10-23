@@ -12,13 +12,20 @@ export const ANGULAR_MAJOR = 15;
  * Angular majors the generators write for: `pstack new --angular=<major>`, and `pstack app` / `:lib`
  * fill in packages for a workspace on one of them. One major is added per public release.
  */
-export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16, 17, 18];
+export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16, 17, 18, 19];
 
 /**
  * From this major, generated apps provide HttpClient with `provideHttpClient(withInterceptorsFromDi())`
  * (Angular 18 deprecates HttpClientModule; its own migration writes the same providers).
  */
 export const PROVIDE_HTTP_CLIENT_MAJOR = 18;
+
+/**
+ * From this major, components, directives and pipes are standalone unless they say otherwise, so
+ * generated NgModule declarations get `standalone: false` (what Angular 19's own migration writes),
+ * and their ESLint configs turn off angular-eslint 19's `prefer-standalone` (as Nx 20.2's migration does).
+ */
+export const STANDALONE_FALSE_MAJOR = 19;
 
 /** Versions the generators add for one Angular major (only where a package is missing). */
 export interface AngularGeneratorVersions {
@@ -36,6 +43,7 @@ const ZONE_JS: Record<number, string> = {
   16: '~0.13.0',
   17: '~0.14.0',
   18: '~0.14.0',
+  19: '~0.15.0',
 };
 /** @types/node the major's TypeScript can parse (a latest one uses newer syntax: TS1139). */
 const TYPES_NODE: Record<number, string> = {
@@ -43,6 +51,7 @@ const TYPES_NODE: Record<number, string> = {
   16: '~20.10.0',
   17: '~20.10.0',
   18: '~20.10.0',
+  19: '~20.10.0',
 };
 
 export function angularGeneratorVersions(major: number): AngularGeneratorVersions {
@@ -155,7 +164,7 @@ export interface EnsureAngularOptions {
  * never upgraded:
  * - no @angular/core → the whole set for `major` (default 15): runtime, build, lint, TypeScript
  *   and @types/node;
- * - a generator major installed (15–18) → missing build/lint packages at the installed Angular
+ * - a generator major installed (15–19) → missing build/lint packages at the installed Angular
  *   version (plus the imported runtime packages when `includeRuntime`);
  * - another Angular major → nothing; warns which build/lint packages are missing.
  */

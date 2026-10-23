@@ -36,7 +36,8 @@ Each release adds one Angular major and keeps every earlier one.
 | 16.2    | 17.0.6 | 5.1        | 7.8   | 6         | 20    | supported (1.3.1)                      |
 | 17.3    | 18.3.5 | 5.4        | 7.8   | 6         | 20    | supported (1.4.0)                      |
 | 18.2    | 19.8   | 5.5        | 8.7   | 7         | 20    | supported (1.5.0)                      |
-| 19–21   | 20–22  | 5.8–5.9    | 8–9   | 7–8       | 20/22 | `pstack upgrade angular` only, for now |
+| 19.2    | 20.8   | 5.8        | 8.7   | 7         | 20    | supported (1.7.0)                      |
+| 20–21   | 21–22  | 5.9        | 8–9   | 7–8       | 20/22 | `pstack upgrade angular` only, for now |
 
 Supported means:
 
@@ -47,7 +48,7 @@ Supported means:
 
 `pstack upgrade angular` moves a workspace one major at a time, with one commit per step. Each step
 pins Nx, TypeScript, the build and lint packages, Ionic, Capacitor and Node. It works up to Angular 21
-today. Generators for 19 and later come in the next releases; until then they warn which packages to
+today. Generators for 20 and later come in the next releases; until then they warn which packages to
 add.
 
 Known breakpoints when upgrading:
@@ -56,6 +57,8 @@ Known breakpoints when upgrading:
 - **17:** Nx 18's module-boundary rule refuses relative environment imports (pstack uses `@env/*`).
 - **18:** `HttpClientModule` can be left in an NgModule's lists; `pstack upgrade angular` removes it.
   New apps on 18 provide HttpClient with `provideHttpClient(withInterceptorsFromDi())`.
+- **19:** components, directives and pipes are standalone by default; Angular's migration adds
+  `standalone: false` to NgModule declarations, and new apps and libraries on 19 write it.
 - **20:** angular-eslint 20 makes `prefer-inject` an error; the step runs Angular's `inject()` migration.
 - **21:** Node 22 is required, Ionic 9 comes through `@ionic/migrate`, and Capacitor moves to 8.
 
