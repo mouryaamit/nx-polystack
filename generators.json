@@ -38,6 +38,11 @@
       "schema": "./src/generators/migrate/schema.json",
       "description": "Bring existing code into the workspace, the source never modified: a standalone Angular CLI or Flutter app as apps/<name>, or the Angular and Flutter projects of an Nx 15-17 workspace at their own paths."
     },
+    "adopt": {
+      "factory": "./src/generators/adopt/generator",
+      "schema": "./src/generators/adopt/schema.json",
+      "description": "Move the Angular apps that build without the plugin (their own build scripts) to its release target, in place."
+    },
     "shared-libs": {
       "factory": "./src/generators/shared-libs/generator",
       "schema": "./src/generators/shared-libs/schema.json",

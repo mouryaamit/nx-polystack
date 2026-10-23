@@ -18,6 +18,7 @@ import {
   shouldDelegate,
   upgradeHint,
   WORKSPACE_COMMANDS,
+  workspaceNxProblem,
 } from '../src/cli/launcher';
 import { CliError, CommandContext } from '../src/cli/types';
 
@@ -40,6 +41,12 @@ async function main(argv: string[]): Promise<number> {
   if (!command || command === 'help' || flags['h'] || flags['help']) {
     console.log(helpText(selfVersion));
     return 0;
+  }
+
+  const nxProblem = wsRoot ? workspaceNxProblem(command, wsRoot) : null;
+  if (nxProblem) {
+    console.error(`\nError: ${nxProblem}`);
+    return 1;
   }
 
   if (local && wsRoot && shouldDelegate({ command, flags, env: process.env, selfRoot, local })) {

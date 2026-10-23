@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "cli": "nx",
+  "id": "adopt",
+  "title": "Adopt Apps",
+  "description": "Move the Angular apps of this workspace that build without the plugin to its release target, in place: release target (base hrefs and post-build steps read from the workspace's own build script), environments/<app>/htaccess.<env>, env encryption settings, build:<app>:<env> npm scripts. Old scripts are kept.",
+  "type": "object",
+  "properties": {
+    "projects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Apps to adopt (default: every Angular app without a release target)."
+    },
+    "scripts": {
+      "type": "boolean",
+      "description": "Point the apps' build:<app>:<env> npm scripts at nx run <app>:release:<env>.",
+      "default": true
+    }
+  },
+  "required": []
+}

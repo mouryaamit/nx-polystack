@@ -27,6 +27,9 @@ COMMANDS
               Flutter projects of an Nx 15-22 workspace (same paths, names and aliases), or the
               app and TypeScript library packages of an npm, Yarn or pnpm workspaces repo
               (apps/, libs/)
+  adopt       Move the Angular apps that still build with the workspace's own scripts to the
+              plugin's release target, in place (base hrefs, nonce and obfuscation read from the
+              script, environments/<app>/htaccess.<env>, env encryption, build:<app>:<env>)
   encryption  Show or change the env encryption settings of release builds (nx.json
               pstack.envEncryption)
   build       Build every app (or some) for one environment: release targets of Angular/Ionic
@@ -195,6 +198,12 @@ OPTIONS — migrate
                                the file win over --force-angular / --max-files
   Writes docs/migrations/<name>.md and <name>.manifest.json (for --rollback). Without
   --adapter the most confident adapter is used if its confidence is at least 0.80.
+
+OPTIONS — adopt
+  --app=<a,b>                  Only these apps (default: every Angular app without a release target)
+  --no-scripts                 Leave the build:<app>:<env> npm scripts as they are
+  --dry-run                    Show the changes without writing them
+  Writes docs/migrations/adopt.md. The workspace's own build scripts are not deleted.
 
 OPTIONS — infra
   --with=<parts>               docs | ci | quality | upgrades, comma-separated, or all | none

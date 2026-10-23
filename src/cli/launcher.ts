@@ -12,6 +12,7 @@ export const NEVER_DELEGATE = new Set(['', 'help', 'new', 'update', '_migrate', 
 
 /** Generator commands that act on the workspace (run from its root when delegated). */
 export const WORKSPACE_COMMANDS = new Set([
+  'adopt',
   'app',
   'env',
   'lib',
@@ -40,6 +41,7 @@ export const MIN_LOCAL_VERSION: Readonly<Record<string, string>> = {
   csp: '0.33.0',
   shared: '0.35.0',
   upgrade: '1.2.12',
+  adopt: '1.7.1',
 };
 
 /** First plugin version that understands a flag of a command (checked when the flag is given). */
@@ -182,4 +184,62 @@ export function upgradeHint(localVersion: string, selfVersion: string): string |
     `pstack: workspace uses nx-polystack v${localVersion}, global CLI is v${selfVersion} — ` +
     `run "pstack update" to upgrade.`
   );
+}
+
+/** Nx majors the plugin loads on (package.json peer range `>=17.0.0 <23.0.0`). */
+export const NX_MAJORS = { min: 17, max: 22 };
+
+/** Commands that need the workspace on a supported Nx with a matching @nx/devkit. */
+const NEEDS_SUPPORTED_NX = new Set(
+  [...WORKSPACE_COMMANDS, 'update'].filter((c) => c !== 'upgrade'),
+);
+
+function installedVersion(wsRoot: string, pkg: string): string | undefined {
+  try {
+    const file = path.join(wsRoot, 'node_modules', ...pkg.split('/'), 'package.json');
+    const version = JSON.parse(fs.readFileSync(file, 'utf8')).version;
+    return typeof version === 'string' ? version.replace(/^v/, '') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const majorOf = (v: string): number => Number(/^(\d+)\./.exec(v)?.[1] ?? NaN);
+
+/**
+ * Why `command` cannot run in this workspace, or null: an Nx outside 17–22 (the plugin does not
+ * load there; npm only reports a peer conflict), or an installed @nx/devkit of another major
+ * than nx (npm resolves the plugin's devkit peer to the newest one when the workspace does not
+ * pin it). Workspaces without node_modules/nx are let through.
+ */
+export function workspaceNxProblem(command: string, wsRoot: string): string | null {
+  if (!NEEDS_SUPPORTED_NX.has(command)) return null;
+  const nx = installedVersion(wsRoot, 'nx');
+  if (!nx) return null;
+  const major = majorOf(nx);
+  if (Number.isNaN(major)) return null;
+  if (major < NX_MAJORS.min) {
+    const steps =
+      major < 16
+        ? 'NX_SKIP_PROVENANCE_CHECK=true npx nx migrate 16.9.1 --interactive, then ' +
+          'NX_MIGRATE_USE_LOCAL=true npx nx migrate 17.0.6 --interactive'
+        : 'NX_MIGRATE_USE_LOCAL=true npx nx migrate 17.0.6 --interactive';
+    return (
+      `this workspace is on Nx ${nx}; nx-polystack needs Nx ${NX_MAJORS.min}-${NX_MAJORS.max}. ` +
+      `Move it first, one major at a time: ${steps} (each followed by npm install and ` +
+      'npx nx migrate --run-migrations). Take any @mouryaamit/nx-polystack entry out of ' +
+      'package.json before that, and review the diff: nx migrate reformats the JSON it touches.'
+    );
+  }
+  if (major > NX_MAJORS.max) {
+    return `this workspace is on Nx ${nx}; nx-polystack supports Nx ${NX_MAJORS.min}-${NX_MAJORS.max}.`;
+  }
+  const devkit = installedVersion(wsRoot, '@nx/devkit');
+  if (devkit && majorOf(devkit) !== major) {
+    return (
+      `@nx/devkit ${devkit} does not match nx ${nx}. Pin it to the workspace's Nx: ` +
+      `npm i -D @nx/devkit@${nx}`
+    );
+  }
+  return null;
 }

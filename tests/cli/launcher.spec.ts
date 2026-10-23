@@ -1,13 +1,16 @@
+import * as path from 'path';
+
 import { resolveLocalPlugin } from '../../src/cli/context';
 import {
   assertLocalSupports,
   MIN_LOCAL_VERSION,
   shouldDelegate,
   upgradeHint,
+  workspaceNxProblem,
 } from '../../src/cli/launcher';
 import { CliError } from '../../src/cli/types';
 
-import { fakeLocalPlugin, REPO_ROOT, tmpDir } from './helpers';
+import { fakeLocalPlugin, REPO_ROOT, tmpDir, writeJson } from './helpers';
 
 function setup(version = '0.2.2') {
   const ws = tmpDir();
@@ -99,5 +102,52 @@ describe('assertLocalSupports', () => {
     expect(() => assertLocalSupports('lib', 'v0.7.1')).not.toThrow();
     expect(() => assertLocalSupports('app', '0.1.0')).not.toThrow();
     expect(() => assertLocalSupports('lib', 'main')).not.toThrow();
+  });
+});
+
+describe('workspaceNxProblem', () => {
+  function ws(nx?: string, devkit?: string): string {
+    const root = tmpDir();
+    if (nx) writeJson(path.join(root, 'node_modules/nx/package.json'), { name: 'nx', version: nx });
+    if (devkit) {
+      writeJson(path.join(root, 'node_modules/@nx/devkit/package.json'), {
+        name: '@nx/devkit',
+        version: devkit,
+      });
+    }
+    return root;
+  }
+
+  it('lets supported workspaces and unknown installs through', () => {
+    expect(workspaceNxProblem('adopt', ws('17.0.6', '17.0.6'))).toBeNull();
+    expect(workspaceNxProblem('app', ws('22.7.12'))).toBeNull();
+    expect(workspaceNxProblem('adopt', ws())).toBeNull();
+  });
+
+  it('names the nx migrate hops for an Nx 15 or 16 workspace', () => {
+    const from15 = workspaceNxProblem('adopt', ws('15.9.7'));
+    expect(from15).toContain('this workspace is on Nx 15.9.7; nx-polystack needs Nx 17-22');
+    expect(from15).toContain('NX_SKIP_PROVENANCE_CHECK=true npx nx migrate 16.9.1');
+    expect(from15).toContain('NX_MIGRATE_USE_LOCAL=true npx nx migrate 17.0.6');
+    const from16 = workspaceNxProblem('update', ws('16.9.1'));
+    expect(from16).not.toContain('16.9.1 --interactive');
+    expect(from16).toContain('npx nx migrate 17.0.6');
+  });
+
+  it('refuses an Nx newer than the plugin supports', () => {
+    expect(workspaceNxProblem('app', ws('23.0.0'))).toContain('supports Nx 17-22');
+  });
+
+  it('asks for @nx/devkit pinned to the workspace Nx', () => {
+    expect(workspaceNxProblem('adopt', ws('17.0.6', '22.7.12'))).toBe(
+      "@nx/devkit 22.7.12 does not match nx 17.0.6. Pin it to the workspace's Nx: " +
+        'npm i -D @nx/devkit@17.0.6',
+    );
+  });
+
+  it('leaves commands that do not load the plugin alone', () => {
+    for (const command of ['new', 'inspect', 'upgrade', 'help']) {
+      expect(workspaceNxProblem(command, ws('15.9.7'))).toBeNull();
+    }
   });
 });

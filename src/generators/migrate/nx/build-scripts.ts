@@ -3,6 +3,8 @@ import * as path from 'path';
 
 import { releaseConfigName } from '../angular-project-json';
 
+import { isObject, Json, objectField } from './workspace-source';
+
 /**
  * What a source's root npm scripts say about building its apps: base hrefs per environment
  * (from `nx build … --base-href` flags, or from a plain map in a custom build script) and which
@@ -154,4 +156,51 @@ export function readBuildScripts(
   info.customScripts.sort();
   info.unread = [...customProjects.keys()].filter((p) => !info.baseHrefs.has(p)).sort();
   return info;
+}
+
+/**
+ * The release target of a migrated app: the env folder its fileReplacements use
+ * (environments/<x>/…), and base hrefs from the source's build scripts.
+ */
+export function shapeReleaseTarget(
+  targets: Json,
+  sourceName: string,
+  scripts: BuildScriptInfo,
+  notes: string[],
+): void {
+  const release = targets['release'];
+  if (!isObject(release) || !isObject(release['options'])) return;
+  const options = release['options'] as Json;
+  const envProject = envFolderOf(objectField(targets, 'build'));
+  if (envProject && envProject !== options['envProject']) options['envProject'] = envProject;
+  const hrefs = scripts.baseHrefs.get(sourceName);
+  if (!hrefs) return;
+  const configurations = isObject(release['configurations'])
+    ? (release['configurations'] as Record<string, Json>)
+    : {};
+  const applied: string[] = [];
+  for (const [name, config] of Object.entries(configurations)) {
+    const href = hrefs[name] ?? hrefs['*'];
+    if (!href || href === '/' || !isObject(config)) continue;
+    config['baseHref'] = href;
+    applied.push(`${name}: ${href}`);
+  }
+  if (applied.length > 0) {
+    notes.push(`release target base hrefs from the source build scripts: ${applied.join(', ')}`);
+  }
+}
+
+/** "environments/<x>/environment.prod.ts" in the build's fileReplacements → "<x>". */
+export function envFolderOf(build: Json): string | undefined {
+  const sets = [build['options'], ...Object.values(objectField(build, 'configurations'))];
+  for (const set of sets) {
+    const replacements = isObject(set) ? set['fileReplacements'] : undefined;
+    if (!Array.isArray(replacements)) continue;
+    for (const r of replacements) {
+      const w = isObject(r) ? r['with'] ?? r['replaceWith'] : undefined;
+      const m = typeof w === 'string' ? /^(?:\.\/)?environments\/([^/]+)\/[^/]+$/.exec(w) : null;
+      if (m) return m[1];
+    }
+  }
+  return undefined;
 }
