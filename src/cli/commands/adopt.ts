@@ -4,8 +4,19 @@ import { CliError, CommandContext } from '../types';
 
 import { requireWorkspace } from './app';
 
+/** --report=<path> | --report=false | --no-report; undefined when not given. */
+function reportOption(ctx: CommandContext): string | false | undefined {
+  if (ctx.flags['noReport'] === true) return false;
+  const v = ctx.flags['report'];
+  if (v === undefined) return undefined;
+  if (v === true)
+    throw new CliError('--report needs a path (e.g. --report=docs/adopt.md), or use --no-report.');
+  if (v === false || /^(false|no|off|0)$/i.test(v)) return false;
+  return v;
+}
+
 /**
- * pstack adopt [--app=a,b] [--no-scripts] [--remove-old-scripts]: Angular apps on their own build
+ * pstack adopt [--app=a,b] [--no-scripts] [--remove-old-scripts] [--report=<path>|--no-report]: Angular apps on their own build
  * scripts → release target. pstack adopt --compare --app=<app>: old build vs release target.
  */
 export async function runAdopt(ctx: CommandContext): Promise<number> {
@@ -27,6 +38,7 @@ export async function runAdopt(ctx: CommandContext): Promise<number> {
         projects,
         scripts: ctx.flags['scripts'] === false ? false : ctx.flags['noScripts'] !== true,
         removeOldScripts: flagBoolean(ctx.flags, 'removeOldScripts'),
+        report: reportOption(ctx),
       }),
     );
   } catch (err) {

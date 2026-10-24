@@ -112,6 +112,34 @@ export async function runAdoptCompare(
     );
   }
 
+  const out = path.join(root, 'dist', 'pstack-compare', app);
+  const env = { NX_DAEMON: 'false', NX_SKIP_NX_CACHE: 'true' };
+  const oldDirFlag = flagString(ctx.flags, 'oldDir');
+  if (ctx.flags['oldDir'] === true) throw new CliError('--old-dir needs a path.');
+  if (oldDirFlag !== undefined) {
+    // A build made elsewhere (e.g. a clone of master with its own npm install): one env.
+    if (envs.length !== 1) {
+      throw new CliError('--old-dir is one build: pass the env it was built for with --env=<env>.');
+    }
+    const oldDir = path.resolve(ctx.cwd, oldDirFlag);
+    if (!fs.existsSync(path.join(oldDir, 'index.html'))) {
+      throw new CliError(`--old-dir: no index.html in ${oldDir}.`);
+    }
+    const e = envs[0];
+    copyDir(oldDir, path.join(out, e, 'old'));
+    deps.log(`\n▶ ${e}: new build (nx run ${app}:release:${e})`);
+    deps.exec('npx', ['nx', 'run', `${app}:release:${e}`], root, env);
+    copyDir(path.join(root, outputPath(pj, 'release', app)), path.join(out, e, 'new'));
+    return finish(
+      root,
+      app,
+      oldDir,
+      out,
+      { [e]: compareBuilds(path.join(out, e, 'old'), path.join(out, e, 'new')) },
+      deps,
+    );
+  }
+
   const status = deps.capture('git', ['status', '--porcelain'], root);
   if (status === null) throw new CliError('--compare needs a git repository.');
   let base = flagString(ctx.flags, 'base');
@@ -129,8 +157,6 @@ export async function runAdoptCompare(
 
   const worktree = fs.mkdtempSync(path.join(os.tmpdir(), `pstack-compare-${app}-`));
   fs.rmSync(worktree, { recursive: true, force: true });
-  const out = path.join(root, 'dist', 'pstack-compare', app);
-  const env = { NX_DAEMON: 'false', NX_SKIP_NX_CACHE: 'true' };
   const byEnv: Record<string, Check[]> = {};
   deps.log(`Old build: ${app} at ${base}, in a temporary worktree (${worktree}).`);
   deps.exec('git', ['worktree', 'add', '--detach', worktree, base], root);
@@ -165,7 +191,20 @@ export async function runAdoptCompare(
     }
   }
 
+  return finish(root, app, base, out, byEnv, deps);
+}
+
+/** Writes report.md, prints the checks; 1 when any differs. */
+function finish(
+  root: string,
+  app: string,
+  base: string,
+  out: string,
+  byEnv: Record<string, Check[]>,
+  deps: CompareDeps,
+): number {
   const reportFile = path.join(out, 'report.md');
+  fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(reportFile, renderReport(app, base, byEnv));
   let differs = 0;
   for (const [e, checks] of Object.entries(byEnv)) {

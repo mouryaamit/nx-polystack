@@ -59,7 +59,13 @@ export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<str
   lib: { dir: '0.19.0' },
   csp: { import: '0.38.0', nonceSource: '1.2.5', env: '1.5.5' },
   infra: { lintStaged: '0.36.0' },
-  adopt: { compare: '1.8.0', removeOldScripts: '1.8.0' },
+  adopt: {
+    compare: '1.8.0',
+    removeOldScripts: '1.8.0',
+    report: '1.8.5',
+    noReport: '1.8.5',
+    oldDir: '1.8.5',
+  },
   migrate: {
     rollback: '0.13.0',
     config: '0.14.0',
