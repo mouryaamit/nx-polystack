@@ -40,6 +40,28 @@ export function selectMigrations(
     .sort((a, b) => compareVersions(a.version, b.version) || a.name.localeCompare(b.name));
 }
 
+/** Every migration of the manifest, oldest first. */
+export function allMigrations(manifest: MigrationsManifest): MigrationEntry[] {
+  return selectMigrations(manifest, '0.0.0', '999999.0.0');
+}
+
+/**
+ * The named migrations (any version), in release order. Throws with the known names when one is
+ * not in the manifest.
+ */
+export function namedMigrations(manifest: MigrationsManifest, names: string[]): MigrationEntry[] {
+  const all = allMigrations(manifest);
+  const unknown = names.filter((n) => !all.some((e) => e.name === n));
+  if (unknown.length > 0) {
+    throw new Error(
+      `no migration named ${unknown.map((n) => `"${n}"`).join(', ')}. Known: ${all
+        .map((e) => e.name)
+        .join(', ')}`,
+    );
+  }
+  return all.filter((e) => names.includes(e.name));
+}
+
 export async function runMigrations(
   entries: MigrationEntry[],
   runOne: (e: MigrationEntry) => Promise<void>,
