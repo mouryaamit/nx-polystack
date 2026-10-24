@@ -3,6 +3,16 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.8.6
+
+- `pstack update --run-migration=<name,...>` runs migrations of the installed plugin again, whatever
+  their version (an update only runs those newer than the version it starts from, so a workspace
+  that skipped one could not get it), and `pstack update --list-migrations` lists them. Needs 1.8.6
+  or later installed in the workspace.
+- `pstack adopt --remove-old-scripts` no longer deletes, on a later run, the scripts an earlier
+  report listed as not part of the old build and left in place. A later run that finds nothing left
+  to remove now says so in the report instead of keeping the earlier list.
+
 ## 1.8.5
 
 - `pstack adopt --report=<path>` writes the report somewhere else (a folder ending in `/` gets

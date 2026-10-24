@@ -77,6 +77,10 @@ OPTIONS — update
                                (default: this CLI's version)
   --allow-dirty                Run with uncommitted changes
   --force                      Allow downgrading
+  --run-migration=<a,b>        Run these migrations of the installed plugin again, whatever their
+                               version (an update runs only those newer than where it starts);
+                               needs v1.8.6+ in the workspace
+  --list-migrations            List the installed plugin's migrations with their versions
 
 OPTIONS — upgrade angular
   --to=<major>                 Go up to this Angular major, one step at a time (default: the

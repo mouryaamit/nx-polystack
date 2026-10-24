@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { loadJsonc, restoreJsonLayouts, snapshotJsonConfigs } from '../../lib/utils/json-layout';
 import { devkitPinFor, installedVersion as installedPackage } from '../../lib/utils/devkit-pin';
-import { flagString } from '../args';
+import { loadJsonc, restoreJsonLayouts, snapshotJsonConfigs } from '../../lib/utils/json-layout';
+import { flagBoolean, flagString } from '../args';
 import { findWorkspaceRoot, resolveLocalPlugin } from '../context';
 import { execOrThrow, gitStatus } from '../exec';
 import { installSource } from '../install-source';
@@ -30,7 +30,12 @@ export interface UpdateDeps {
     cwd: string,
     verbose?: boolean,
   ): number;
+  /** Run the installed plugin's CLI with these arguments; returns its exit code. */
+  runLocal?(cliPath: string, args: string[], cwd: string): number;
 }
+
+/** First plugin version whose `_migrate` takes --only and --list. */
+export const RUN_MIGRATION_VERSION = '1.8.6';
 
 /** Arguments for the child `_migrate` process. */
 export function migrateArgs(from: string, to: string, verbose = false): string[] {
@@ -62,7 +67,67 @@ const defaultDeps: UpdateDeps = {
   gitStatus,
   runLocalMigrate: (cliPath, from, to, cwd, verbose) =>
     delegate(cliPath, migrateArgs(from, to, verbose), cwd),
+  runLocal: (cliPath, args, cwd) => delegate(cliPath, args, cwd),
 };
+
+/**
+ * `pstack update --run-migration=a,b`: runs those migrations of the installed plugin again,
+ * whatever their version (an update only runs the ones newer than the version it starts from).
+ * `pstack update --list-migrations`: prints them.
+ */
+function runNamedMigrations(ctx: CommandContext, root: string, deps: UpdateDeps): number {
+  const local = resolveLocalPlugin(root);
+  if (!local) {
+    throw new CliError('nx-polystack is not installed in this workspace; run npm install first.');
+  }
+  if (compareVersions(local.version, RUN_MIGRATION_VERSION) < 0) {
+    throw new CliError(
+      `the workspace has nx-polystack v${local.version}; --run-migration and --list-migrations ` +
+        `need v${RUN_MIGRATION_VERSION} or later in the workspace. Run "pstack update" first.`,
+    );
+  }
+  const run = deps.runLocal ?? ((cli, args, cwd) => delegate(cli, args, cwd));
+  if (flagBoolean(ctx.flags, 'listMigrations')) {
+    return run(local.cliPath, ['_migrate', '--list'], root);
+  }
+  const names = flagString(ctx.flags, 'runMigration')
+    ?.split(',')
+    .map((n) => n.trim())
+    .filter(Boolean);
+  if (!names || names.length === 0) {
+    throw new CliError(
+      '--run-migration needs migration names, e.g. --run-migration=flutter-web-platform ' +
+        '(pstack update --list-migrations lists them).',
+    );
+  }
+  if (!ctx.dryRun && !ctx.flags['allowDirty']) {
+    const status = deps.gitStatus(root);
+    if (status !== null && status.trim() !== '') {
+      throw new CliError(
+        'the workspace has uncommitted changes. Commit or stash first, or pass --allow-dirty.',
+      );
+    }
+  }
+  const jsonc = loadJsonc(root);
+  const snapshot = jsonc ? snapshotJsonConfigs(root) : null;
+  const code = run(
+    local.cliPath,
+    [
+      '_migrate',
+      `--only=${names.join(',')}`,
+      ...(ctx.verbose ? ['--verbose'] : []),
+      ...(ctx.dryRun ? ['--dry-run'] : []),
+    ],
+    root,
+  );
+  if (jsonc && snapshot) {
+    const kept = restoreJsonLayouts(root, snapshot, jsonc);
+    if (kept.length > 0) {
+      console.log(`\nKept the existing layout of ${kept.join(', ')} (only changed values moved).`);
+    }
+  }
+  return code;
+}
 
 export async function runUpdate(
   ctx: CommandContext,
@@ -78,6 +143,14 @@ export async function runUpdate(
   const pkgPath = path.join(root, 'package.json');
   const lockPath = path.join(root, 'package-lock.json');
   if (!fs.existsSync(pkgPath)) throw new CliError(`no package.json at ${root}`);
+  if (ctx.flags['runMigration'] !== undefined || ctx.flags['listMigrations'] !== undefined) {
+    if (ctx.positionals.length > 0 || ctx.flags['to'] !== undefined) {
+      throw new CliError(
+        '--run-migration and --list-migrations use the installed plugin; give no version.',
+      );
+    }
+    return runNamedMigrations(ctx, root, deps);
+  }
   if (ctx.flags['to'] === true) {
     throw new CliError('--to requires a version, e.g. --to=0.3.0');
   }
