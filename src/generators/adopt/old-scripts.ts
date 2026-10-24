@@ -121,9 +121,11 @@ const RUNS_BUILD_SCRIPTS = /\bnpm\b[^\n]{0,30}['"`]run['"`]|\bnpm\s+run\s+build:
 
 /** Workspace-relative script paths named in backticks in a report (`tools/scripts/build.js`). */
 export function recordedScripts(report: string): string[] {
+  // Not the scripts a report listed as left in place (not part of the old build).
+  const text = report.replace(/^Nothing starts these[^\n]*$/gm, '');
   return [
     ...new Set(
-      [...report.matchAll(/`((?:\.\/)?tools\/[\w./-]+\.(?:c|m)?js)\b[^`]*`/g)].map((m) =>
+      [...text.matchAll(/`((?:\.\/)?tools\/[\w./-]+\.(?:c|m)?js)\b[^`]*`/g)].map((m) =>
         posix.normalize(m[1]),
       ),
     ),

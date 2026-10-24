@@ -112,6 +112,8 @@ export interface AdoptResult {
   removed: string[];
   /** Scripts under tools/ nothing starts, outside the old pipeline (left in place). */
   unreferenced: string[];
+  /** removeOldScripts looked (so the report's "Old scripts" section is current). */
+  oldScriptsChecked?: boolean;
 }
 
 /** Angular apps of the workspace that build without the plugin: build target, no release target. */
@@ -385,6 +387,7 @@ function removeOldScripts(
   const previous = from ? tree.read(from, 'utf8') ?? '' : '';
   const found = findOldScripts(tree, [...oldScripts, ...recordedScripts(previous)]);
   for (const f of found.removable) tree.delete(f);
+  result.oldScriptsChecked = true;
   result.removed = found.removable;
   result.unreferenced = found.unreferenced;
   logger.info(
@@ -402,7 +405,11 @@ function removeOldScripts(
 }
 
 function removalLines(result: AdoptResult): string[] {
-  if (result.removed.length === 0 && result.unreferenced.length === 0) return [];
+  if (result.removed.length === 0 && result.unreferenced.length === 0) {
+    return result.oldScriptsChecked
+      ? ['## Old scripts', '', 'None left: no old build script is still in the workspace.', '']
+      : [];
+  }
   const lines = ['## Old scripts', ''];
   if (result.removed.length > 0) {
     lines.push(`Removed (nothing uses them any more): ${result.removed.map(code).join(', ')}.`, '');

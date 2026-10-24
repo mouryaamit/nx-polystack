@@ -64,6 +64,50 @@ describe('pstack update', () => {
     await expect(runUpdate(makeCtx({ cwd: tmpDir() }), deps().d)).rejects.toThrow(/no nx\.json/);
   });
 
+  it('runs named migrations of the installed plugin with --run-migration, installing nothing', async () => {
+    const ws = workspace('1.8.6');
+    fakeLocalPlugin(ws, '1.8.6');
+    const runs: string[][] = [];
+    const { calls, d } = deps({
+      runLocal: (cli, args) => {
+        runs.push(args);
+        return 0;
+      },
+    });
+    expect(
+      await runUpdate(makeCtx({ cwd: ws, flags: { runMigration: 'flutter-web-platform, a' } }), d),
+    ).toBe(0);
+    expect(calls).toEqual([]);
+    expect(runs).toEqual([['_migrate', '--only=flutter-web-platform,a']]);
+    expect(await runUpdate(makeCtx({ cwd: ws, flags: { listMigrations: true } }), d)).toBe(0);
+    expect(runs[1]).toEqual(['_migrate', '--list']);
+  });
+
+  it('refuses --run-migration on an older installed plugin, a dirty tree or without names', async () => {
+    const old = workspace('1.8.5');
+    fakeLocalPlugin(old, '1.8.5');
+    await expect(
+      runUpdate(makeCtx({ cwd: old, flags: { runMigration: 'x' } }), deps().d),
+    ).rejects.toThrow(/v1\.8\.5; --run-migration .* need v1\.8\.6/);
+    const ws = workspace('1.8.6');
+    fakeLocalPlugin(ws, '1.8.6');
+    await expect(
+      runUpdate(
+        makeCtx({ cwd: ws, flags: { runMigration: 'x' } }),
+        deps({ gitStatus: () => ' M a' }).d,
+      ),
+    ).rejects.toThrow(/uncommitted/);
+    await expect(
+      runUpdate(makeCtx({ cwd: ws, flags: { runMigration: true } }), deps().d),
+    ).rejects.toThrow(/needs migration names/);
+    await expect(
+      runUpdate(
+        makeCtx({ cwd: ws, positionals: ['1.9.0'], flags: { runMigration: 'x' } }),
+        deps().d,
+      ),
+    ).rejects.toThrow(/give no version/);
+  });
+
   it('bumps the pin, installs, then runs migrations from the new local plugin', async () => {
     const ws = workspace();
     const { calls, d } = deps();

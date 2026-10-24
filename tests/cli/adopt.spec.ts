@@ -301,6 +301,12 @@ describe('pstack adopt', () => {
     expect(fs.existsSync(path.join(later, 'tools/scripts/build.js'))).toBe(true);
     await runAdopt(makeCtx({ cwd: later, flags: { removeOldScripts: true } }));
     for (const f of old) expect(fs.existsSync(path.join(later, f))).toBe(false);
+    // A later run with nothing left refreshes the section instead of keeping the old list.
+    await runAdopt(makeCtx({ cwd: later, flags: { removeOldScripts: true } }));
+    const again = fs.readFileSync(path.join(later, 'docs/migrations/adopt.md'), 'utf8');
+    expect(again).toContain('Nothing starts these, but they are not part of the old build');
+    expect(again).not.toContain('Removed (nothing uses them any more)');
+    expect(fs.existsSync(path.join(later, 'tools/scripts/csp-patch.js'))).toBe(true);
     expect(fs.readFileSync(path.join(later, 'docs/migrations/adopt.md'), 'utf8')).toContain(
       'Apps moved to the polystack `release` target',
     );
@@ -373,6 +379,17 @@ describe('pstack adopt', () => {
     await expect(runAdopt(makeCtx({ cwd: workspace(), flags: { report: true } }))).rejects.toThrow(
       /needs a path/,
     );
+  });
+
+  it('says none are left when a later --remove-old-scripts finds nothing', async () => {
+    const ws = workspace();
+    for (const f of ['csp-patch.js', 'encrypt-env.js'])
+      fs.rmSync(path.join(ws, 'tools/scripts', f));
+    await runAdopt(makeCtx({ cwd: ws, flags: { removeOldScripts: true } }));
+    await runAdopt(makeCtx({ cwd: ws, flags: { removeOldScripts: true } }));
+    const report = fs.readFileSync(path.join(ws, 'docs/migrations/adopt.md'), 'utf8');
+    expect(report).toContain('None left: no old build script is still in the workspace.');
+    expect(report).not.toContain('Removed (nothing uses them any more)');
   });
 
   it('pins @nx/devkit to the installed nx, keeping the package.json layout', async () => {

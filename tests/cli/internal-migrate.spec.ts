@@ -41,6 +41,32 @@ describe('runInternalMigrate', () => {
     expect(fs.existsSync(path.join(ws, 'b.txt'))).toBe(true);
   });
 
+  it('runs only the named migrations with --only, whatever their version, and lists them', async () => {
+    const { selfRoot, ws } = setup(
+      {
+        old: { version: '0.1.0', implementation: './old.js', description: 'Old one' },
+        a: { version: '0.3.0', implementation: './a.js' },
+      },
+      {
+        'old.js': "exports.default = (tree) => tree.write('old.txt', 'o');",
+        'a.js': "exports.default = (tree) => tree.write('a.txt', 'a');",
+      },
+    );
+    expect(await runInternalMigrate(makeCtx({ cwd: ws, selfRoot, flags: { only: 'old' } }))).toBe(
+      0,
+    );
+    expect(fs.existsSync(path.join(ws, 'old.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(ws, 'a.txt'))).toBe(false);
+    await expect(
+      runInternalMigrate(makeCtx({ cwd: ws, selfRoot, flags: { only: 'nope' } })),
+    ).rejects.toThrow(/no migration named "nope"\. Known: old, a/);
+    (console.log as jest.Mock).mockClear();
+    expect(await runInternalMigrate(makeCtx({ cwd: ws, selfRoot, flags: { list: true } }))).toBe(0);
+    const out = (console.log as jest.Mock).mock.calls.map((c) => String(c[0]));
+    expect(out[0]).toMatch(/^old\s+0\.1\.0\s+Old one$/);
+    expect(out[1]).toMatch(/^a\s+0\.3\.0$/);
+  });
+
   it('says when a migration had nothing to change', async () => {
     const { selfRoot, ws } = setup(
       {
