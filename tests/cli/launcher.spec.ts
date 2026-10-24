@@ -124,14 +124,13 @@ describe('workspaceNxProblem', () => {
     expect(workspaceNxProblem('adopt', ws())).toBeNull();
   });
 
-  it('names the nx migrate hops for an Nx 15 or 16 workspace', () => {
-    const from15 = workspaceNxProblem('adopt', ws('15.9.7'));
-    expect(from15).toContain('this workspace is on Nx 15.9.7; nx-polystack needs Nx 17-22');
-    expect(from15).toContain('NX_SKIP_PROVENANCE_CHECK=true npx nx migrate 16.9.1');
-    expect(from15).toContain('NX_MIGRATE_USE_LOCAL=true npx nx migrate 17.0.6');
-    const from16 = workspaceNxProblem('update', ws('16.9.1'));
-    expect(from16).not.toContain('16.9.1 --interactive');
-    expect(from16).toContain('npx nx migrate 17.0.6');
+  it('points an Nx 15 or 16 workspace at pstack upgrade nx', () => {
+    for (const v of ['15.9.7', '16.9.1']) {
+      expect(workspaceNxProblem('adopt', ws(v))).toBe(
+        `this workspace is on Nx ${v}; nx-polystack needs Nx 17-22. ` +
+          'Move it first with: pstack upgrade nx (one commit per Nx major, Angular unchanged).',
+      );
+    }
   });
 
   it('refuses an Nx newer than the plugin supports', () => {

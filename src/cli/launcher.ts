@@ -2,6 +2,8 @@ import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { installedVersion } from '../lib/utils/devkit-pin';
+
 import type { Flags } from './args';
 import type { LocalPlugin } from './context';
 import { CliError } from './types';
@@ -57,6 +59,7 @@ export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<str
   lib: { dir: '0.19.0' },
   csp: { import: '0.38.0', nonceSource: '1.2.5', env: '1.5.5' },
   infra: { lintStaged: '0.36.0' },
+  adopt: { compare: '1.8.0', removeOldScripts: '1.8.0' },
   migrate: {
     rollback: '0.13.0',
     config: '0.14.0',
@@ -194,16 +197,6 @@ const NEEDS_SUPPORTED_NX = new Set(
   [...WORKSPACE_COMMANDS, 'update'].filter((c) => c !== 'upgrade'),
 );
 
-function installedVersion(wsRoot: string, pkg: string): string | undefined {
-  try {
-    const file = path.join(wsRoot, 'node_modules', ...pkg.split('/'), 'package.json');
-    const version = JSON.parse(fs.readFileSync(file, 'utf8')).version;
-    return typeof version === 'string' ? version.replace(/^v/, '') : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 const majorOf = (v: string): number => Number(/^(\d+)\./.exec(v)?.[1] ?? NaN);
 
 /**
@@ -219,22 +212,16 @@ export function workspaceNxProblem(command: string, wsRoot: string): string | nu
   const major = majorOf(nx);
   if (Number.isNaN(major)) return null;
   if (major < NX_MAJORS.min) {
-    const steps =
-      major < 16
-        ? 'NX_SKIP_PROVENANCE_CHECK=true npx nx migrate 16.9.1 --interactive, then ' +
-          'NX_MIGRATE_USE_LOCAL=true npx nx migrate 17.0.6 --interactive'
-        : 'NX_MIGRATE_USE_LOCAL=true npx nx migrate 17.0.6 --interactive';
     return (
       `this workspace is on Nx ${nx}; nx-polystack needs Nx ${NX_MAJORS.min}-${NX_MAJORS.max}. ` +
-      `Move it first, one major at a time: ${steps} (each followed by npm install and ` +
-      'npx nx migrate --run-migrations). Take any @mouryaamit/nx-polystack entry out of ' +
-      'package.json before that, and review the diff: nx migrate reformats the JSON it touches.'
+      'Move it first with: pstack upgrade nx (one commit per Nx major, Angular unchanged).'
     );
   }
   if (major > NX_MAJORS.max) {
     return `this workspace is on Nx ${nx}; nx-polystack supports Nx ${NX_MAJORS.min}-${NX_MAJORS.max}.`;
   }
-  const devkit = installedVersion(wsRoot, '@nx/devkit');
+  // pstack update installs @nx/devkit of the workspace's Nx itself.
+  const devkit = command === 'update' ? undefined : installedVersion(wsRoot, '@nx/devkit');
   if (devkit && majorOf(devkit) !== major) {
     return (
       `@nx/devkit ${devkit} does not match nx ${nx}. Pin it to the workspace's Nx: ` +

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { loadJsonc, restoreJsonLayouts, snapshotJsonConfigs } from '../../lib/utils/json-layout';
+import { devkitPinFor, installedVersion as installedPackage } from '../../lib/utils/devkit-pin';
 import { flagString } from '../args';
 import { findWorkspaceRoot, resolveLocalPlugin } from '../context';
 import { execOrThrow, gitStatus } from '../exec';
@@ -138,17 +139,26 @@ export async function runUpdate(
   };
 
   // An explicit install: a plain "npm install" after editing a git-tag spec does not refetch.
+  // @nx/devkit of the workspace's Nx in the same install: left to npm, the plugin's devkit peer
+  // resolves to the newest Nx and the install fails (ERESOLVE) on an older workspace.
+  const devkit = devkitPinFor(
+    JSON.parse(pkgText.replace(/^\uFEFF/, '')),
+    installedPackage(root, 'nx'),
+  );
   try {
     deps.exec(
       'npm',
       [
         'install',
         `${PLUGIN_NAME}@${formatPluginSpec(target.to)}`,
+        ...(devkit ? [`@nx/devkit@${devkit}`] : []),
         pin.field === 'dependencies' ? '--save-prod' : '--save-dev',
         ...pinInstallFlags(),
+        ...(devkit && !pinInstallFlags().includes('--save-exact') ? ['--save-exact'] : []),
       ],
       root,
     );
+    if (devkit) console.log(`@nx/devkit pinned to ${devkit} (the workspace's Nx).`);
   } catch (err) {
     restore();
     throw new CliError(

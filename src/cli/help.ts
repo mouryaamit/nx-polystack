@@ -13,6 +13,8 @@ COMMANDS
   update      Upgrade this workspace's nx-polystack version and run its migrations
   upgrade     upgrade angular: move the workspace to the next Angular major (Nx, TypeScript,
               build and lint packages, Ionic, Capacitor, Node), one commit per step
+              upgrade nx: move an Nx 15 or 16 workspace to Nx 17 (where the plugin loads), one
+              major per commit, Angular unchanged
   preset      Bootstrap a workspace root skeleton in the current directory
   app         Scaffold a new application into an existing workspace
   lib         Scaffold a shared library (ts, angular, ionic, flutter, assets, styles,
@@ -84,6 +86,15 @@ OPTIONS — upgrade angular
   --no-commit                  Leave each step's changes uncommitted (with --to, stops after one)
   --dry-run                    Print the steps; change nothing
   Needs a clean git tree and the Node major of the step (Node 22 for Angular 21).
+
+OPTIONS — upgrade nx
+  --to=<major>                 16 or 17 (default 17); one nx migrate per major
+  --skip-check                 Skip "nx run-many -t build" after each step
+  --no-commit                  Leave the step uncommitted (one step only)
+  --dry-run                    Print the steps; change nothing
+  Keeps Angular and its packages where they are, the JSON files' layout, and Markdown and binary
+  files; nx-polystack comes out of package.json for the steps and goes back with @nx/devkit
+  pinned to the new Nx. Needs a clean git tree.
 
 OPTIONS — app
   --type=<type>                App type: angular | ionic | flutter  (required)
@@ -201,9 +212,16 @@ OPTIONS — migrate
 
 OPTIONS — adopt
   --app=<a,b>                  Only these apps (default: every Angular app without a release target)
-  --no-scripts                 Leave the build:<app>:<env> npm scripts as they are
+  --no-scripts                 Leave the build:<app>:<env> and build:all:<env> npm scripts as they are
+  --remove-old-scripts         Delete the old build scripts nothing uses any more (also on its own,
+                               after an earlier adopt)
+  --compare                    With --app=<app>: build it with the old script at --base (a temporary
+                               git worktree) and with its release target, for each env, and compare
+  --env=<a,b>                  --compare: only these envs (default: every release configuration)
+  --base=<commit>              --compare: the commit before adopt (default HEAD when adopt is not
+                               committed yet)
   --dry-run                    Show the changes without writing them
-  Writes docs/migrations/adopt.md. The workspace's own build scripts are not deleted.
+  Writes docs/migrations/adopt.md; --compare writes dist/pstack-compare/<app>/report.md.
 
 OPTIONS — infra
   --with=<parts>               docs | ci | quality | upgrades, comma-separated, or all | none
@@ -332,5 +350,8 @@ EXAMPLES
   pstack update 0.3.0 --dry-run
   pstack upgrade angular --dry-run
   pstack upgrade angular --to=18
+  pstack upgrade nx --dry-run
+  pstack adopt --compare --app=portal --base=HEAD~1
+  pstack adopt --remove-old-scripts --dry-run
 `.trimStart();
 }

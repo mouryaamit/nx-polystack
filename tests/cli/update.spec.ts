@@ -75,6 +75,29 @@ describe('pstack update', () => {
     ]);
   });
 
+  it('installs @nx/devkit pinned to the installed Nx with the plugin', async () => {
+    const ws = workspace();
+    writeJson(path.join(ws, 'node_modules/nx/package.json'), { name: 'nx', version: '17.0.6' });
+    const { calls, d } = deps();
+    expect(await runUpdate(makeCtx({ cwd: ws }), d)).toBe(0);
+    expect(calls[0]).toBe(
+      `npm install @mouryaamit/nx-polystack@${SPEC(
+        '0.3.0',
+      )} @nx/devkit@17.0.6 --save-dev --save-exact`,
+    );
+  });
+
+  it('leaves @nx/devkit alone when it is already pinned to the installed Nx', async () => {
+    const ws = workspace();
+    const pkg = readPkg(ws);
+    pkg.devDependencies['@nx/devkit'] = '17.0.6';
+    writeJson(path.join(ws, 'package.json'), pkg);
+    writeJson(path.join(ws, 'node_modules/nx/package.json'), { name: 'nx', version: '17.0.6' });
+    const { calls, d } = deps();
+    await runUpdate(makeCtx({ cwd: ws }), d);
+    expect(calls[0]).toBe(`npm install @mouryaamit/nx-polystack@${SPEC('0.3.0')} --save-dev`);
+  });
+
   it('moves a pin on the earlier repo name to the development repo (v0.38.2)', async () => {
     const ws = workspace();
     writeJson(path.join(ws, 'package.json'), {

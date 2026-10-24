@@ -3,6 +3,57 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.8.4
+
+- `pstack adopt --remove-old-scripts` counts a `tools/` script that app or library code imports
+  (`import '../../../tools/scripts/x'`) as in use: it is kept and no longer listed as a script
+  nothing starts.
+
+## 1.8.3
+
+- `pstack adopt` in a workspace whose Angular apps all build with the release target already (adopted
+  app by app, or before 1.8.0) moves `build:all:<env>` scripts that still run the workspace's own
+  script to `nx run-many -t release -c <env>`; with `--remove-old-scripts`, that script and the
+  helpers only it loaded are removed too. Before, they stayed, and so did the helpers they kept alive.
+
+## 1.8.2
+
+- `pstack adopt --compare` counts the obfuscated names the release target writes with its per-file
+  prefix (`_p1a2b3c_0x…`); it counted only half of them and reported obfuscation as weaker than it
+  is. Its report also says why vendor, polyfills and runtime can differ (module paths, as the old
+  build runs from a worktree).
+
+## 1.8.1
+
+- Layout-keeping JSON edits (`pstack update`, `pstack upgrade nx|angular`, `pstack adopt`) add a new key
+  in alphabetical place when the object was sorted (dependencies), so `@nrwl/*` renamed to `@nx/*` no
+  longer lands at the end of `devDependencies`. Found running `pstack upgrade nx` on an 18-app Nx 15
+  workspace.
+
+## 1.8.0
+
+- **`pstack upgrade nx`** moves an Nx 15 or 16 workspace to Nx 17.0.6, where the plugin loads: one
+  `nx migrate` per major (16.9.1, then 17.0.6), each with `npm install`, the migrations, a build check
+  and one commit. Angular and its packages stay where they are (with their migrations left out), the
+  plugin comes out of `package.json` for the steps and goes back with `@nx/devkit` pinned to the new
+  Nx, JSON files keep their layout, and the Markdown and binary files `nx migrate` text-replaces are
+  put back. The newest Nx CLI's provenance check and version lookup are worked around (the pinned
+  versions, then the workspace's own Nx).
+- **`pstack upgrade angular`** gets the same tidying for its `nx migrate` steps (JSON layout,
+  Markdown and binary files, `"v17.0.6"`-style versions, `@nx/devkit` pinned) and the same CLI
+  fallback.
+- **`@nx/devkit` pinned**: `pstack update` installs `@nx/devkit` of the workspace's Nx together with
+  the plugin (npm otherwise resolves the plugin's devkit peer to the newest Nx and fails), and
+  `pstack adopt` pins it in `package.json`.
+- **`pstack adopt`**: `build:all:<env>` scripts that ran the workspace's own script become
+  `nx run-many -t release -c <env>` when every app is adopted. `--remove-old-scripts` deletes the old
+  build pipeline scripts nothing uses any more (npm scripts, project.json, CI and git hooks are
+  checked; unused scripts outside the old build are listed, not deleted). `--compare --app=<app>`
+  builds the app with the old script (in a git worktree of `--base`) and with its release target for
+  each env and compares the file set, `.htaccess`, CSP nonce, build commit meta, encrypted env values,
+  obfuscation and image metadata, in `dist/pstack-compare/<app>/report.md`.
+- On an Nx 15 or 16 workspace, `pstack` now points at `pstack upgrade nx`.
+
 ## 1.7.2
 
 - **`pstack adopt` obfuscation**: adopt wrote `obfuscate: true`, which the release target rejects

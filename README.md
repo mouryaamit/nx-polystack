@@ -83,20 +83,21 @@ Known breakpoints when upgrading:
 
 ## Commands
 
-| Command                                  | What it does                                                               |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| `pstack new <dir>`                       | Create a workspace (installs dependencies, initialises git)                |
-| `pstack update`                          | Upgrade the workspace's plugin and run its migrations                      |
-| `pstack upgrade angular`                 | Move the workspace to the next Angular major (one commit per step)         |
-| `pstack app` / `pstack lib`              | Add an application or a shared library                                     |
-| `pstack env`                             | Add an environment to some or all apps                                     |
-| `pstack migrate`                         | Copy an existing project into the workspace (the source is never modified) |
-| `pstack adopt`                           | Move apps that build with the repo's own scripts to the release target     |
-| `pstack build`                           | Build every app (or some) for one environment                              |
-| `pstack csp`                             | Edit an app's CSP allowlist and write its server config                    |
-| `pstack hardening` / `pstack encryption` | Show or change release hardening and env encryption                        |
-| `pstack infra`                           | Add repo docs, CI gates, quality checks and the upgrade workflow           |
-| `pstack llm`                             | Refresh the AI assistant context files                                     |
+| Command                                  | What it does                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `pstack new <dir>`                       | Create a workspace (installs dependencies, initialises git)                                |
+| `pstack update`                          | Upgrade the workspace's plugin and run its migrations                                      |
+| `pstack upgrade angular`                 | Move the workspace to the next Angular major (one commit per step)                         |
+| `pstack upgrade nx`                      | Move an Nx 15 or 16 workspace to Nx 17 (Angular unchanged)                                 |
+| `pstack app` / `pstack lib`              | Add an application or a shared library                                                     |
+| `pstack env`                             | Add an environment to some or all apps                                                     |
+| `pstack migrate`                         | Copy an existing project into the workspace (the source is never modified)                 |
+| `pstack adopt`                           | Move apps that build with the repo's own scripts to the release target, compare the builds |
+| `pstack build`                           | Build every app (or some) for one environment                                              |
+| `pstack csp`                             | Edit an app's CSP allowlist and write its server config                                    |
+| `pstack hardening` / `pstack encryption` | Show or change release hardening and env encryption                                        |
+| `pstack infra`                           | Add repo docs, CI gates, quality checks and the upgrade workflow                           |
+| `pstack llm`                             | Refresh the AI assistant context files                                                     |
 
 Run `pstack --help` for every option. The full guide is the **[user manual](USER-MANUAL.md)**.
 
