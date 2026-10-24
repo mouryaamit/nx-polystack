@@ -44,7 +44,7 @@ describe('keepJsonLayout', () => {
     expect(out).toContain('"lint": "nx lint"');
     expect(out).toContain('    "nx": "17.0.7"');
     expect(out).toContain('"scripts": { "build": "nx build", "lint": "nx lint", "test": "jest" },');
-    expect(out).toContain('    "nx": "17.0.7",\n    "@nx/devkit": "17.0.6"\n');
+    expect(out).toContain('    "@nx/devkit": "17.0.6",\n    "@nx/js": "17.0.6",\n    "nx": "17.0.7"\n');
     expect(out).toContain('    "a": { "x": "1" }\n  }');
   });
 
@@ -82,6 +82,24 @@ describe('keepJsonLayout', () => {
       pj
         .replace(',\n    { "glob": ".htaccess", "input": "apps/web/src/", "output": "./" }', '')
         .replace('"2mb"', '"3mb"'),
+    );
+  });
+
+  it('keeps a sorted object sorted when keys are renamed', () => {
+    const pkg =
+      '{\n  "devDependencies": {\n    "@angular/cli": "15.2.11",\n    "@nrwl/angular": "15.9.7",\n    "nx": "15.9.7",\n    "typescript": "~4.8.4"\n  }\n}\n';
+    const value = {
+      devDependencies: {
+        '@angular/cli': '15.2.11',
+        nx: '17.0.6',
+        typescript: '~4.8.4',
+        '@nx/angular': '17.0.6',
+      },
+    };
+    expect(keepJsonLayout(jsonc!, pkg, JSON.stringify(value, null, 2))).toBe(
+      pkg
+        .replace('"@nrwl/angular": "15.9.7"', '"@nx/angular": "17.0.6"')
+        .replace('"nx": "15.9.7"', '"nx": "17.0.6"'),
     );
   });
 

@@ -3,6 +3,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import {
+  filterMigrations,
+  fixVersionPrefixes,
+  isRevertable,
+  keepAngularPackages,
+  loadSemver,
+  NX_HOP_MAX,
+  NX_HOP_MIN,
+  NX_HOPS,
+  versionOf,
+} from '../../lib/upgrade/nx-migrate';
+import {
   ANGULAR_PINS,
   AngularPins,
   INJECT_MIGRATION_ANGULAR,
@@ -11,6 +22,13 @@ import {
   MIN_ANGULAR,
   pinRange,
 } from '../../lib/upgrade/pins';
+import { withDevkitPin } from '../../lib/utils/devkit-pin';
+import {
+  keepJsonLayout,
+  loadJsonc,
+  restoreJsonLayouts,
+  snapshotJsonConfigs,
+} from '../../lib/utils/json-layout';
 import { flagBoolean, flagString } from '../args';
 import { findWorkspaceRoot } from '../context';
 import { gitStatus } from '../exec';
@@ -30,6 +48,8 @@ import { CliError, CommandContext } from '../types';
 export interface UpgradeDeps {
   /** Run a command with inherited stdio; throws on a non-zero exit. */
   exec(cmd: string, args: string[], cwd: string, env?: Record<string, string>): void;
+  /** Run a command and return its stdout ('' when it fails). */
+  capture?(cmd: string, args: string[], cwd: string): string;
   /** Porcelain status text, or null when not a git repo. */
   gitStatus(cwd: string): string | null;
   /** Major version of the Node running pstack. */
@@ -56,6 +76,10 @@ const defaultDeps: UpgradeDeps = {
         `"${cmd} ${args.join(' ')}" exited with code ${r.status ?? `signal ${r.signal}`}`,
       );
     }
+  },
+  capture(cmd, args, cwd) {
+    const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', shell: useShell(cmd) });
+    return r.status === 0 ? r.stdout : '';
   },
   gitStatus,
   nodeMajor: () => Number(process.versions.node.split('.')[0]),
@@ -268,6 +292,74 @@ export function repairHttpClientModule(root: string): string[] {
   return changed;
 }
 
+/**
+ * nx migrate with the CLI that works: the newest Nx CLI it downloads checks provenance (which older
+ * releases fail) and can fail to look versions up; the workspace's own Nx then runs it.
+ */
+function nxMigrate(
+  root: string,
+  args: string[],
+  deps: UpgradeDeps,
+  say: (line: string) => void,
+  attempts: (Record<string, string> | undefined)[],
+): void {
+  let last: Error | undefined;
+  for (const [i, env] of attempts.entries()) {
+    try {
+      deps.exec('npx', ['nx', 'migrate', ...args, '--interactive=false'], root, env);
+      return;
+    } catch (e) {
+      last = e as Error;
+      if (i < attempts.length - 1) {
+        say(
+          `nx migrate failed (${last.message}); retrying with ${Object.entries(
+            attempts[i + 1] ?? {},
+          )
+            .map(([k, v]) => `${k}=${v}`)
+            .join(' ')}`,
+        );
+      }
+    }
+  }
+  throw last;
+}
+
+/** @nx/devkit pinned to `nx` when the workspace declares it otherwise; true when changed. */
+function pinDeclaredDevkit(root: string, nx: string): boolean {
+  const file = path.join(root, 'package.json');
+  const pkg = readJsonFile(file);
+  const spec = declared(pkg, '@nx/devkit');
+  if (spec === undefined || spec === nx) return false;
+  writeJsonFile(file, withDevkitPin(pkg, nx));
+  return true;
+}
+
+/**
+ * After a step: the JSON files keep their own layout (only values changed), Markdown and binary
+ * files nx migrate text-replaced are put back.
+ */
+function tidyAfterMigrate(
+  root: string,
+  snapshot: Map<string, string>,
+  deps: UpgradeDeps,
+  say: (line: string) => void,
+): void {
+  const jsonc = loadJsonc(root);
+  if (jsonc) {
+    const kept = restoreJsonLayouts(root, snapshot, jsonc);
+    if (kept.length > 0) say(`kept the layout of ${kept.length} JSON file(s); only values changed`);
+  }
+  const changed = (deps.capture?.('git', ['diff', '--name-only'], root) ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const revert = changed.filter((f) => isRevertable(root, f));
+  if (revert.length > 0) {
+    deps.exec('git', ['checkout', '--', ...revert], root);
+    say(`put back what nx migrate rewrote in Markdown and binary files: ${revert.join(', ')}`);
+  }
+}
+
 /** What one step does, in order (the dry-run plan and the log headings). */
 export function stepPlan(from: number, to: number, root: string): string[] {
   const pins = ANGULAR_PINS[to];
@@ -332,15 +424,31 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
     fs.rmSync(path.join(root, 'migrations.json'), { force: true });
   };
 
+  const snapshot = snapshotJsonConfigs(root);
+  const attempts = [
+    undefined,
+    { NX_SKIP_PROVENANCE_CHECK: 'true' },
+    { NX_MIGRATE_USE_LOCAL: 'true' },
+  ];
+  const afterMigrate = () => {
+    const file = path.join(root, 'package.json');
+    const pkg = readJsonFile(file);
+    if (fixVersionPrefixes(pkg).length > 0) writeJsonFile(file, pkg);
+    const nx = (declared(readJsonFile(file), 'nx') ?? '').replace(/^[\^~=]/, '');
+    if (/^\d+\.\d+\.\d+$/.test(nx) && pinDeclaredDevkit(root, nx))
+      say(`@nx/devkit pinned to ${nx}`);
+  };
+
   if (pinNode(root, pins.node)) say(`engines.node and .nvmrc set to Node ${pins.node}`);
 
   if (to === 16 && pins.nx === ANGULAR_PINS[o.from].nx) {
     say(`nx migrate @angular/core@${pins.angular}`);
-    npx(['nx', 'migrate', `@angular/core@${pins.angular}`, '--interactive=false']);
+    nxMigrate(root, [`@angular/core@${pins.angular}`], deps, say, attempts);
   } else {
     say(`nx migrate ${pins.nx}`);
-    npx(['nx', 'migrate', pins.nx, '--interactive=false']);
+    nxMigrate(root, [pins.nx], deps, say, attempts);
   }
+  afterMigrate();
   say('npm install');
   npm(['install']);
   runMigrations();
@@ -405,6 +513,8 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
     }
   }
 
+  tidyAfterMigrate(root, snapshot, deps, say);
+
   if (o.check) {
     say('check: nx run-many -t build lint');
     npx(['nx', 'run-many', '-t', 'build', 'lint']);
@@ -426,9 +536,10 @@ export async function runUpgrade(
   deps: UpgradeDeps = defaultDeps,
 ): Promise<number> {
   const what = ctx.positionals[0];
+  if (what === 'nx') return runUpgradeNx(ctx, deps);
   if (what !== 'angular') {
     throw new CliError(
-      `pstack upgrade takes what to upgrade: "pstack upgrade angular"${
+      `pstack upgrade takes what to upgrade: "pstack upgrade angular" or "pstack upgrade nx"${
         what ? ` (got "${what}")` : ''
       }.`,
     );
@@ -513,6 +624,220 @@ export async function runUpgrade(
     }
     runStep({ root, from, to, check, commit }, deps);
     deps.log(`\n✔ Angular ${to} done.`);
+  }
+  return 0;
+}
+
+const PLUGIN = '@mouryaamit/nx-polystack';
+
+/** Where the plugin is declared, so `upgrade nx` can take it out and put it back. */
+function pluginPin(pkg: Json): { field: string; spec: string } | undefined {
+  for (const field of ['dependencies', 'devDependencies']) {
+    const deps = pkg[field];
+    if (isObject(deps) && typeof deps[PLUGIN] === 'string') {
+      return { field, spec: deps[PLUGIN] as string };
+    }
+  }
+  return undefined;
+}
+
+/** The workspace's Nx major: installed nx, else the declared one. */
+export function workspaceNxMajor(root: string): number | undefined {
+  const pkg = readJsonFile(path.join(root, 'package.json'));
+  return majorOfSpec(versionOf(root, pkg, 'nx'));
+}
+
+interface NxStepOptions {
+  root: string;
+  to: number;
+  last: boolean;
+  /** The plugin pin taken out before the first step, put back after the last. */
+  plugin?: { field: string; spec: string };
+  check: boolean;
+  commit: boolean;
+}
+
+/** What one Nx step does (dry-run plan and log headings). */
+export function nxStepPlan(to: number, last: boolean, plugin: boolean): string[] {
+  const lines = [
+    `nx migrate ${NX_HOPS[to]} (Angular and its packages stay where they are)`,
+    'npm install, then the migrations nx migrate wrote (Angular ones left out)',
+    'JSON files keep their layout; Markdown and binary files nx migrate rewrote are put back',
+  ];
+  if (last) {
+    lines.push(
+      plugin
+        ? `nx-polystack back in package.json, @nx/devkit pinned to ${NX_HOPS[to]}`
+        : `@nx/devkit pinned to ${NX_HOPS[to]} when declared`,
+    );
+  }
+  return lines;
+}
+
+function runNxStep(o: NxStepOptions, deps: UpgradeDeps): void {
+  const { root, to } = o;
+  const version = NX_HOPS[to];
+  const say = (line: string) => deps.log(`\n▶ Nx ${to}: ${line}`);
+  const pkgFile = path.join(root, 'package.json');
+  const snapshot = snapshotJsonConfigs(root);
+  const before = readJsonFile(pkgFile);
+
+  say(`nx migrate ${version}`);
+  nxMigrate(root, [version], deps, say, [
+    { NX_SKIP_PROVENANCE_CHECK: 'true' },
+    { NX_MIGRATE_USE_LOCAL: 'true' },
+  ]);
+
+  const after = readJsonFile(pkgFile);
+  const kept = keepAngularPackages(before, after);
+  if (o.last) {
+    if (o.plugin) {
+      const deps2 = isObject(after[o.plugin.field]) ? (after[o.plugin.field] as Json) : {};
+      after[o.plugin.field] = { ...deps2, [PLUGIN]: o.plugin.spec };
+    }
+    const pinned = withDevkitPin(after, version);
+    if (o.plugin || declared(after, '@nx/devkit') !== undefined) Object.assign(after, pinned);
+  }
+  writeJsonFile(pkgFile, after);
+  if (kept.length > 0) say(`kept Angular's packages where they were: ${kept.join(', ')}`);
+
+  const keptVersion = (name: string) => versionOf(root, before, name);
+  const dropped = filterMigrations(
+    path.join(root, 'migrations.json'),
+    keptVersion,
+    loadSemver(root),
+  );
+  if (dropped.length > 0) say(`left out the Angular migrations: ${dropped.join(', ')}`);
+
+  say('npm install');
+  deps.exec('npm', ['install'], root);
+  if (fs.existsSync(path.join(root, 'migrations.json'))) {
+    say('running migrations.json');
+    deps.exec('npx', ['nx', 'migrate', '--run-migrations', '--if-exists'], root);
+    fs.rmSync(path.join(root, 'migrations.json'), { force: true });
+  }
+  tidyAfterMigrate(root, snapshot, deps, say);
+
+  if (o.check) {
+    say('check: nx run-many -t build');
+    deps.exec('npx', ['nx', 'run-many', '-t', 'build'], root);
+  }
+  if (o.commit) {
+    say('commit');
+    deps.exec('git', ['add', '-A'], root);
+    deps.exec('git', ['commit', '-m', `chore: upgrade to Nx ${version} (pstack upgrade nx)`], root);
+  }
+}
+
+/**
+ * pstack upgrade nx [--to=16|17] [--skip-check] [--no-commit] [--dry-run]: moves an Nx 15 or 16
+ * workspace to Nx 17 (where the plugin loads), one major per commit, Angular unchanged.
+ */
+export async function runUpgradeNx(
+  ctx: CommandContext,
+  deps: UpgradeDeps = defaultDeps,
+): Promise<number> {
+  const root = findWorkspaceRoot(ctx.cwd);
+  if (!root || !fs.existsSync(path.join(root, 'package.json'))) {
+    throw new CliError('run "pstack upgrade nx" inside an Nx workspace (nx.json, package.json).');
+  }
+  const current = workspaceNxMajor(root);
+  if (current === undefined) throw new CliError('this workspace has no nx in package.json.');
+  if (current >= NX_HOP_MAX) {
+    deps.log(
+      `The workspace is on Nx ${current}; nx-polystack loads on it. Later Nx versions come with ` +
+        'the Angular majors: pstack upgrade angular.',
+    );
+    return 0;
+  }
+  if (current < NX_HOP_MIN) {
+    throw new CliError(
+      `the workspace is on Nx ${current}; pstack upgrade nx starts from Nx ${NX_HOP_MIN}. ` +
+        `Move it to Nx ${NX_HOP_MIN} with nx migrate first.`,
+    );
+  }
+  const angular = workspaceAngularMajor(root);
+  if (angular !== undefined && angular < MIN_ANGULAR) {
+    throw new CliError(
+      `the workspace is on Angular ${angular}; Nx ${NX_HOP_MAX} needs Angular ${MIN_ANGULAR} or later.`,
+    );
+  }
+  const toFlag = flagString(ctx.flags, 'to');
+  if (ctx.flags['to'] === true) throw new CliError('--to needs a major, e.g. --to=17');
+  let target = toFlag === undefined ? NX_HOP_MAX : Number(toFlag);
+  if (!Number.isInteger(target) || target <= current || target > NX_HOP_MAX) {
+    throw new CliError(
+      `--to must be an Nx major from ${current + 1} to ${NX_HOP_MAX} (got "${toFlag}").`,
+    );
+  }
+  const check = !flagBoolean(ctx.flags, 'skipCheck');
+  const commit = !flagBoolean(ctx.flags, 'noCommit');
+  const plugin = pluginPin(readJsonFile(path.join(root, 'package.json')));
+  if (!commit && target > current + 1) {
+    if (plugin) {
+      throw new CliError(
+        '--no-commit runs one step, but nx-polystack has to come out of package.json until the ' +
+          `last one (Nx ${NX_HOP_MAX}); run without --no-commit (each step is its own commit).`,
+      );
+    }
+    deps.log(`--no-commit: only the Nx ${current + 1} step runs; commit it, then run again.`);
+    target = current + 1;
+  }
+
+  if (plugin) {
+    deps.log(
+      `\nnx-polystack (${plugin.spec}) needs Nx ${NX_HOP_MAX}: it comes out of package.json for the ` +
+        'steps and goes back after the last one.',
+    );
+  }
+  for (let to = current + 1; to <= target; to++) {
+    deps.log(`\nNx ${to - 1} → ${to}:`);
+    for (const line of nxStepPlan(to, to === target, !!plugin)) deps.log(`  - ${line}`);
+    if (check) deps.log('  - check: nx run-many -t build');
+    if (commit) deps.log('  - one commit for the step');
+  }
+  if (ctx.dryRun) {
+    deps.log('\nDry run: nothing was changed.');
+    return 0;
+  }
+
+  const status = deps.gitStatus(root);
+  if (status === null) {
+    throw new CliError('pstack upgrade nx needs a git repository (each step is one commit).');
+  }
+  if (status.trim() !== '') {
+    throw new CliError('commit or stash your changes first; each upgrade step is its own commit.');
+  }
+  if (deps.nodeMajor() < 18) {
+    throw new CliError(
+      `Nx ${NX_HOP_MAX} needs Node 18 or later; this is Node ${deps.nodeMajor()}.`,
+    );
+  }
+
+  if (plugin) {
+    // The plugin's peers (nx and @nx/devkit 17+) make every npm install of an older Nx fail.
+    const file = path.join(root, 'package.json');
+    const text = fs.readFileSync(file, 'utf8');
+    const pkg = readJsonFile(file);
+    delete (pkg[plugin.field] as Json)[PLUGIN];
+    const jsonc = loadJsonc(root);
+    const after = JSON.stringify(pkg, null, 2);
+    fs.writeFileSync(file, (jsonc && keepJsonLayout(jsonc, text, after)) || `${after}\n`);
+  }
+  for (let to = current + 1; to <= target; to++) {
+    runNxStep({ root, to, last: to === NX_HOP_MAX, plugin, check, commit }, deps);
+    deps.log(`\n✔ Nx ${NX_HOPS[to]} done.`);
+  }
+  if (plugin && target < NX_HOP_MAX) {
+    deps.log(
+      `\nnx-polystack stays out of package.json until the workspace is on Nx ${NX_HOP_MAX}; ` +
+        `add it back with: npm i -D ${PLUGIN}@${plugin.spec} @nx/devkit@${NX_HOPS[NX_HOP_MAX]}`,
+    );
+  }
+  if (plugin && target === NX_HOP_MAX) {
+    deps.log(
+      `\nnx-polystack ${plugin.spec} is back; "pstack update" moves it to the newest release.`,
+    );
   }
   return 0;
 }

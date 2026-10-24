@@ -7,11 +7,14 @@ import {
 } from '../../lib/env-encryption/workspace';
 import { adoptHtaccess, htaccessNote } from '../../lib/release/htaccess-adopt';
 import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
+import { devkitPinFor, installedVersion, withDevkitPin } from '../../lib/utils/devkit-pin';
+import { keepJsonLayout, loadJsonc } from '../../lib/utils/json-layout';
 import { readProjects } from '../../lib/utils/project-json-files';
 import { addReleaseTarget, angularAppNpmScripts } from '../migrate/angular-project-json';
 import { readBuildScripts, shapeReleaseTarget } from '../migrate/nx/build-scripts';
 import { applySourceEnvEncryption } from '../migrate/nx/env-encryption';
 
+import { findOldScripts, recordedScripts } from './old-scripts';
 import { readSourcePipeline, SourcePipeline } from './pipeline';
 
 export interface AdoptGeneratorSchema {
@@ -19,6 +22,11 @@ export interface AdoptGeneratorSchema {
   projects?: string[];
   /** Point the apps' build:<app>:<env> npm scripts at the release target (default true). */
   scripts?: boolean;
+  /**
+   * Delete the old build pipeline scripts nothing uses any more (after the apps are adopted;
+   * also on its own, in a workspace adopted earlier).
+   */
+  removeOldScripts?: boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -38,6 +46,10 @@ export interface AdoptResult {
   skipped: string[];
   notes: string[];
   scripts: Record<string, string>;
+  /** Old pipeline scripts deleted (removeOldScripts). */
+  removed: string[];
+  /** Scripts under tools/ nothing starts, outside the old pipeline (left in place). */
+  unreferenced: string[];
 }
 
 /** Angular apps of the workspace that build without the plugin: build target, no release target. */
@@ -228,6 +240,132 @@ export function setScriptsInPlace(tree: Tree, scripts: Record<string, string>): 
   });
 }
 
+/**
+ * @nx/devkit pinned to the installed nx in package.json (text edit, layout kept): the plugin's
+ * devkit peer otherwise resolves to the newest Nx on the next install.
+ */
+function pinDevkit(tree: Tree, notes: string[]): void {
+  if (!tree.exists('package.json')) return;
+  const nx = installedVersion(tree.root, 'nx');
+  const before = tree.read('package.json', 'utf8') ?? '';
+  let pkg: Json;
+  try {
+    pkg = JSON.parse(before) as Json;
+  } catch {
+    return;
+  }
+  const version = devkitPinFor(pkg, nx);
+  if (!version) return;
+  const jsonc = loadJsonc(tree.root);
+  const after = JSON.stringify(withDevkitPin(pkg, version), null, 2);
+  tree.write('package.json', (jsonc && keepJsonLayout(jsonc, before, after)) || `${after}\n`);
+  notes.push(
+    `\`@nx/devkit\` pinned to ${version} (the workspace's Nx)` +
+      (installedVersion(tree.root, '@nx/devkit') === version ? '.' : '; run npm install.'),
+  );
+}
+
+/** The configurations of a project's plugin release target. */
+function releaseEnvs(pj: Json): string[] {
+  const release = (pj['targets'] as Record<string, Json> | undefined)?.['release'];
+  if (!isObject(release) || release['executor'] !== POLYSTACK_BUILD_EXECUTOR) return [];
+  return Object.keys((release['configurations'] as Json | undefined) ?? {});
+}
+
+/**
+ * Sets `build:all:<env>` scripts that run a workspace script to `nx run-many -t release -c
+ * <env>` (for the envs the release targets have) in `out`; returns the scripts they ran.
+ */
+function buildAllScripts(
+  scripts: Record<string, string>,
+  envs: Set<string>,
+  out: Record<string, string>,
+): string[] {
+  const replaced: string[] = [];
+  for (const [key, cmd] of Object.entries(scripts)) {
+    const env = /^build:all:([\w-]+)$/.exec(key)?.[1];
+    if (!env || !envs.has(env) || /^\s*(npx\s+)?nx\s/.test(cmd)) continue;
+    out[key] = `nx run-many -t release -c ${env}`;
+    const file = /\bnode\s+(['"]?)([\w./-]+\.(?:c|m)?js)\1/.exec(cmd)?.[2];
+    if (file) replaced.push(file.replace(/^\.\//, ''));
+  }
+  return replaced;
+}
+
+/**
+ * In a workspace whose Angular apps all build with the release target already: build:all:<env>
+ * scripts still running the workspace's own script move to nx run-many. Returns those scripts.
+ */
+function switchBuildAll(tree: Tree, options: AdoptGeneratorSchema, result: AdoptResult): string[] {
+  if (options.scripts === false || (options.projects && options.projects.length > 0)) return [];
+  if (!tree.exists('package.json')) return [];
+  const pkg = readJson<{ scripts?: Record<string, string> }>(tree, 'package.json');
+  const envs = new Set(readProjects(tree).flatMap(({ json }) => releaseEnvs(json as Json)));
+  const scripts: Record<string, string> = {};
+  const replaced = buildAllScripts(pkg.scripts ?? {}, envs, scripts);
+  if (replaced.length === 0) return [];
+  setScriptsInPlace(tree, scripts);
+  result.scripts = scripts;
+  logger.info(
+    `adopt: ${Object.keys(scripts).join(', ')} now run every release target (nx run-many).`,
+  );
+  return [...new Set(replaced)].sort();
+}
+
+/** Deletes the old pipeline scripts nothing uses any more (see old-scripts.ts). */
+function removeOldScripts(tree: Tree, oldScripts: string[], result: AdoptResult): void {
+  const previous = tree.exists(ADOPT_REPORT) ? tree.read(ADOPT_REPORT, 'utf8') ?? '' : '';
+  const found = findOldScripts(tree, [...oldScripts, ...recordedScripts(previous)]);
+  for (const f of found.removable) tree.delete(f);
+  result.removed = found.removable;
+  result.unreferenced = found.unreferenced;
+  logger.info(
+    found.removable.length > 0
+      ? `adopt: removed the old build scripts nothing uses any more: ${found.removable.join(', ')}`
+      : 'adopt: no old build script left to remove.',
+  );
+  if (found.unreferenced.length > 0) {
+    logger.info(
+      `adopt: not part of the old build, nothing starts them; left in place: ${found.unreferenced.join(
+        ', ',
+      )}`,
+    );
+  }
+}
+
+function removalLines(result: AdoptResult): string[] {
+  if (result.removed.length === 0 && result.unreferenced.length === 0) return [];
+  const lines = ['## Old scripts', ''];
+  if (result.removed.length > 0) {
+    lines.push(`Removed (nothing uses them any more): ${result.removed.map(code).join(', ')}.`, '');
+  }
+  if (result.unreferenced.length > 0) {
+    lines.push(
+      'Nothing starts these, but they are not part of the old build, so they were left: ' +
+        `${result.unreferenced.map(code).join(', ')}.`,
+      '',
+    );
+  }
+  return lines;
+}
+
+function appendRemovalReport(tree: Tree, result: AdoptResult): void {
+  const scripts = Object.entries(result.scripts);
+  const lines = [
+    ...(scripts.length > 0
+      ? ['## build:all scripts', '', ...scripts.map(([k, v]) => `- ${code(k)}: ${code(v)}`), '']
+      : []),
+    ...removalLines(result),
+  ];
+  if (lines.length === 0) return;
+  const previous = tree.exists(ADOPT_REPORT)
+    ? tree.read(ADOPT_REPORT, 'utf8') ?? ''
+    : '# pstack adopt\n';
+  let kept = previous.replace(/\n## Old scripts\n[\s\S]*?(?=\n## |$)/, '\n');
+  if (scripts.length > 0) kept = kept.replace(/\n## build:all scripts\n[\s\S]*?(?=\n## |$)/, '\n');
+  tree.write(ADOPT_REPORT, `${kept.replace(/\n*$/, '\n\n')}${lines.join('\n')}`);
+}
+
 function report(result: AdoptResult, pipeline: SourcePipeline, customScripts: string[]): string {
   const lines = ['# pstack adopt', ''];
   lines.push(
@@ -267,13 +405,20 @@ function report(result: AdoptResult, pipeline: SourcePipeline, customScripts: st
           : 'no'
       }; console removal: ${pipeline.dropConsole ? 'yes' : 'no'}`,
       '',
-      'Check before switching CI: build one app both ways for each env and compare ' +
-        '`dist/apps/<app>` (index.html, the .htaccess, the encrypted env values in main.js). ' +
-        `The old scripts (${customScripts.map(code).join(', ')}) are left in place.`,
+      'Check before switching CI: `pstack adopt --compare --app=<app> --base=<commit before adopt>` ' +
+        'builds an app both ways for each env and compares the output (files, .htaccess, nonce, ' +
+        'encrypted env values, obfuscation, image metadata).',
+      '',
+      `Old build scripts: ${customScripts.map(code).join(', ') || 'none'}.` +
+        (result.removed.length > 0
+          ? ''
+          : ' They are left in place; `pstack adopt --remove-old-scripts` deletes the ones nothing ' +
+            'uses any more.'),
       '',
     );
   }
   if (result.notes.length > 0) lines.push('## Notes', '', ...result.notes.map((n) => `- ${n}`), '');
+  lines.push(...removalLines(result));
   const scripts = Object.entries(result.scripts);
   if (scripts.length > 0) {
     lines.push('## npm scripts', '', ...scripts.map(([k, v]) => `- ${code(k)}: ${code(v)}`), '');
@@ -292,7 +437,14 @@ export default async function adoptGenerator(
   tree: Tree,
   options: AdoptGeneratorSchema = {},
 ): Promise<AdoptResult> {
-  const result: AdoptResult = { adopted: [], skipped: [], notes: [], scripts: {} };
+  const result: AdoptResult = {
+    adopted: [],
+    skipped: [],
+    notes: [],
+    scripts: {},
+    removed: [],
+    unreferenced: [],
+  };
   let candidates = adoptCandidates(tree);
   if (options.projects && options.projects.length > 0) {
     const wanted = new Set(options.projects);
@@ -312,6 +464,13 @@ export default async function adoptGenerator(
   }
   candidates = candidates.filter((c) => !c.reason);
   if (candidates.length === 0) {
+    // Adopted earlier (before adopt moved build:all, or app by app): move it now.
+    const replaced = result.skipped.length === 0 ? switchBuildAll(tree, options, result) : [];
+    if (options.removeOldScripts) removeOldScripts(tree, replaced, result);
+    if (replaced.length > 0 || options.removeOldScripts) {
+      appendRemovalReport(tree, result);
+      return result;
+    }
     logger.info('adopt: no Angular app builds without the plugin; nothing to do.');
     return result;
   }
@@ -360,10 +519,25 @@ export default async function adoptGenerator(
         "build scripts; set `baseHref` on their release target's configurations.",
     );
   }
+  // build:all:<env> through the workspace's own script: every app now builds with its release
+  // target, so nx builds them all (only when every candidate was adopted).
+  const replacedAll: string[] = [];
+  if (options.scripts !== false && (!options.projects || options.projects.length === 0)) {
+    const envs = new Set(
+      result.adopted.flatMap((name) => {
+        const c = candidates.find((x) => x.name === name);
+        return c ? releaseEnvs(readJson<Json>(tree, `${c.root}/project.json`)) : [];
+      }),
+    );
+    replacedAll.push(...buildAllScripts(pkg.scripts ?? {}, envs, scripts));
+  }
   if (tree.exists('package.json')) setScriptsInPlace(tree, scripts);
   result.scripts = scripts;
+  pinDevkit(tree, result.notes);
 
-  tree.write(ADOPT_REPORT, report(result, pipeline, buildScripts.customScripts));
+  const oldScripts = [...new Set([...buildScripts.customScripts, ...replacedAll])].sort();
+  if (options.removeOldScripts) removeOldScripts(tree, oldScripts, result);
+  tree.write(ADOPT_REPORT, report(result, pipeline, oldScripts));
   logger.info(
     `adopt: ${result.adopted.length} app(s) now build with nx run <app>:release:<env> ` +
       `(${result.adopted.join(', ')}). Report: ${ADOPT_REPORT}`,

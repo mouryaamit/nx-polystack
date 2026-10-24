@@ -15,6 +15,11 @@
       "type": "boolean",
       "description": "Point the apps' build:<app>:<env> npm scripts at nx run <app>:release:<env>.",
       "default": true
+    },
+    "removeOldScripts": {
+      "type": "boolean",
+      "description": "Delete the old build pipeline scripts nothing uses any more (package.json, project.json, CI and git hooks are checked).",
+      "default": false
     }
   },
   "required": []

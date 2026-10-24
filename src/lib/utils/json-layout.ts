@@ -20,14 +20,17 @@ export interface JsoncParser {
 
 /** jsonc-parser from the workspace's (or else the plugin's) nx install, or null. */
 export function loadJsonc(workspaceRoot: string): JsoncParser | null {
-  try {
-    const nxPkg = require.resolve('nx/package.json', { paths: [workspaceRoot, __dirname] });
-    const resolved = require.resolve('jsonc-parser', { paths: [path.dirname(nxPkg)] });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require(resolved) as JsoncParser;
-  } catch {
-    return null;
+  for (const from of [workspaceRoot, __dirname]) {
+    try {
+      const nxPkg = require.resolve('nx/package.json', { paths: [from] });
+      const resolved = require.resolve('jsonc-parser', { paths: [path.dirname(nxPkg)] });
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require(resolved) as JsoncParser;
+    } catch {
+      // try the next install
+    }
   }
+  return null;
 }
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -138,8 +141,16 @@ export function keepJsonLayout(jsonc: JsoncParser, before: string, after: string
     const one = !text.slice(parent.offset, parent.offset + parent.length).includes('\n');
     const keyOf = (p: JsonNode) => p.children?.[0]?.value;
     let anchor: JsonNode | undefined;
-    for (let i = order.indexOf(key) - 1; i >= 0 && !anchor; i--) {
-      anchor = props.find((p) => keyOf(p) === order[i]);
+    const names = props.map((p) => String(keyOf(p)));
+    const sorted =
+      names.length > 1 && names.every((n, i) => i === 0 || names[i - 1].localeCompare(n) <= 0);
+    if (sorted) {
+      // A sorted object (dependencies) stays sorted: after the last key that sorts before it.
+      for (const p of props) if (String(keyOf(p)).localeCompare(key) < 0) anchor = p;
+    } else {
+      for (let i = order.indexOf(key) - 1; i >= 0 && !anchor; i--) {
+        anchor = props.find((p) => keyOf(p) === order[i]);
+      }
     }
     const name = JSON.stringify(key);
     if (props.length === 0) {

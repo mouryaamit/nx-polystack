@@ -49,7 +49,14 @@ async function main(argv: string[]): Promise<number> {
     return 1;
   }
 
-  if (local && wsRoot && shouldDelegate({ command, flags, env: process.env, selfRoot, local })) {
+  // upgrade nx runs before the workspace's plugin can load (Nx 15/16): the global CLI runs it.
+  const runHere = command === 'upgrade' && positionals[0] === 'nx';
+  if (
+    !runHere &&
+    local &&
+    wsRoot &&
+    shouldDelegate({ command, flags, env: process.env, selfRoot, local })
+  ) {
     try {
       assertLocalSupports(command, local.version, flags);
     } catch (err: unknown) {
