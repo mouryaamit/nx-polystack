@@ -20,6 +20,10 @@
       "type": "boolean",
       "description": "Delete the old build pipeline scripts nothing uses any more (package.json, project.json, CI and git hooks are checked).",
       "default": false
+    },
+    "report": {
+      "type": ["string", "boolean"],
+      "description": "Where the report goes (workspace-relative path; a folder ending in / gets pstack-adopt.md), or false for none. Saved as nx.json pstack.adopt.report. Default docs/migrations/adopt.md."
     }
   },
   "required": []

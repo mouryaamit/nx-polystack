@@ -340,6 +340,41 @@ describe('pstack adopt', () => {
     expect(report).not.toContain('nonce-patch');
   });
 
+  it('writes the report where --report says, saves it in nx.json and moves an earlier one', async () => {
+    const ws = workspace();
+    await runAdopt(makeCtx({ cwd: ws, flags: { app: 'admin' } }));
+    expect(fs.existsSync(path.join(ws, 'docs/migrations/adopt.md'))).toBe(true);
+    const nxBefore = fs.readFileSync(path.join(ws, 'nx.json'), 'utf8');
+
+    await runAdopt(makeCtx({ cwd: ws, flags: { report: '.ai-context/context/modules/misc/' } }));
+    const file = path.join(ws, '.ai-context/context/modules/misc/pstack-adopt.md');
+    expect(fs.existsSync(path.join(ws, 'docs/migrations/adopt.md'))).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toContain('`portal`');
+    const nx = JSON.parse(fs.readFileSync(path.join(ws, 'nx.json'), 'utf8'));
+    expect(nx.pstack.adopt.report).toBe('.ai-context/context/modules/misc/pstack-adopt.md');
+    expect(nx.npmScope).toBe(JSON.parse(nxBefore).npmScope);
+
+    // Later runs use the saved path.
+    await runAdopt(makeCtx({ cwd: ws, flags: { removeOldScripts: true } }));
+    expect(fs.existsSync(path.join(ws, 'docs/migrations/adopt.md'))).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toContain('## Old scripts');
+  });
+
+  it('writes no report with --no-report, and refuses a path outside the workspace', async () => {
+    const ws = workspace();
+    await runAdopt(makeCtx({ cwd: ws, flags: { noReport: true } }));
+    expect(fs.existsSync(path.join(ws, 'docs/migrations/adopt.md'))).toBe(false);
+    expect(JSON.parse(fs.readFileSync(path.join(ws, 'nx.json'), 'utf8')).pstack.adopt.report).toBe(
+      false,
+    );
+    await expect(
+      runAdopt(makeCtx({ cwd: workspace(), flags: { report: '../elsewhere.md' } })),
+    ).rejects.toThrow(/inside the workspace/);
+    await expect(runAdopt(makeCtx({ cwd: workspace(), flags: { report: true } }))).rejects.toThrow(
+      /needs a path/,
+    );
+  });
+
   it('pins @nx/devkit to the installed nx, keeping the package.json layout', async () => {
     const ws = workspace();
     writeJson(path.join(ws, 'node_modules/nx/package.json'), { name: 'nx', version: '17.0.6' });

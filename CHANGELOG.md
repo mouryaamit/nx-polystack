@@ -3,6 +3,16 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.8.5
+
+- `pstack adopt --report=<path>` writes the report somewhere else (a folder ending in `/` gets
+  `pstack-adopt.md`) and `--no-report` writes none, for repos that only allow Markdown in some
+  folders. The choice is saved as `pstack.adopt.report` in `nx.json`; a report already at
+  `docs/migrations/adopt.md` moves to the new path.
+- `pstack adopt --compare --old-dir=<path> --env=<env>` compares against a build made elsewhere,
+  such as a clone of the main branch with its own `npm install`, instead of a worktree that shares
+  this checkout's `node_modules`.
+
 ## 1.8.4
 
 - `pstack adopt --remove-old-scripts` counts a `tools/` script that app or library code imports

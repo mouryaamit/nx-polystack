@@ -194,7 +194,9 @@ export function renderReport(app: string, base: string, byEnv: Record<string, Ch
   const lines = [
     `# pstack adopt --compare: ${app}`,
     '',
-    `Old build: the workspace's own script at \`${base}\`. New build: \`nx run ${app}:release:<env>\`.`,
+    `Old build: ${
+      /[\\/]/.test(base) ? `\`${base}\`` : `the workspace's own script at \`${base}\``
+    }. New build: \`nx run ${app}:release:<env>\`.`,
     '',
   ];
   for (const [env, checks] of Object.entries(byEnv)) {

@@ -220,8 +220,14 @@ OPTIONS — adopt
   --env=<a,b>                  --compare: only these envs (default: every release configuration)
   --base=<commit>              --compare: the commit before adopt (default HEAD when adopt is not
                                committed yet)
+  --old-dir=<path>             --compare with one --env: compare against a build made elsewhere
+                               (e.g. a clone of master with its own npm install) instead (v1.8.5)
+  --report=<path>              Write the report there (a folder ending in / gets pstack-adopt.md),
+                               saved as nx.json pstack.adopt.report for later runs (v1.8.5)
+  --no-report                  Write no report (saved the same way)
   --dry-run                    Show the changes without writing them
-  Writes docs/migrations/adopt.md; --compare writes dist/pstack-compare/<app>/report.md.
+  Writes docs/migrations/adopt.md unless --report says otherwise; --compare writes
+  dist/pstack-compare/<app>/report.md.
 
 OPTIONS — infra
   --with=<parts>               docs | ci | quality | upgrades, comma-separated, or all | none

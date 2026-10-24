@@ -168,6 +168,33 @@ describe('pstack adopt --compare', () => {
     expect(out.join('\n')).toContain('No differences that matter.');
   });
 
+  it('compares a build made elsewhere with --old-dir (one env, no worktree)', async () => {
+    const ws = workspace();
+    const elsewhere = tmpDir();
+    build(elsewhere, {
+      hash: '0123456789abcdef',
+      names: 50,
+      exif: true,
+      ht: 'r',
+      meta: { commit: 'a' },
+    });
+    const { deps, calls } = fake(ws);
+    const code = await runAdoptCompare(
+      makeCtx({ cwd: ws, flags: { compare: true, app: 'web', env: 'uat', oldDir: elsewhere } }),
+      deps,
+    );
+    expect(code).toBe(0);
+    expect(calls).toEqual(['npx nx run web:release:uat']);
+    const report = fs.readFileSync(path.join(ws, 'dist/pstack-compare/web/report.md'), 'utf8');
+    expect(report).toContain(`Old build: \`${elsewhere}\``);
+    await expect(
+      runAdoptCompare(
+        makeCtx({ cwd: ws, flags: { compare: true, app: 'web', oldDir: elsewhere } }),
+        fake(ws).deps,
+      ),
+    ).rejects.toThrow(/--env=<env>/);
+  });
+
   it('needs --base once adopt is committed, and one app with a release target', async () => {
     const ws = workspace();
     const clean = fake(ws, { capture: (_c, args) => (args[0] === 'status' ? '' : 'abc') });

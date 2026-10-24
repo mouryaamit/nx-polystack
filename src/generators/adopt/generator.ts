@@ -27,6 +27,11 @@ export interface AdoptGeneratorSchema {
    * also on its own, in a workspace adopted earlier).
    */
   removeOldScripts?: boolean;
+  /**
+   * Where the report goes (workspace-relative), or false for none. Saved as nx.json
+   * `pstack.adopt.report`, which later runs read; default docs/migrations/adopt.md.
+   */
+  report?: string | false;
 }
 
 type Json = Record<string, unknown>;
@@ -40,6 +45,63 @@ const ANGULAR_APP_BUILDERS =
   /^(@angular-devkit\/build-angular:(browser|browser-esbuild|application)|@angular\/build:application|@nx\/angular:(webpack-browser|browser-esbuild|application))$/;
 
 export const ADOPT_REPORT = 'docs/migrations/adopt.md';
+
+/** nx.json `pstack.adopt.report`: a path, false, or undefined. */
+function savedReport(tree: Tree): string | false | undefined {
+  if (!tree.exists('nx.json')) return undefined;
+  const v = (readJson(tree, 'nx.json') as Json)?.['pstack'] as Json | undefined;
+  const r = isObject(v?.['adopt']) ? (v?.['adopt'] as Json)['report'] : undefined;
+  return typeof r === 'string' || r === false ? r : undefined;
+}
+
+/** Writes nx.json `pstack.adopt.report`, keeping the rest of the file's layout. */
+function saveReport(tree: Tree, value: string | false): void {
+  if (!tree.exists('nx.json')) return;
+  const before = tree.read('nx.json', 'utf8') ?? '';
+  const json = JSON.parse(before) as Json;
+  const pstack = isObject(json['pstack']) ? (json['pstack'] as Json) : {};
+  const adopt = isObject(pstack['adopt']) ? (pstack['adopt'] as Json) : {};
+  json['pstack'] = { ...pstack, adopt: { ...adopt, report: value } };
+  const after = JSON.stringify(json, null, 2);
+  const jsonc = loadJsonc(tree.root);
+  tree.write('nx.json', (jsonc && keepJsonLayout(jsonc, before, after)) || `${after}\n`);
+}
+
+/**
+ * The report file for this run (null: none). `--report` wins and is saved in nx.json; else the
+ * saved setting; else docs/migrations/adopt.md. A report at the default path moves to the new one.
+ */
+export function resolveReport(tree: Tree, option: string | false | undefined): string | null {
+  let value: string | false | undefined = option;
+  if (typeof value === 'string') {
+    value = value.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+    if (value.endsWith('/')) value += 'pstack-adopt.md';
+    if (
+      !value ||
+      value.startsWith('/') ||
+      /^[A-Za-z]:/.test(value) ||
+      value.split('/').includes('..')
+    ) {
+      throw new Error(`adopt: --report must be a path inside the workspace (got "${option}")`);
+    }
+  }
+  const saved = savedReport(tree);
+  if (value !== undefined && value !== saved) {
+    saveReport(tree, value);
+    logger.info(
+      `adopt: report ${
+        value === false ? 'turned off' : `goes to ${value}`
+      } (nx.json pstack.adopt.report).`,
+    );
+  }
+  const chosen = value ?? saved ?? ADOPT_REPORT;
+  if (chosen === false) return null;
+  if (chosen !== ADOPT_REPORT && tree.exists(ADOPT_REPORT) && !tree.exists(chosen)) {
+    tree.rename(ADOPT_REPORT, chosen);
+    logger.info(`adopt: moved ${ADOPT_REPORT} to ${chosen}.`);
+  }
+  return chosen;
+}
 
 export interface AdoptResult {
   adopted: string[];
@@ -313,8 +375,14 @@ function switchBuildAll(tree: Tree, options: AdoptGeneratorSchema, result: Adopt
 }
 
 /** Deletes the old pipeline scripts nothing uses any more (see old-scripts.ts). */
-function removeOldScripts(tree: Tree, oldScripts: string[], result: AdoptResult): void {
-  const previous = tree.exists(ADOPT_REPORT) ? tree.read(ADOPT_REPORT, 'utf8') ?? '' : '';
+function removeOldScripts(
+  tree: Tree,
+  oldScripts: string[],
+  result: AdoptResult,
+  file: string | null,
+): void {
+  const from = [file, ADOPT_REPORT].find((f): f is string => !!f && tree.exists(f));
+  const previous = from ? tree.read(from, 'utf8') ?? '' : '';
   const found = findOldScripts(tree, [...oldScripts, ...recordedScripts(previous)]);
   for (const f of found.removable) tree.delete(f);
   result.removed = found.removable;
@@ -349,7 +417,8 @@ function removalLines(result: AdoptResult): string[] {
   return lines;
 }
 
-function appendRemovalReport(tree: Tree, result: AdoptResult): void {
+function appendRemovalReport(tree: Tree, result: AdoptResult, file: string | null): void {
+  if (!file) return;
   const scripts = Object.entries(result.scripts);
   const lines = [
     ...(scripts.length > 0
@@ -358,12 +427,10 @@ function appendRemovalReport(tree: Tree, result: AdoptResult): void {
     ...removalLines(result),
   ];
   if (lines.length === 0) return;
-  const previous = tree.exists(ADOPT_REPORT)
-    ? tree.read(ADOPT_REPORT, 'utf8') ?? ''
-    : '# pstack adopt\n';
+  const previous = tree.exists(file) ? tree.read(file, 'utf8') ?? '' : '# pstack adopt\n';
   let kept = previous.replace(/\n## Old scripts\n[\s\S]*?(?=\n## |$)/, '\n');
   if (scripts.length > 0) kept = kept.replace(/\n## build:all scripts\n[\s\S]*?(?=\n## |$)/, '\n');
-  tree.write(ADOPT_REPORT, `${kept.replace(/\n*$/, '\n\n')}${lines.join('\n')}`);
+  tree.write(file, `${kept.replace(/\n*$/, '\n\n')}${lines.join('\n')}`);
 }
 
 function report(result: AdoptResult, pipeline: SourcePipeline, customScripts: string[]): string {
@@ -445,6 +512,7 @@ export default async function adoptGenerator(
     removed: [],
     unreferenced: [],
   };
+  const reportFile = resolveReport(tree, options.report);
   let candidates = adoptCandidates(tree);
   if (options.projects && options.projects.length > 0) {
     const wanted = new Set(options.projects);
@@ -466,9 +534,9 @@ export default async function adoptGenerator(
   if (candidates.length === 0) {
     // Adopted earlier (before adopt moved build:all, or app by app): move it now.
     const replaced = result.skipped.length === 0 ? switchBuildAll(tree, options, result) : [];
-    if (options.removeOldScripts) removeOldScripts(tree, replaced, result);
+    if (options.removeOldScripts) removeOldScripts(tree, replaced, result, reportFile);
     if (replaced.length > 0 || options.removeOldScripts) {
-      appendRemovalReport(tree, result);
+      appendRemovalReport(tree, result, reportFile);
       return result;
     }
     logger.info('adopt: no Angular app builds without the plugin; nothing to do.');
@@ -536,11 +604,12 @@ export default async function adoptGenerator(
   pinDevkit(tree, result.notes);
 
   const oldScripts = [...new Set([...buildScripts.customScripts, ...replacedAll])].sort();
-  if (options.removeOldScripts) removeOldScripts(tree, oldScripts, result);
-  tree.write(ADOPT_REPORT, report(result, pipeline, oldScripts));
+  if (options.removeOldScripts) removeOldScripts(tree, oldScripts, result, reportFile);
+  if (reportFile) tree.write(reportFile, report(result, pipeline, oldScripts));
   logger.info(
     `adopt: ${result.adopted.length} app(s) now build with nx run <app>:release:<env> ` +
-      `(${result.adopted.join(', ')}). Report: ${ADOPT_REPORT}`,
+      `(${result.adopted.join(', ')}).` +
+      (reportFile ? ` Report: ${reportFile}` : ''),
   );
   for (const s of result.skipped) logger.warn(`adopt: not changed: ${s.replace(/`/g, '')}`);
   return result;
