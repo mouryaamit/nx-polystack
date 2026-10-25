@@ -79,7 +79,7 @@ OPTIONS — update
   --force                      Allow downgrading
   --run-migration=<a,b>        Run these migrations of the installed plugin again, whatever their
                                version (an update runs only those newer than where it starts);
-                               needs v1.8.6+ in the workspace
+                               needs v1.8.7+ in the workspace
   --list-migrations            List the installed plugin's migrations with their versions
 
 OPTIONS — upgrade angular

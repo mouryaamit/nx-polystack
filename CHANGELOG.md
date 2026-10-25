@@ -3,7 +3,10 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
-## 1.8.6
+## 1.8.7
+
+(The `v1.8.6` tag was created on the 1.8.5 commit by mistake and never published to npm; these
+changes ship as 1.8.7.)
 
 - `pstack update --run-migration=<name,...>` runs migrations of the installed plugin again, whatever
   their version (an update only runs those newer than the version it starts from, so a workspace
