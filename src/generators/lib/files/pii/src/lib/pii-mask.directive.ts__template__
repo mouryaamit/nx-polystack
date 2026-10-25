@@ -1,4 +1,4 @@
-import { Directive, ElementRef, Inject, Input, OnChanges, Optional } from '@angular/core';
+import { Directive, ElementRef, inject, Input, OnChanges } from '@angular/core';
 
 import { maskPii, PiiMaskOptions } from './pii-mask';
 import { PII_MASK_OPTIONS } from './pii-mask.options';
@@ -14,10 +14,8 @@ export class PiiMaskDirective implements OnChanges {
   @Input() piiFormat = '';
   @Input() piiReveal = false;
 
-  constructor(
-    private readonly element: ElementRef<HTMLElement>,
-    @Optional() @Inject(PII_MASK_OPTIONS) private readonly options: PiiMaskOptions | null,
-  ) {}
+  private readonly element: ElementRef<HTMLElement> = inject(ElementRef);
+  private readonly options: PiiMaskOptions | null = inject(PII_MASK_OPTIONS, { optional: true });
 
   ngOnChanges(): void {
     const plain = this.value === null || this.value === undefined ? '' : String(this.value);

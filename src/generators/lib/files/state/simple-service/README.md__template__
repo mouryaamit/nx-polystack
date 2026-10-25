@@ -11,9 +11,8 @@ import { <%= className %>Store } from '<%= importPath %>';
 
 @Component({ /* … */ })
 export class ListComponent {
+  private readonly store = inject(<%= className %>Store);
   readonly items$ = this.store.items$;
-
-  constructor(private readonly store: <%= className %>Store) {}
 }
 ```
 

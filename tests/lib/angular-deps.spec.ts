@@ -106,7 +106,7 @@ describe('ensureAngularDependencies', () => {
     (field) => {
       const tree = createTreeWithEmptyWorkspace();
       updateJson(tree, 'package.json', (j) => {
-        j[field] = { ...j[field], '@angular/core': '~20.3.0' };
+        j[field] = { ...j[field], '@angular/core': '~21.2.0' };
         return j;
       });
       const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
@@ -115,7 +115,7 @@ describe('ensureAngularDependencies', () => {
       expect(readJson(tree, 'package.json')).toEqual(before);
       expect(warn).toHaveBeenCalledWith(
         expect.stringMatching(
-          /Angular 20; the generators support Angular 15, 16, 17, 18, 19.*@angular-devkit\/build-angular/s,
+          /Angular 21; the generators support Angular 15, 16, 17, 18, 19, 20.*@angular-devkit\/build-angular/s,
         ),
       );
       warn.mockRestore();
@@ -209,8 +209,17 @@ describe('ensureAngularDependencies', () => {
       ionicAngular: '~8.7.11',
       capacitor: '^7.0.0',
     });
-    expect(() => angularGeneratorVersions(20)).toThrow(
-      /not supported by the generators \(15, 16, 17, 18, 19\)/,
+    expect(angularGeneratorVersions(20)).toEqual({
+      angular: '~20.3.32',
+      zoneJs: '~0.15.0',
+      typescript: '~5.9.3',
+      typesNode: '~20.10.0',
+      angularEslint: '~20.7.0',
+      ionicAngular: '~8.7.11',
+      capacitor: '^7.0.0',
+    });
+    expect(() => angularGeneratorVersions(21)).toThrow(
+      /not supported by the generators \(15, 16, 17, 18, 19, 20\)/,
     );
   });
 });

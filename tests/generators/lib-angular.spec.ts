@@ -65,6 +65,37 @@ describe('lib generator --type=angular', () => {
       expect([f, tree.read(f, 'utf8')]).toEqual([f, expect.stringContaining('standalone: false')]);
   });
 
+  it('injects with inject() so angular-eslint 20 prefer-inject passes', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        name: '@acme/source',
+        dependencies: { '@angular/core': '~20.3.32' },
+        devDependencies: { nx: '21.6.11' },
+      }),
+    );
+    await libGenerator(tree, { name: 'cards', type: 'angular' });
+    await libGenerator(tree, { name: 'pages', type: 'ionic' });
+    await libGenerator(tree, { name: 'pii', type: 'pii' });
+    await libGenerator(tree, { name: 'session', type: 'session' });
+    await libGenerator(tree, { name: 'orders', type: 'state', variant: 'ngrx' });
+    await libGenerator(tree, { name: 'cart', type: 'state' });
+    const sources = tree
+      .listChanges()
+      .map((c) => c.path)
+      .filter((f) => f.startsWith('libs/') && f.endsWith('.ts'));
+    expect(sources.some((f) => f.endsWith('session-timeout.service.ts'))).toBe(true);
+    expect(sources.some((f) => f.endsWith('.effects.ts'))).toBe(true);
+    // A constructor with parameters in a class Angular injects into fails prefer-inject.
+    const injecting =
+      /@(?:Component|Directive|Pipe|Injectable)\b[\s\S]*?\bconstructor\s*\(\s*[^)\s]/;
+    for (const f of sources)
+      expect([f, injecting.test(tree.read(f, 'utf8') ?? '')]).toEqual([f, false]);
+    const pkg = readJson(tree, 'package.json');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~20.7.0');
+    expect(pkg.devDependencies.typescript).toBe('~5.9.3');
+  });
+
   it('writes Angular tsconfigs', async () => {
     await libGenerator(tree, { name: 'ui', type: 'angular' });
     const ts = readJson(tree, `${ROOT}/tsconfig.json`);

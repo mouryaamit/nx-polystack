@@ -4,7 +4,11 @@ import * as path from 'path';
 import { Tree, updateJson } from '@nx/devkit';
 
 import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt';
-import { STANDALONE_FALSE_MAJOR, workspaceGeneratorMajor } from '../../../lib/utils/angular-deps';
+import {
+  PREFER_INJECT_MAJOR,
+  STANDALONE_FALSE_MAJOR,
+  workspaceGeneratorMajor,
+} from '../../../lib/utils/angular-deps';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { setProjectTags } from '../../../lib/utils/nx-targets';
@@ -635,14 +639,16 @@ export function migrateEslint(
     path.join(__dirname, '..', '..', 'app', 'files', 'angular', '.eslintrc.json__template__'),
     'utf8',
   );
+  const major = workspaceGeneratorMajor(tree);
+  const sources = copied
+    .filter((f) => f.endsWith('.ts'))
+    .map((f) => tree.read(`${ctx.projectRoot}/${f}`, 'utf8') ?? '');
   // angular-eslint 19 makes prefer-standalone an error; NgModule declarations opt out of it.
   const standaloneFalse =
-    workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR &&
-    copied.some(
-      (f) =>
-        f.endsWith('.ts') &&
-        /\bstandalone\s*:\s*false\b/.test(tree.read(`${ctx.projectRoot}/${f}`, 'utf8') ?? ''),
-    );
+    major >= STANDALONE_FALSE_MAJOR && sources.some((s) => /\bstandalone\s*:\s*false\b/.test(s));
+  // angular-eslint 20 makes prefer-inject an error; constructor parameter injection opts out of it.
+  const constructorInjection =
+    major >= PREFER_INJECT_MAJOR && sources.some((s) => CONSTRUCTOR_INJECTION.test(s));
   tree.write(
     file,
     template
@@ -650,4 +656,20 @@ export function migrateEslint(
       .replace(/"prefix": "app"/g, `"prefix": ${JSON.stringify(prefix)}`)
       .replace(/<%= up %>/g, upTo(ctx.projectRoot)),
   );
+  if (constructorInjection) {
+    updateJson(tree, file, (json) => {
+      json.overrides[0].rules['@angular-eslint/prefer-inject'] = 'off';
+      return json;
+    });
+    data.notes.push(
+      'The copied code injects through constructor parameters, which angular-eslint ' +
+        `${PREFER_INJECT_MAJOR}+ reports (\`@angular-eslint/prefer-inject\`), so the rule is off in ` +
+        `\`${file}\`. To move to \`inject()\`, run \`npx nx g @angular/core:inject ` +
+        `--path=${ctx.projectRoot}\` and turn the rule back on.`,
+    );
+  }
 }
+
+/** A class with an Angular decorator whose constructor takes parameters. */
+const CONSTRUCTOR_INJECTION =
+  /@(?:Component|Directive|Pipe|Injectable|NgModule)\b[\s\S]*?\bconstructor\s*\(\s*[^)\s]/;

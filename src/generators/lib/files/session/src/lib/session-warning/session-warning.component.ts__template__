@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   EventEmitter,
+  inject,
   Input,
   Output,
   ViewChild,
@@ -55,6 +56,8 @@ export class SessionWarningComponent {
   /** The user chose to sign out now. */
   @Output() readonly signOut = new EventEmitter<void>();
 
+  private readonly session = inject(SessionTimeoutService);
+
   readonly id = `session-warning-${nextId++}`;
   private announced = '';
   private focused = false;
@@ -70,8 +73,6 @@ export class SessionWarningComponent {
     }
     if (!button) this.focused = false;
   }
-
-  constructor(private readonly session: SessionTimeoutService) {}
 
   stay(): void {
     this.session.extend();

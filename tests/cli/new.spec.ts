@@ -81,13 +81,13 @@ describe('pstack new', () => {
     expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~16.2.12');
     expect(pkg.devDependencies.typescript).toBe('~5.1.6');
 
-    for (const angular of ['20', true]) {
+    for (const angular of ['21', true]) {
       await expect(
         runNew(
           makeCtx({ cwd: tmpDir(), positionals: ['ws'], flags: { skipFormat: true, angular } }),
           recorder().deps,
         ),
-      ).rejects.toThrow(/--angular must be one of 15, 16, 17, 18, 19/);
+      ).rejects.toThrow(/--angular must be one of 15, 16, 17, 18, 19, 20/);
     }
   });
 
@@ -141,6 +141,22 @@ describe('pstack new', () => {
     }
     expect(pkg.devDependencies.typescript).toBe('~5.8.3');
     expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~19.8.1');
+  });
+
+  it('--angular=20 moves the workspace to Nx 21.6 with TypeScript 5.9', async () => {
+    const cwd = tmpDir();
+    await runNew(
+      makeCtx({ cwd, positionals: ['ws'], flags: { skipFormat: true, angular: '20' } }),
+      recorder().deps,
+    );
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'ws', 'package.json'), 'utf8'));
+    expect(pkg.dependencies['@angular/core']).toBe('~20.3.32');
+    expect(pkg.dependencies['zone.js']).toBe('~0.15.0');
+    for (const name of ['nx', '@nx/devkit', '@nx/eslint', '@nx/eslint-plugin', '@nx/angular']) {
+      expect(pkg.devDependencies[name]).toBe('~21.6.11');
+    }
+    expect(pkg.devDependencies.typescript).toBe('~5.9.3');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~20.7.0');
   });
 
   it('honours --skip-install and --skip-git', async () => {

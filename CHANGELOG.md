@@ -3,6 +3,42 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.9.0
+
+Angular 20 is supported, the fifth release of one public release per Angular major.
+
+- **New workspaces on 20:** `pstack new --angular=20` starts on Angular 20.3, Nx 21.6, TypeScript 5.9,
+  angular-eslint 20.7 and zone.js 0.15.
+- **Generators on 20:** apps, Ionic apps and libraries get Angular 20 packages, Ionic 8.7 and
+  Capacitor 7. angular-eslint 20 makes `prefer-inject` an error, so the session, PII and NgRx state
+  libraries now inject with `inject()` (on every Angular major).
+- **Migration on 20:** `pstack migrate` brings in Angular CLI apps, Ionic 8 apps and Nx workspaces on
+  20 (Nx 21.6). An app whose code still injects through constructor parameters gets `prefer-inject`
+  turned off, and the report says how to run Angular's `inject()` migration.
+
+Checked by:
+
+- a new Angular 20 workspace with generated apps, an Ionic app, a library and the session, PII and
+  state libraries: build, lint, test and release builds;
+- migrated `ng new` 20 (with environment files), Ionic 8 and `create-nx-workspace` 21.6 sources:
+  env files moved, build, lint and release builds.
+
+The 1.8.8 entry below was the development release leading to this one.
+
+## 1.8.8
+
+- `pstack new --angular=20` creates a workspace on Angular 20.3, Nx 21.6, TypeScript 5.9,
+  angular-eslint 20.7 and zone.js 0.15; `pstack app`, `pstack lib` and `pstack migrate` add packages
+  for a workspace on 20. Ionic apps keep Ionic 8.7 and Capacitor 7.
+- angular-eslint 20 makes `@angular-eslint/prefer-inject` an error, so the generated session,
+  PII and NgRx state libraries now inject with `inject()` instead of constructor parameters, on
+  every Angular major.
+- `pstack migrate` into an Angular 20 workspace turns `prefer-inject` off in the app's generated
+  ESLint config when the copied code injects through constructor parameters, and the report says
+  how to run Angular's `inject()` migration.
+- `pstack update --run-migration` needs 1.8.7 in the workspace (the 1.8.7 notes said 1.8.6, which
+  was never published).
+
 ## 1.8.7
 
 (The `v1.8.6` tag was created on the 1.8.5 commit by mistake and never published to npm; these

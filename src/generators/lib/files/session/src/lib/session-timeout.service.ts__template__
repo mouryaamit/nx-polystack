@@ -1,5 +1,5 @@
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
-import { Inject, Injectable, NgZone, OnDestroy, Optional, PLATFORM_ID } from '@angular/core';
+import { inject, Injectable, NgZone, OnDestroy, PLATFORM_ID } from '@angular/core';
 import {
   BehaviorSubject,
   distinctUntilChanged,
@@ -51,6 +51,9 @@ const ACTIVITY_THROTTLE_MS = 1000;
 export class SessionTimeoutService implements OnDestroy {
   readonly config: SessionTimeoutConfig;
 
+  private readonly zone = inject(NgZone);
+  private readonly document: Document = inject(DOCUMENT);
+
   private readonly stateSubject = new BehaviorSubject<SessionState>({
     status: 'stopped',
     remainingMs: 0,
@@ -81,19 +84,14 @@ export class SessionTimeoutService implements OnDestroy {
   private channel?: BroadcastChannel;
   private storageListener?: (e: StorageEvent) => void;
 
-  constructor(
-    private readonly zone: NgZone,
-    @Inject(DOCUMENT) private readonly document: Document,
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    @Inject(PLATFORM_ID) platformId: Object,
-    @Optional() @Inject(SESSION_TIMEOUT_CONFIG) config: Partial<SessionTimeoutConfig> | null,
-  ) {
+  constructor() {
+    const config = inject(SESSION_TIMEOUT_CONFIG, { optional: true });
     this.config = { ...DEFAULT_SESSION_TIMEOUT, ...(config ?? {}) };
     const problems = sessionConfigProblems(this.config);
     if (problems.length > 0) {
       throw new Error(`SessionTimeoutService: ${problems.join('; ')}.`);
     }
-    this.browser = isPlatformBrowser(platformId);
+    this.browser = isPlatformBrowser(inject(PLATFORM_ID));
     this.key = channelKey(this.config.channelName, this.document.baseURI);
   }
 
