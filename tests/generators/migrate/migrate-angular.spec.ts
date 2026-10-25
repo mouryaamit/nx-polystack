@@ -969,18 +969,18 @@ describe('migrate generator: standalone Angular CLI app', () => {
     });
 
     it('--force-angular proceeds, keeps the workspace Angular and flags the mismatch', async () => {
-      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~21.2.0' } }));
+      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~22.0.0' } }));
       await migrateGenerator(tree, { source: FIXTURE, name: 'portal', forceAngular: true });
       const pkg = pkgOf(tree);
-      expect(pkg.dependencies['@angular/core']).toBe('~21.2.0');
+      expect(pkg.dependencies['@angular/core']).toBe('~22.0.0');
       expect(pkg.dependencies['@angular/router']).toBeUndefined();
       expect(pkg.dependencies['zone.js']).toBe('~0.12.0');
       const report = tree.read('docs/migrations/portal.md', 'utf8')!;
       expect(report).toContain('## Angular version');
       expect(report).toContain(
-        'Angular major mismatch: the workspace has @angular/core `~21.2.0` (Angular 21)',
+        'Angular major mismatch: the workspace has @angular/core `~22.0.0` (Angular 22)',
       );
-      expect(report).toContain('Install versions matching Angular 21 for:');
+      expect(report).toContain('Install versions matching Angular 22 for:');
       expect(report).toContain(
         'Not added (they would mix Angular majors): `@angular-devkit/build-angular`, `@angular/animations`',
       );

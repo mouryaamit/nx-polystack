@@ -1,7 +1,7 @@
 // Gives <script>/<style> elements added at runtime the page's CSP nonce (keep it first).
 import '@mouryaamit/nx-polystack/runtime/csp-nonce';
 
-import { enableProdMode } from '@angular/core';
+import { enableProdMode<% if (zoneProviders) { %>, provideZoneChangeDetection<% } %> } from '@angular/core';
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
 
 import { AppModule } from './app/app.module';
@@ -12,5 +12,9 @@ if (environment.production) {
 }
 
 platformBrowserDynamic()
-  .bootstrapModule(AppModule)
-  .catch((err) => console.error(err));
+<% if (zoneProviders) { %>  // Angular 21 is zoneless by default; this app keeps zone.js change detection.
+  .bootstrapModule(AppModule, {
+    applicationProviders: [provideZoneChangeDetection()],
+  })
+<% } else { %>  .bootstrapModule(AppModule)
+<% } %>  .catch((err) => console.error(err));

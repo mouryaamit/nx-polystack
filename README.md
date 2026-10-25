@@ -30,15 +30,15 @@ Requires Node 20 and npm 10+. `pstack new` creates Nx 17 workspaces on Angular 1
 
 Each release adds one Angular major and keeps every earlier one.
 
-| Angular | Nx     | TypeScript | Ionic | Capacitor | Node | Status                                 |
-| ------- | ------ | ---------- | ----- | --------- | ---- | -------------------------------------- |
-| 15.2    | 17.0.6 | 4.9        | 7.8   | 5         | 20   | supported                              |
-| 16.2    | 17.0.6 | 5.1        | 7.8   | 6         | 20   | supported (1.3.1)                      |
-| 17.3    | 18.3.5 | 5.4        | 7.8   | 6         | 20   | supported (1.4.0)                      |
-| 18.2    | 19.8   | 5.5        | 8.7   | 7         | 20   | supported (1.5.0)                      |
-| 19.2    | 20.8   | 5.8        | 8.7   | 7         | 20   | supported (1.7.0)                      |
-| 20.3    | 21.6   | 5.9        | 8.7   | 7         | 20   | supported (1.9.0)                      |
-| 21      | 22     | 5.9        | 9     | 8         | 22   | `pstack upgrade angular` only, for now |
+| Angular | Nx     | TypeScript | Ionic | Capacitor | Node | Status             |
+| ------- | ------ | ---------- | ----- | --------- | ---- | ------------------ |
+| 15.2    | 17.0.6 | 4.9        | 7.8   | 5         | 20   | supported          |
+| 16.2    | 17.0.6 | 5.1        | 7.8   | 6         | 20   | supported (1.3.1)  |
+| 17.3    | 18.3.5 | 5.4        | 7.8   | 6         | 20   | supported (1.4.0)  |
+| 18.2    | 19.8   | 5.5        | 8.7   | 7         | 20   | supported (1.5.0)  |
+| 19.2    | 20.8   | 5.8        | 8.7   | 7         | 20   | supported (1.7.0)  |
+| 20.3    | 21.6   | 5.9        | 8.7   | 7         | 20   | supported (1.9.0)  |
+| 21.2    | 22.7   | 5.9        | 9     | 8         | 22   | supported (1.10.0) |
 
 Supported means:
 
@@ -48,8 +48,8 @@ Supported means:
 - `pstack upgrade angular` moves a workspace there from the previous major.
 
 `pstack upgrade angular` moves a workspace one major at a time, with one commit per step. Each step
-pins Nx, TypeScript, the build and lint packages, Ionic, Capacitor and Node. It works up to Angular 21
-today. Generators for 21 come in the next release; until then they warn which packages to add.
+pins Nx, TypeScript, the build and lint packages, Ionic, Capacitor and Node. It works up to Angular 21,
+the newest major the generators support.
 
 Known breakpoints when upgrading:
 
@@ -62,6 +62,10 @@ Known breakpoints when upgrading:
 - **20:** angular-eslint 20 makes `prefer-inject` an error; the step runs Angular's `inject()` migration.
   Generated code injects with `inject()`.
 - **21:** Node 22 is required, Ionic 9 comes through `@ionic/migrate`, and Capacitor moves to 8.
+  Angular 21 is zoneless by default; new apps on 21 keep zone.js with `provideZoneChangeDetection()`,
+  import `IonicModule` from `@ionic/angular/lazy` and resolve modules as `bundler`. Use npm 11: the
+  npm 10.9 that ships with Node 22 fails to install new Angular 21 projects (`ng new`,
+  `create-nx-workspace`).
 
 ## What you get
 

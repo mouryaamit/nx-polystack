@@ -15,10 +15,12 @@ import {
 import {
   ANGULAR_VERSION,
   ensureAngularDependencies,
+  ionicAngularImport,
   PROVIDE_HTTP_CLIENT_MAJOR,
   STANDALONE_FALSE_MAJOR,
   workspaceGeneratorMajor,
   workspaceGeneratorVersions,
+  ZONE_PROVIDER_MAJOR,
 } from '../../lib/utils/angular-deps';
 import {
   angularProjectTargets,
@@ -157,10 +159,12 @@ export default async function appGenerator(
   if (type === 'angular' || type === 'ionic') {
     const vars = {
       name: projectName,
-      // Capacitor for the workspace's Angular (5 on 15, 6 on 16–17, 7 on 18); Angular itself is added below.
+      // Capacitor for the workspace's Angular (5 on 15, 6 on 16–17, 7 on 18–20, 8 on 21); Angular itself is added below.
       capacitorVersion: workspaceGeneratorVersions(tree).capacitor,
       provideHttp: workspaceGeneratorMajor(tree) >= PROVIDE_HTTP_CLIENT_MAJOR,
       standaloneFalse: workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR,
+      zoneProviders: workspaceGeneratorMajor(tree) >= ZONE_PROVIDER_MAJOR,
+      ionicImport: ionicAngularImport(workspaceGeneratorMajor(tree)),
       className,
       title,
       appId,

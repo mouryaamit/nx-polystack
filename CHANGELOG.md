@@ -3,6 +3,51 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.10.0
+
+Angular 21 is supported, the sixth release of one public release per Angular major, and the last
+major `pstack upgrade angular` reaches today.
+
+- **New workspaces on 21:** `pstack new --angular=21` starts on Angular 21.2, Nx 22.7, TypeScript 5.9,
+  angular-eslint 21 and zone.js 0.16, with Node 22 in `.nvmrc` and `moduleResolution: "bundler"`.
+- **Generators on 21:** apps keep zone.js change detection (Angular 21 is zoneless by default) with
+  `applicationProviders: [provideZoneChangeDetection()]`. Ionic apps and libraries get Ionic 9 and
+  Capacitor 8 and import from `@ionic/angular/lazy`. The session library's warning uses `@let` and
+  `@if`, as angular-eslint 21 reports `*ngIf`.
+- **Migration on 21:** `pstack migrate` brings in Angular CLI apps, Ionic 9 apps and Nx workspaces on
+  21 (Nx 22.7).
+- Generated Ionic apps ignore the web build Capacitor copies into `android/` and `ios/`.
+
+Checked by:
+
+- a new Angular 21 workspace with generated apps, an Ionic app, a library and the session, PII and
+  state libraries: build, lint, test and release builds;
+- migrated `ng new` 21 (with environment files), Ionic 9 and `create-nx-workspace` 22.7 sources:
+  env files moved, build, lint and release builds. These run on Node 22 with npm 11; the npm 10.9
+  that ships with Node 22 fails to install new Angular 21 projects.
+
+The 1.9.1 and 1.9.2 entries below were development releases leading to this one.
+
+## 1.9.2
+
+- `pstack new --angular=21` sets `moduleResolution: "bundler"` in `tsconfig.base.json`: Angular 21's
+  packages and Ionic 9's `@ionic/angular/lazy` declare their entry points only in `exports`, which
+  `"node"` resolution does not read (builds failed with `Cannot find module '@angular/common/http'`).
+- The session library's warning template uses `@let` and `@if` on Angular 21, whose angular-eslint
+  rules report `*ngIf` (`prefer-control-flow`).
+
+## 1.9.1
+
+- `pstack new --angular=21` creates a workspace on Angular 21.2, Nx 22.7, TypeScript 5.9,
+  angular-eslint 21 and zone.js 0.16, with `22` in `.nvmrc`; `pstack app`, `pstack lib` and
+  `pstack migrate` add packages for a workspace on 21.
+- Angular 21 is zoneless by default; generated apps on 21 keep zone.js change detection by passing
+  `applicationProviders: [provideZoneChangeDetection()]` to `bootstrapModule`, as Angular's own
+  migration does.
+- Ionic apps and libraries on 21 get Ionic 9 and Capacitor 8, and import `IonicModule` and
+  `IonicRouteStrategy` from `@ionic/angular/lazy` (Ionic 9 moved them there).
+- Generated Ionic apps ignore the web build Capacitor copies into `android/` and `ios/`.
+
 ## 1.9.0
 
 Angular 20 is supported, the fifth release of one public release per Angular major.

@@ -12,7 +12,7 @@ export const ANGULAR_MAJOR = 15;
  * Angular majors the generators write for: `pstack new --angular=<major>`, and `pstack app` / `:lib`
  * fill in packages for a workspace on one of them. One major is added per public release.
  */
-export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16, 17, 18, 19, 20];
+export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16, 17, 18, 19, 20, 21];
 
 /**
  * From this major, generated apps provide HttpClient with `provideHttpClient(withInterceptorsFromDi())`
@@ -34,6 +34,37 @@ export const STANDALONE_FALSE_MAJOR = 19;
  */
 export const PREFER_INJECT_MAJOR = 20;
 
+/**
+ * From this major, Angular is zoneless unless the app asks for zone.js, so generated NgModule apps
+ * pass `applicationProviders: [provideZoneChangeDetection()]` to `bootstrapModule` (what Angular
+ * 21's own migration writes).
+ */
+export const ZONE_PROVIDER_MAJOR = 21;
+
+/**
+ * From this major the generators install Ionic 9, which moves `IonicModule` and the other NgModule
+ * APIs to `@ionic/angular/lazy` (what `@ionic/migrate` rewrites).
+ */
+export const IONIC_LAZY_MAJOR = 21;
+
+/**
+ * From this major, generated templates use the built-in control flow (`@if`, `@let`):
+ * angular-eslint 21's template rules report `*ngIf` (`prefer-control-flow`).
+ */
+export const CONTROL_FLOW_MAJOR = 21;
+
+/**
+ * From this major, new workspaces resolve modules the way bundlers do (`moduleResolution:
+ * "bundler"`): Angular 21's packages and Ionic 9's `@ionic/angular/lazy` only declare their entry
+ * points in `exports`, which `"node"` resolution does not read.
+ */
+export const BUNDLER_RESOLUTION_MAJOR = 21;
+
+/** Where generated NgModule code imports Ionic from, for an Angular major. */
+export function ionicAngularImport(major: number): string {
+  return major >= IONIC_LAZY_MAJOR ? '@ionic/angular/lazy' : '@ionic/angular';
+}
+
 /** Versions the generators add for one Angular major (only where a package is missing). */
 export interface AngularGeneratorVersions {
   angular: string;
@@ -52,6 +83,7 @@ const ZONE_JS: Record<number, string> = {
   18: '~0.14.0',
   19: '~0.15.0',
   20: '~0.15.0',
+  21: '~0.16.0',
 };
 /** @types/node the major's TypeScript can parse (a latest one uses newer syntax: TS1139). */
 const TYPES_NODE: Record<number, string> = {
@@ -61,6 +93,8 @@ const TYPES_NODE: Record<number, string> = {
   18: '~20.10.0',
   19: '~20.10.0',
   20: '~20.10.0',
+  // Angular 21 workspaces run on Node 22 (Capacitor 8).
+  21: '~22.10.0',
 };
 
 export function angularGeneratorVersions(major: number): AngularGeneratorVersions {
@@ -173,7 +207,7 @@ export interface EnsureAngularOptions {
  * never upgraded:
  * - no @angular/core → the whole set for `major` (default 15): runtime, build, lint, TypeScript
  *   and @types/node;
- * - a generator major installed (15–20) → missing build/lint packages at the installed Angular
+ * - a generator major installed (15–21) → missing build/lint packages at the installed Angular
  *   version (plus the imported runtime packages when `includeRuntime`);
  * - another Angular major → nothing; warns which build/lint packages are missing.
  */

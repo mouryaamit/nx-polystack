@@ -96,6 +96,26 @@ describe('lib generator --type=angular', () => {
     expect(pkg.devDependencies.typescript).toBe('~5.9.3');
   });
 
+  it('uses the built-in control flow from Angular 21 (prefer-control-flow)', async () => {
+    const html = (lib: string) =>
+      `libs/shared/${lib}/src/lib/session-warning/session-warning.component.html`;
+    await libGenerator(tree, { name: 'session', type: 'session' });
+    expect(tree.read(html('session'), 'utf8')).toContain('*ngIf');
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        name: '@acme/source',
+        dependencies: { '@angular/core': '~21.2.24' },
+        devDependencies: { nx: '22.7.12' },
+      }),
+    );
+    await libGenerator(tree, { name: 'idle', type: 'session' });
+    const text = tree.read(html('idle'), 'utf8') ?? '';
+    expect(text).not.toContain('*ngIf');
+    expect(text).toContain('@let view = view$ | async;');
+    expect(text).toContain('@if (view.idle) {');
+  });
+
   it('writes Angular tsconfigs', async () => {
     await libGenerator(tree, { name: 'ui', type: 'angular' });
     const ts = readJson(tree, `${ROOT}/tsconfig.json`);

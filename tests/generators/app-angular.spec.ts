@@ -108,11 +108,11 @@ describe('app generator --type=angular', () => {
   it('leaves an Angular major the generators do not support alone (adds only terser)', async () => {
     tree.write(
       'package.json',
-      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~21.2.0' } }),
+      JSON.stringify({ scripts: {}, dependencies: { '@angular/core': '~22.0.0' } }),
     );
     await appGenerator(tree, { name: 'my-app', type: 'angular' });
     const pkg = JSON.parse(tree.read('package.json')!.toString());
-    expect(pkg.dependencies).toEqual({ '@angular/core': '~21.2.0' });
+    expect(pkg.dependencies).toEqual({ '@angular/core': '~22.0.0' });
     expect(pkg.devDependencies).toEqual({ terser: '^5.16.0' });
   });
 
@@ -219,6 +219,32 @@ describe('app generator --type=angular', () => {
     expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~20.7.0');
     expect(pkg.devDependencies['@nx/angular']).toBe('21.6.11');
     expect(pkg.devDependencies.typescript).toBe('~5.9.3');
+  });
+
+  it('on Angular 21: keeps zone.js change detection in bootstrapModule', async () => {
+    await appGenerator(tree, { name: 'old', type: 'angular' });
+    expect(tree.read('apps/old/src/main.ts', 'utf8')).not.toContain('provideZoneChangeDetection');
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~21.2.24' },
+        devDependencies: { nx: '22.7.12' },
+      }),
+    );
+    await appGenerator(tree, { name: 'my-app', type: 'angular' });
+    const main = tree.read('apps/my-app/src/main.ts', 'utf8') ?? '';
+    expect(main).toContain(
+      "import { enableProdMode, provideZoneChangeDetection } from '@angular/core';",
+    );
+    expect(main).toContain(
+      '.bootstrapModule(AppModule, {\n    applicationProviders: [provideZoneChangeDetection()],\n  })',
+    );
+    const pkg = JSON.parse(tree.read('package.json')!.toString());
+    expect(pkg.dependencies['zone.js']).toBe('~0.16.0');
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~21.2.24');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('^21.0.0');
+    expect(pkg.devDependencies['@nx/angular']).toBe('22.7.12');
   });
 
   it('adds @mouryaamit/<name> path alias to tsconfig.base.json', async () => {
