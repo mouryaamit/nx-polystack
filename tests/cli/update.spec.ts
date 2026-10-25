@@ -88,7 +88,7 @@ describe('pstack update', () => {
     fakeLocalPlugin(old, '1.8.5');
     await expect(
       runUpdate(makeCtx({ cwd: old, flags: { runMigration: 'x' } }), deps().d),
-    ).rejects.toThrow(/v1\.8\.5; --run-migration .* need v1\.8\.6/);
+    ).rejects.toThrow(/v1\.8\.5; --run-migration .* need v1\.8\.7/);
     const ws = workspace('1.8.6');
     fakeLocalPlugin(ws, '1.8.6');
     await expect(

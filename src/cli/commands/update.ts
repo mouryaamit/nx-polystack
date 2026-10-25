@@ -83,7 +83,7 @@ function runNamedMigrations(ctx: CommandContext, root: string, deps: UpdateDeps)
   if (compareVersions(local.version, RUN_MIGRATION_VERSION) < 0) {
     throw new CliError(
       `the workspace has nx-polystack v${local.version}; --run-migration and --list-migrations ` +
-        `need v${RUN_MIGRATION_VERSION} or later in the workspace. Run "pstack update" first.`,
+        `need v1.8.7 or later in the workspace. Run "pstack update" first.`,
     );
   }
   const run = deps.runLocal ?? ((cli, args, cwd) => delegate(cli, args, cwd));

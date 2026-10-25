@@ -20,7 +20,7 @@ import { requireWorkspace } from './app';
 /**
  * Hidden, spawned by `pstack update` from the workspace's installed plugin:
  * - `pstack _migrate --from=X --to=Y`: the migrations after X up to Y;
- * - `pstack _migrate --only=a,b`: those migrations, whatever their version (v1.8.6);
+ * - `pstack _migrate --only=a,b`: those migrations, whatever their version (v1.8.6 dev, public 1.8.7);
  * - `pstack _migrate --list`: every migration with its version.
  */
 export async function runInternalMigrate(ctx: CommandContext): Promise<number> {
