@@ -126,7 +126,7 @@ describe('lib generator --type=state', () => {
       expect(effects).toContain('readonly load$ = createEffect(() =>');
       expect(effects).toContain('ofType(OrdersActions.load)');
       expect(effects).toContain('of<OrdersItem[]>([])');
-      expect(effects).toContain('constructor(private readonly actions$: Actions) {}');
+      expect(effects).toContain('private readonly actions$ = inject(Actions);');
 
       const mod = read('src/lib/orders-state.module.ts');
       expect(mod).toContain('StoreModule.forFeature(ORDERS_FEATURE_KEY, ordersReducer)');

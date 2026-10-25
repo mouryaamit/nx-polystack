@@ -969,18 +969,18 @@ describe('migrate generator: standalone Angular CLI app', () => {
     });
 
     it('--force-angular proceeds, keeps the workspace Angular and flags the mismatch', async () => {
-      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~20.3.0' } }));
+      tree.write('package.json', JSON.stringify({ dependencies: { '@angular/core': '~21.2.0' } }));
       await migrateGenerator(tree, { source: FIXTURE, name: 'portal', forceAngular: true });
       const pkg = pkgOf(tree);
-      expect(pkg.dependencies['@angular/core']).toBe('~20.3.0');
+      expect(pkg.dependencies['@angular/core']).toBe('~21.2.0');
       expect(pkg.dependencies['@angular/router']).toBeUndefined();
       expect(pkg.dependencies['zone.js']).toBe('~0.12.0');
       const report = tree.read('docs/migrations/portal.md', 'utf8')!;
       expect(report).toContain('## Angular version');
       expect(report).toContain(
-        'Angular major mismatch: the workspace has @angular/core `~20.3.0` (Angular 20)',
+        'Angular major mismatch: the workspace has @angular/core `~21.2.0` (Angular 21)',
       );
-      expect(report).toContain('Install versions matching Angular 20 for:');
+      expect(report).toContain('Install versions matching Angular 21 for:');
       expect(report).toContain(
         'Not added (they would mix Angular majors): `@angular-devkit/build-angular`, `@angular/animations`',
       );
@@ -1028,6 +1028,46 @@ describe('migrate generator: standalone Angular CLI app', () => {
       expect(tree.read('apps/portal/src/app/app.component.ts', 'utf8')).toContain(
         'standalone: false',
       );
+    });
+
+    it('on Angular 20, constructor injection gets prefer-inject off and a report note', async () => {
+      const workspaceOn = (core: string, nx: string) =>
+        tree.write(
+          'package.json',
+          JSON.stringify({ dependencies: { '@angular/core': core }, devDependencies: { nx } }),
+        );
+      const sourceOn = (core: string, inject: boolean) => {
+        const src = fixtureCopy('angular15-app');
+        const pkg = readJsonFile<{ dependencies: Record<string, string> }>(src, 'package.json');
+        pkg.dependencies['@angular/core'] = core;
+        putJson(src, 'package.json', pkg);
+        fs.writeFileSync(
+          path.join(src, 'src/app/clock.service.ts'),
+          "import { Injectable, NgZone } from '@angular/core';\n\n" +
+            "@Injectable({ providedIn: 'root' })\nexport class ClockService {\n" +
+            (inject
+              ? '  constructor(private readonly zone: NgZone) {}\n'
+              : '  constructor() {}\n') +
+            '}\n',
+        );
+        return src;
+      };
+      const rules = (app: string) =>
+        readJson(tree, `apps/${app}/.eslintrc.json`).overrides[0].rules;
+
+      workspaceOn('~20.3.32', '21.6.11');
+      await migrateGenerator(tree, { source: sourceOn('^20.3.0', true), name: 'portal' });
+      expect(rules('portal')['@angular-eslint/prefer-inject']).toBe('off');
+      expect(tree.read('docs/migrations/portal.md', 'utf8')).toContain(
+        'npx nx g @angular/core:inject --path=apps/portal',
+      );
+
+      await migrateGenerator(tree, { source: sourceOn('^20.3.0', false), name: 'admin' });
+      expect(rules('admin')['@angular-eslint/prefer-inject']).toBeUndefined();
+
+      workspaceOn('~19.2.25', '20.8.4');
+      await migrateGenerator(tree, { source: sourceOn('^19.2.0', true), name: 'legacy' });
+      expect(rules('legacy')['@angular-eslint/prefer-inject']).toBeUndefined();
     });
 
     it('refreshes the llm block', async () => {
