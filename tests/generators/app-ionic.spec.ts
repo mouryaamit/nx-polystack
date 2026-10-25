@@ -104,6 +104,30 @@ describe('app generator --type=ionic', () => {
     );
   });
 
+  it('on an Angular 21 workspace: Ionic 9 from @ionic/angular/lazy and Capacitor 8', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~21.2.24' },
+        devDependencies: { nx: '22.7.12' },
+      }),
+    );
+    await appGenerator(tree, { name: 'field-ops', type: 'ionic' });
+    expect(readJson(tree, 'package.json').dependencies['@ionic/angular']).toBe('^9.0.0');
+    expect(readJson(tree, 'apps/field-ops/package.json').dependencies['@capacitor/core']).toBe(
+      '^8.0.0',
+    );
+    const mod = tree.read('apps/field-ops/src/app/app.module.ts', 'utf8') ?? '';
+    expect(mod).toContain("import { IonicModule, IonicRouteStrategy } from '@ionic/angular/lazy';");
+    expect(tree.read('apps/field-ops/src/main.ts', 'utf8')).toContain(
+      'provideZoneChangeDetection()',
+    );
+    expect(tree.read('apps/field-ops/.gitignore', 'utf8')).toContain(
+      'android/app/src/main/assets/public',
+    );
+  });
+
   it('uses --appId when given', async () => {
     await appGenerator(tree, { name: 'field-ops', type: 'ionic', appId: 'com.acme.field' });
     expect(tree.read('apps/field-ops/capacitor.config.ts', 'utf8')).toContain(

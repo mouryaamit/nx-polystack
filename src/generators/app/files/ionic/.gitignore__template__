@@ -5,3 +5,6 @@ android/app/build
 ios/Pods
 ios/build
 ios/DerivedData
+# Web build copied in by cap sync
+android/app/src/main/assets/public
+ios/App/App/public

@@ -7,7 +7,11 @@ import { formatPluginSpec, PLUGIN_NAME } from '../../cli/versions';
 import { defaultEnvEncryptionConfig } from '../../lib/env-encryption/config';
 import { writeEnvEncryptionBlock } from '../../lib/env-encryption/workspace';
 import { ANGULAR_PINS } from '../../lib/upgrade/pins';
-import { ensureAngularDependencies, GENERATOR_ANGULAR_MAJORS } from '../../lib/utils/angular-deps';
+import {
+  BUNDLER_RESOLUTION_MAJOR,
+  ensureAngularDependencies,
+  GENERATOR_ANGULAR_MAJORS,
+} from '../../lib/utils/angular-deps';
 import { typescriptEslintVersion } from '../../lib/utils/dependencies';
 import { LINT_STAGED_CONFIG } from '../../lib/utils/lint-staged';
 import {
@@ -40,9 +44,18 @@ export function isRecursiveLintCommand(command: string): boolean {
 /**
  * Nx and the lint stack for a new workspace on this Angular major: the major's Nx pin (Nx 18 from
  * Angular 17), and from Nx 18 typescript-eslint 7 with eslint-plugin-unused-imports 3 (its peer).
+ * `.nvmrc` names the major's Node (22 from Angular 21, which Capacitor 8 needs), and from Angular 21
+ * tsconfig.base.json resolves modules as `bundler`.
  */
 export function alignWorkspaceStack(tree: Tree, angularMajor: number): void {
   const nx = `~${ANGULAR_PINS[angularMajor].nx}`;
+  if (tree.exists('.nvmrc')) tree.write('.nvmrc', `${ANGULAR_PINS[angularMajor].node}\n`);
+  if (angularMajor >= BUNDLER_RESOLUTION_MAJOR && tree.exists('tsconfig.base.json')) {
+    updateJson(tree, 'tsconfig.base.json', (json) => {
+      json.compilerOptions = { ...json.compilerOptions, moduleResolution: 'bundler' };
+      return json;
+    });
+  }
   const tsEslint = typescriptEslintVersion(nx);
   updateJson(tree, 'package.json', (json) => {
     const dev: Record<string, string> = json.devDependencies ?? {};

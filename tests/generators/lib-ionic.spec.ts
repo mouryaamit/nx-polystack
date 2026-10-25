@@ -17,6 +17,22 @@ describe('lib generator --type=ionic', () => {
     tree.write('tsconfig.base.json', JSON.stringify({ compilerOptions: { paths: {} } }));
   });
 
+  it('on Angular 21 imports IonicModule from @ionic/angular/lazy (Ionic 9)', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        name: '@acme/source',
+        dependencies: { '@angular/core': '~21.2.24' },
+        devDependencies: { nx: '22.7.12' },
+      }),
+    );
+    await libGenerator(tree, { name: 'field-kit', type: 'ionic' });
+    expect(tree.read(`${ROOT}/src/lib/field-kit.module.ts`, 'utf8')).toContain(
+      "import { IonicModule } from '@ionic/angular/lazy';",
+    );
+    expect(readJson(tree, 'package.json').dependencies['@ionic/angular']).toBe('^9.0.0');
+  });
+
   it('creates an Angular lib importing IonicModule with a page component', async () => {
     await libGenerator(tree, { name: 'field-kit', type: 'ionic' });
     const mod = tree.read(`${ROOT}/src/lib/field-kit.module.ts`, 'utf8') ?? '';

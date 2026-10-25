@@ -4,7 +4,9 @@ import { generateFiles, GeneratorCallback, names, Tree, writeJson } from '@nx/de
 
 import {
   ANGULAR_VERSION,
+  CONTROL_FLOW_MAJOR,
   ensureAngularDependencies,
+  ionicAngularImport,
   ngPackagrDependencies,
   STANDALONE_FALSE_MAJOR,
   workspaceGeneratorMajor,
@@ -65,6 +67,8 @@ export function writeAngularLib(
     componentSuffixes: opts.componentSuffixes ?? null,
     // Read before ensureAngularDependencies: a workspace without Angular gets 15 (no flag needed).
     standaloneFalse: workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR,
+    ionicImport: ionicAngularImport(workspaceGeneratorMajor(tree)),
+    controlFlow: workspaceGeneratorMajor(tree) >= CONTROL_FLOW_MAJOR,
     ...(opts.vars ?? {}),
   };
   const build = opts.build ?? (o.variant as AngularLibBuild);

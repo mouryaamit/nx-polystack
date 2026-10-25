@@ -81,13 +81,13 @@ describe('pstack new', () => {
     expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~16.2.12');
     expect(pkg.devDependencies.typescript).toBe('~5.1.6');
 
-    for (const angular of ['21', true]) {
+    for (const angular of ['22', true]) {
       await expect(
         runNew(
           makeCtx({ cwd: tmpDir(), positionals: ['ws'], flags: { skipFormat: true, angular } }),
           recorder().deps,
         ),
-      ).rejects.toThrow(/--angular must be one of 15, 16, 17, 18, 19, 20/);
+      ).rejects.toThrow(/--angular must be one of 15, 16, 17, 18, 19, 20, 21/);
     }
   });
 
@@ -157,6 +157,26 @@ describe('pstack new', () => {
     }
     expect(pkg.devDependencies.typescript).toBe('~5.9.3');
     expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~20.7.0');
+  });
+
+  it('--angular=21 moves the workspace to Nx 22.7 and Node 22', async () => {
+    const cwd = tmpDir();
+    await runNew(
+      makeCtx({ cwd, positionals: ['ws'], flags: { skipFormat: true, angular: '21' } }),
+      recorder().deps,
+    );
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'ws', 'package.json'), 'utf8'));
+    expect(pkg.dependencies['@angular/core']).toBe('~21.2.24');
+    expect(pkg.dependencies['zone.js']).toBe('~0.16.0');
+    for (const name of ['nx', '@nx/devkit', '@nx/eslint', '@nx/eslint-plugin', '@nx/angular']) {
+      expect(pkg.devDependencies[name]).toBe('~22.7.12');
+    }
+    expect(pkg.devDependencies.typescript).toBe('~5.9.3');
+    expect(pkg.devDependencies['@types/node']).toBe('~22.10.0');
+    expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('^21.0.0');
+    expect(fs.readFileSync(path.join(cwd, 'ws', '.nvmrc'), 'utf8')).toBe('22\n');
+    const base = JSON.parse(fs.readFileSync(path.join(cwd, 'ws', 'tsconfig.base.json'), 'utf8'));
+    expect(base.compilerOptions.moduleResolution).toBe('bundler');
   });
 
   it('honours --skip-install and --skip-git', async () => {

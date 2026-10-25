@@ -60,7 +60,7 @@ OPTIONS — new / preset
   --llm=<tools>                AI-assistant files, as pstack llm: claude | agents | copilot
                                (codex, openai-gpt → agents; comma-separated)
   --projectDescription=<text>  Short project description
-  --angular=<major>            Start on this Angular: 15 | 16 | 17 | 18 | 19 | 20 (default: Angular 15, added by the
+  --angular=<major>            Start on this Angular: 15 | 16 | 17 | 18 | 19 | 20 | 21 (default: Angular 15, added by the
                                first Angular or Ionic app)
   --skipFormat                 Skip Prettier format pass
   --skip-install               new only — do not run npm install
