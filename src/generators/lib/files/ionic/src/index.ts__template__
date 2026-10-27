@@ -1,2 +1,2 @@
-export * from './lib/<%= fileName %>.module';
-export * from './lib/<%= fileName %>/<%= fileName %>.page';
+<% if (!standalone) { %>export * from './lib/<%= fileName %>.module';
+<% } %>export * from './lib/<%= fileName %>/<%= fileName %>.page';

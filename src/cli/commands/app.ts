@@ -91,6 +91,8 @@ export async function runApp(ctx: CommandContext, deps: AppDeps = {}): Promise<n
       baseHref,
       port,
       envLayout: envLayout as 'default' | 'per-env' | undefined,
+      standalone: ctx.flags['standalone'] === true || undefined,
+      module: ctx.flags['module'] === true || undefined,
     }),
   );
   return 0;

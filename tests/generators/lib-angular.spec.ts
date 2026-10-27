@@ -70,7 +70,7 @@ describe('lib generator --type=angular', () => {
       'package.json',
       JSON.stringify({
         name: '@acme/source',
-        dependencies: { '@angular/core': '~20.3.32' },
+        dependencies: { '@angular/core': '~20.3.34' },
         devDependencies: { nx: '21.6.11' },
       }),
     );
@@ -105,7 +105,7 @@ describe('lib generator --type=angular', () => {
       'package.json',
       JSON.stringify({
         name: '@acme/source',
-        dependencies: { '@angular/core': '~21.2.24' },
+        dependencies: { '@angular/core': '~21.2.25' },
         devDependencies: { nx: '22.7.12' },
       }),
     );
@@ -114,6 +114,100 @@ describe('lib generator --type=angular', () => {
     expect(text).not.toContain('*ngIf');
     expect(text).toContain('@let view = view$ | async;');
     expect(text).toContain('@if (view.idle) {');
+  });
+
+  describe('--standalone', () => {
+    const read = (f: string) => tree.read(f, 'utf8') ?? '';
+    const files = (root: string) =>
+      tree
+        .listChanges()
+        .filter((c) => c.type !== 'DELETE' && c.path.startsWith(`${root}/src/`))
+        .map((c) => c.path.slice(root.length + 1))
+        .sort();
+
+    it('angular and ionic libs: no NgModule, standalone components (15: standalone: true)', async () => {
+      await libGenerator(tree, { name: 'ui', type: 'angular', standalone: true });
+      expect(files(ROOT)).not.toContain('src/lib/ui.module.ts');
+      expect(read(`${ROOT}/src/index.ts`)).not.toContain('ui.module');
+      expect(read(`${ROOT}/src/lib/ui/ui.component.ts`)).toContain('  standalone: true,\n');
+      await libGenerator(tree, { name: 'pages', type: 'ionic', standalone: true });
+      const pages = 'libs/ionic/pages';
+      expect(tree.exists(`${pages}/src/lib/pages.module.ts`)).toBe(false);
+      const page = read(`${pages}/src/lib/pages/pages.page.ts`);
+      expect(page).toMatch(
+        /import \{\s*IonContent,\s*IonHeader,\s*IonTitle,\s*IonToolbar,?\s*\} from '@ionic\/angular\/standalone';/,
+      );
+      expect(page).toContain('imports: [IonHeader, IonToolbar, IonTitle, IonContent]');
+    });
+
+    it('pii, session and ngrx state libs export provide*() functions and no modules', async () => {
+      await libGenerator(tree, { name: 'pii', type: 'pii', standalone: true });
+      expect(tree.exists('libs/shared/pii/src/lib/pii-mask.module.ts')).toBe(false);
+      const pii = read('libs/shared/pii/src/index.ts');
+      expect(pii).toContain("export * from './lib/pii-mask.providers';");
+      expect(pii).not.toContain('pii-mask.module');
+      expect(read('libs/shared/pii/src/lib/pii-mask.pipe.ts')).toContain('standalone: true');
+      expect(read('libs/shared/pii/README.md')).toContain('providePiiMask({');
+
+      await libGenerator(tree, { name: 'session', type: 'session', standalone: true });
+      expect(tree.exists('libs/shared/session/src/lib/session-timeout.module.ts')).toBe(false);
+      const warning = read(
+        'libs/shared/session/src/lib/session-warning/session-warning.component.ts',
+      );
+      expect(warning).toContain("import { AsyncPipe, NgIf } from '@angular/common';");
+      expect(warning).toContain('imports: [NgIf, AsyncPipe]');
+      expect(read('libs/shared/session/src/index.ts')).toContain(
+        "export * from './lib/session-timeout.providers';",
+      );
+
+      await libGenerator(tree, {
+        name: 'orders',
+        type: 'state',
+        variant: 'ngrx',
+        standalone: true,
+      });
+      expect(tree.exists('libs/shared/orders/src/lib/orders-state.module.ts')).toBe(false);
+      expect(read('libs/shared/orders/src/index.ts')).not.toContain('orders-state.module');
+      expect(read('libs/shared/orders/README.md')).toContain('provideOrdersState()');
+    });
+
+    it('on Angular 21: no standalone flag, @let/@if session template importing AsyncPipe only', async () => {
+      tree.write(
+        'package.json',
+        JSON.stringify({
+          name: '@acme/source',
+          dependencies: { '@angular/core': '~21.2.25' },
+          devDependencies: { nx: '22.7.12' },
+        }),
+      );
+      await libGenerator(tree, { name: 'session', type: 'session', standalone: true });
+      const warning = read(
+        'libs/shared/session/src/lib/session-warning/session-warning.component.ts',
+      );
+      expect(warning).not.toContain('standalone:');
+      expect(warning).toContain('imports: [AsyncPipe]');
+      await libGenerator(tree, { name: 'pages', type: 'ionic', standalone: true });
+      expect(read('libs/ionic/pages/src/lib/pages/pages.page.ts')).toMatch(
+        /from '@ionic\/angular';/,
+      );
+      const rules = JSON.parse(read('libs/shared/session/.eslintrc.json')).overrides[0].rules;
+      expect(rules['@angular-eslint/prefer-standalone']).toBeUndefined();
+    });
+
+    it('follows the workspace style and rejects the flags on other types', async () => {
+      const nx = JSON.parse(tree.read('nx.json', 'utf8') ?? '{}');
+      tree.write(
+        'nx.json',
+        JSON.stringify({ ...nx, pstack: { angular: { style: 'standalone' } } }),
+      );
+      await libGenerator(tree, { name: 'ui', type: 'angular' });
+      expect(tree.exists(`${ROOT}/src/lib/ui.module.ts`)).toBe(false);
+      await libGenerator(tree, { name: 'cards', type: 'angular', module: true });
+      expect(tree.exists('libs/shared/cards/src/lib/cards.module.ts')).toBe(true);
+      await expect(
+        libGenerator(tree, { name: 'util', type: 'ts', standalone: true }),
+      ).rejects.toThrow('--standalone and --module are for angular, ionic, pii, session, state');
+    });
   });
 
   it('writes Angular tsconfigs', async () => {

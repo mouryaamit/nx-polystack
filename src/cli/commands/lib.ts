@@ -39,6 +39,8 @@ export async function runLib(ctx: CommandContext): Promise<number> {
       dir,
       variant: flagString(ctx.flags, 'variant'),
       prefix: flagString(ctx.flags, 'prefix'),
+      standalone: ctx.flags['standalone'] === true || undefined,
+      module: ctx.flags['module'] === true || undefined,
       tags: flagString(ctx.flags, 'tags')
         ?.split(',')
         .map((t) => t.trim())

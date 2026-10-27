@@ -1,13 +1,24 @@
 # <%= projectName %>
 
 Feature state for Angular apps with NgRx (`--variant=ngrx`): actions (`<%= className %>Actions`),
-reducer (feature key `'<%= propertyName %>'`), selectors, effects and `<%= className %>StateModule`.
+reducer (feature key `'<%= propertyName %>'`), selectors, effects and `provide<%= className %>State()`<% if (!standalone) { %>
+(`<%= className %>StateModule` for NgModule apps)<% } %>.
 
 ## Use it in an app
 
-The app must register the root store and effects **once**, then import the feature module:
+The app must register the root store and effects **once**, then the feature state:
 
-```ts
+<% if (standalone) { %>```ts
+// app.config.ts
+import { provideEffects } from '@ngrx/effects';
+import { provideStore } from '@ngrx/store';
+import { provide<%= className %>State } from '<%= importPath %>';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideStore(), provideEffects(), ...provide<%= className %>State()],
+};
+```
+<% } else { %>```ts
 import { EffectsModule } from '@ngrx/effects';
 import { StoreModule } from '@ngrx/store';
 import { <%= className %>StateModule } from '<%= importPath %>';
@@ -17,7 +28,7 @@ import { <%= className %>StateModule } from '<%= importPath %>';
 })
 export class AppModule {}
 ```
-
+<% } %>
 ```ts
 private readonly store = inject(Store);
 

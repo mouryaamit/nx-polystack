@@ -34,6 +34,9 @@ import { findWorkspaceRoot } from '../context';
 import { gitStatus } from '../exec';
 import { isInteractive, Prompter, terminalPrompter } from '../prompt';
 import { CliError, CommandContext } from '../types';
+import { compareVersions } from '../versions';
+
+import { runUpgradeStandalone } from './upgrade-standalone';
 
 /**
  * `pstack upgrade angular`: moves the workspace to the next Angular major, one step at a time,
@@ -149,6 +152,44 @@ const ANGULAR_ESLINT_PACKAGES = [
   '@angular-eslint/schematics',
 ];
 
+/** Framework packages released with @angular/core (same version numbers). */
+const ANGULAR_FRAMEWORK_PACKAGES = [
+  '@angular/animations',
+  '@angular/common',
+  '@angular/compiler',
+  '@angular/core',
+  '@angular/elements',
+  '@angular/forms',
+  '@angular/localize',
+  '@angular/platform-browser',
+  '@angular/platform-browser-dynamic',
+  '@angular/platform-server',
+  '@angular/router',
+  '@angular/service-worker',
+  '@angular/upgrade',
+];
+
+/** True when an exact or ~/^ version is an older release than the pin (same major or not). */
+function belowPin(spec: string, pin: string): boolean {
+  const v = spec.replace(/^[~^=]/, '');
+  if (!/^\d+\.\d+\.\d+$/.test(v) || !/^\d+\.\d+\.\d+$/.test(pin)) return false;
+  return compareVersions(v, pin) < 0;
+}
+
+/**
+ * `pkg@~pin` for every declared Angular framework package older than the step's pinned release.
+ * `nx migrate` picks the newest Angular it knows, which can be an earlier patch than the one
+ * pstack tested (the later patches carry security fixes).
+ */
+export function frameworkPatchSpecs(pkg: Json, pins: AngularPins): string[] {
+  const out: string[] = [];
+  for (const name of ANGULAR_FRAMEWORK_PACKAGES) {
+    const has = declared(pkg, name);
+    if (has !== undefined && belowPin(has, pins.angular)) out.push(`${name}@~${pins.angular}`);
+  }
+  return out;
+}
+
 /**
  * `pkg@range` for every declared build/CLI/lint package and TypeScript whose major (or, for
  * TypeScript, version) is not the step's. Empty when everything already matches.
@@ -158,7 +199,9 @@ export function buildPackageSpecs(pkg: Json, major: number, pins: AngularPins): 
   const want = (name: string, pin: string) => {
     const has = declared(pkg, name);
     if (has === undefined) return;
-    if (majorOfSpec(has) !== majorOfSpec(pin)) out.push(`${name}@${pinRange(pin)}`);
+    if (majorOfSpec(has) !== majorOfSpec(pin) || belowPin(has, pin)) {
+      out.push(`${name}@${pinRange(pin)}`);
+    }
   };
   for (const name of ANGULAR_BUILD_PACKAGES) want(name, pins.angular);
   for (const name of ANGULAR_ESLINT_PACKAGES) want(name, pins.angularEslint);
@@ -375,6 +418,7 @@ export function stepPlan(from: number, to: number, root: string): string[] {
   );
   lines.push('npm install, then the migrations nx migrate wrote (migrations.json)');
   lines.push(`if Angular is still below ${to}: nx migrate @angular/core@${pins.angular} again`);
+  lines.push(`Angular framework packages below ${pins.angular} to ~${pins.angular}`);
   lines.push(
     `build, CLI and lint packages to Angular ${to}, angular-eslint ${pinRange(
       pins.angularEslint,
@@ -469,6 +513,12 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
     );
   }
 
+  const framework = frameworkPatchSpecs(readJsonFile(path.join(root, 'package.json')), pins);
+  if (framework.length > 0) {
+    say(`Angular framework packages to ${pins.angular}: ${framework.join(' ')}`);
+    npm(['install', ...framework]);
+  }
+
   const specs = buildPackageSpecs(readJsonFile(path.join(root, 'package.json')), to, pins);
   if (specs.length > 0) {
     say(`build, CLI, lint packages and TypeScript: ${specs.join(' ')}`);
@@ -537,11 +587,11 @@ export async function runUpgrade(
 ): Promise<number> {
   const what = ctx.positionals[0];
   if (what === 'nx') return runUpgradeNx(ctx, deps);
+  if (what === 'standalone') return runUpgradeStandalone(ctx, deps);
   if (what !== 'angular') {
     throw new CliError(
-      `pstack upgrade takes what to upgrade: "pstack upgrade angular" or "pstack upgrade nx"${
-        what ? ` (got "${what}")` : ''
-      }.`,
+      'pstack upgrade takes what to upgrade: "pstack upgrade angular", "pstack upgrade nx" or ' +
+        `"pstack upgrade standalone"${what ? ` (got "${what}")` : ''}.`,
     );
   }
   const root = findWorkspaceRoot(ctx.cwd);
@@ -558,7 +608,25 @@ export async function runUpgrade(
     );
   }
   if (current === MAX_ANGULAR) {
-    deps.log(`The workspace is on Angular ${current}, the newest pstack supports. Nothing to do.`);
+    const pkg = readJsonFile(path.join(root, 'package.json'));
+    const pins = ANGULAR_PINS[current];
+    const behind = [
+      ...frameworkPatchSpecs(pkg, pins),
+      ...buildPackageSpecs(pkg, current, pins).filter((spec) =>
+        ANGULAR_BUILD_PACKAGES.some((name) => spec.startsWith(`${name}@`)),
+      ),
+    ];
+    if (behind.length === 0) {
+      deps.log(
+        `The workspace is on Angular ${current}, the newest pstack supports. Nothing to do.`,
+      );
+    } else {
+      deps.log(
+        `The workspace is on Angular ${current}, the newest pstack supports, but its Angular ` +
+          `packages are older than ${pins.angular}, the release pstack tested (later patches ` +
+          `carry security fixes). Update them with:\n  npm install ${behind.join(' ')}`,
+      );
+    }
     return 0;
   }
   const toFlag = flagString(ctx.flags, 'to');

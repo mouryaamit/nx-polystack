@@ -66,7 +66,7 @@ export const ANGULAR_PINS: Readonly<Record<number, AngularPins>> = {
     angularEslint: '19.8.1',
   },
   20: {
-    angular: '20.3.32',
+    angular: '20.3.34',
     nx: '21.6.11',
     typescript: '5.9.3',
     ionic: '8.7.11',
@@ -75,7 +75,7 @@ export const ANGULAR_PINS: Readonly<Record<number, AngularPins>> = {
     angularEslint: '20.7.0',
   },
   21: {
-    angular: '21.2.24',
+    angular: '21.2.25',
     nx: '22.7.12',
     typescript: '5.9.3',
     ionic: '9',

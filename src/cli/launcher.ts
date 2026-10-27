@@ -54,9 +54,11 @@ export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<str
     port: '0.35.0',
     envLayout: '0.35.0',
     from: '1.2.0',
+    standalone: '1.10.1',
+    module: '1.10.1',
   },
   env: { app: '0.34.0', all: '0.34.0', from: '0.34.0', baseHref: '0.34.0', domains: '0.34.0' },
-  lib: { dir: '0.19.0' },
+  lib: { dir: '0.19.0', standalone: '1.10.2', module: '1.10.2' },
   csp: { import: '0.38.0', nonceSource: '1.2.5', env: '1.5.5' },
   infra: { lintStaged: '0.36.0' },
   adopt: {
@@ -75,6 +77,13 @@ export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<str
     rewriteImports: '0.21.0',
     newAdapter: '0.22.0',
   },
+};
+
+/** First plugin version that has a subcommand (`pstack upgrade standalone`). */
+export const MIN_LOCAL_SUBCOMMAND_VERSION: Readonly<
+  Record<string, Readonly<Record<string, string>>>
+> = {
+  upgrade: { standalone: '1.10.3' },
 };
 
 /** Path flags resolved against the caller's cwd, so they survive delegating from another cwd. */
@@ -120,10 +129,17 @@ export function delegationArgs(
  * Throws when the workspace's pinned plugin is too old for `command` (it would only print
  * "Unknown command"). Unreadable versions are let through.
  */
-export function assertLocalSupports(command: string, localVersion: string, flags?: Flags): void {
+export function assertLocalSupports(
+  command: string,
+  localVersion: string,
+  flags?: Flags,
+  subcommand?: string,
+): void {
   const needs: [string, string][] = [];
   const min = MIN_LOCAL_VERSION[command];
   if (min) needs.push([`pstack ${command}`, min]);
+  const minSub = subcommand ? MIN_LOCAL_SUBCOMMAND_VERSION[command]?.[subcommand] : undefined;
+  if (minSub) needs.push([`pstack ${command} ${subcommand}`, minSub]);
   for (const [flag, v] of Object.entries(MIN_LOCAL_FLAG_VERSION[command] ?? {})) {
     if (flags && flags[flag] !== undefined && flags[flag] !== false) {
       const kebab = flag.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);

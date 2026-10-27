@@ -15,6 +15,8 @@ COMMANDS
               build and lint packages, Ionic, Capacitor, Node), one commit per step
               upgrade nx: move an Nx 15 or 16 workspace to Nx 17 (where the plugin loads), one
               major per commit, Angular unchanged
+              upgrade standalone: NgModules to standalone components with Angular's schematic,
+              one commit per mode
   preset      Bootstrap a workspace root skeleton in the current directory
   app         Scaffold a new application into an existing workspace
   lib         Scaffold a shared library (ts, angular, ionic, flutter, assets, styles,
@@ -62,6 +64,8 @@ OPTIONS — new / preset
   --projectDescription=<text>  Short project description
   --angular=<major>            Start on this Angular: 15 | 16 | 17 | 18 | 19 | 20 | 21 (default: Angular 15, added by the
                                first Angular or Ionic app)
+  --standalone                 New Angular and Ionic apps and libraries use standalone components
+                               (default: NgModules; saved as nx.json pstack.angular.style)
   --skipFormat                 Skip Prettier format pass
   --skip-install               new only — do not run npm install
   --skip-git                   new only — do not initialise git
@@ -91,6 +95,16 @@ OPTIONS — upgrade angular
   --dry-run                    Print the steps; change nothing
   Needs a clean git tree and the Node major of the step (Node 22 for Angular 21).
 
+OPTIONS — upgrade standalone (Angular 15.2+)
+  --all                        Every Angular app and library with NgModules (schematic over the
+                               whole workspace; nx.json pstack.angular.style becomes standalone)
+  --project=<a,b>              Only these projects
+  --skip-check                 Skip "nx run-many -t build lint" after each mode
+  --no-commit                  Leave the first mode uncommitted (one mode only)
+  --dry-run                    Print the modes; change nothing
+  Modes: convert-to-standalone, prune-ng-modules, standalone-bootstrap (apps that bootstrap a
+  module). The CSP nonce import stays first in main.ts; Angular 21 apps keep zone.js.
+
 OPTIONS — upgrade nx
   --to=<major>                 16 or 17 (default 17); one nx migrate per major
   --skip-check                 Skip "nx run-many -t build" after each step
@@ -111,6 +125,8 @@ OPTIONS — app
   --port=<n>                   Dev-server port (default: the lowest free port from 4200)
   --env-layout=<layout>        Angular/Ionic — default (environment.ts for dev) | per-env
                                (environment.dev|uat|prod.ts replacing environments/environment.ts)
+  --standalone | --module      Angular/Ionic — standalone components (app.config.ts,
+                               bootstrapApplication) or NgModules (default: the workspace's style)
   --from=<app>                 Create the app from an existing one: copy, rename, every env value
                                emptied; asks for name, folder, port, base href, appId, envs, CSP
                                and tags in a terminal (v1.2.0+)
@@ -135,6 +151,8 @@ OPTIONS — lib
                                (default: buildable)
                                state: simple-service | ngrx (default: simple-service; always buildable)
   --prefix=<prefix>            angular/ionic: component selector prefix (default: lib)
+  --standalone | --module      angular/ionic/pii/session/state: standalone components and
+                               provide*() functions, or NgModules (default: the workspace's style)
   --tags=<tags>                Comma-separated extra Nx tags
 
 OPTIONS — env
@@ -360,6 +378,7 @@ EXAMPLES
   pstack update 0.3.0 --dry-run
   pstack upgrade angular --dry-run
   pstack upgrade angular --to=18
+  pstack upgrade standalone --all --dry-run
   pstack upgrade nx --dry-run
   pstack adopt --compare --app=portal --base=HEAD~1
   pstack adopt --remove-old-scripts --dry-run

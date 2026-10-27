@@ -1,0 +1,9 @@
+import { EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
+
+import { PiiMaskOptions } from './pii-mask';
+import { PII_MASK_OPTIONS } from './pii-mask.options';
+
+/** Once, in the app's providers, to set the mask character or add formats. */
+export function providePiiMask(options: PiiMaskOptions = {}): EnvironmentProviders {
+  return makeEnvironmentProviders([{ provide: PII_MASK_OPTIONS, useValue: options }]);
+}

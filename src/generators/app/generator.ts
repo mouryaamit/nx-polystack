@@ -16,12 +16,14 @@ import {
   ANGULAR_VERSION,
   ensureAngularDependencies,
   ionicAngularImport,
+  ionicStandaloneImport,
   PROVIDE_HTTP_CLIENT_MAJOR,
   STANDALONE_FALSE_MAJOR,
   workspaceGeneratorMajor,
   workspaceGeneratorVersions,
   ZONE_PROVIDER_MAJOR,
 } from '../../lib/utils/angular-deps';
+import { resolveAngularStyle } from '../../lib/utils/angular-style';
 import {
   angularProjectTargets,
   cleanTarget,
@@ -95,6 +97,9 @@ export default async function appGenerator(
       `app generator: --type="${type}" is not supported. Supported types: flutter, angular, ionic.`,
     );
   }
+  if ((options.standalone || options.module) && type === 'flutter') {
+    throw new Error('app generator: --standalone and --module are for Angular and Ionic apps.');
+  }
   if (options.baseHref !== undefined) {
     try {
       checkBaseHref(options.baseHref);
@@ -157,14 +162,28 @@ export default async function appGenerator(
   let installTask: GeneratorCallback | undefined;
 
   if (type === 'angular' || type === 'ionic') {
+    const major = workspaceGeneratorMajor(tree);
+    const style = resolveAngularStyle(
+      tree,
+      { standalone: options.standalone, module: options.module },
+      'app generator',
+    );
+    const standalone = style === 'standalone';
     const vars = {
       name: projectName,
       // Capacitor for the workspace's Angular (5 on 15, 6 on 16–17, 7 on 18–20, 8 on 21); Angular itself is added below.
       capacitorVersion: workspaceGeneratorVersions(tree).capacitor,
       provideHttp: workspaceGeneratorMajor(tree) >= PROVIDE_HTTP_CLIENT_MAJOR,
-      standaloneFalse: workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR,
-      zoneProviders: workspaceGeneratorMajor(tree) >= ZONE_PROVIDER_MAJOR,
-      ionicImport: ionicAngularImport(workspaceGeneratorMajor(tree)),
+      // NgModule declarations on 19+ say standalone: false; standalone components on 15–18 say true.
+      standaloneFalse: !standalone && major >= STANDALONE_FALSE_MAJOR,
+      standaloneTrue: standalone && major < STANDALONE_FALSE_MAJOR,
+      standalone,
+      ionic: type === 'ionic',
+      // ApplicationConfig moved from @angular/platform-browser to @angular/core in Angular 16.
+      applicationConfigFromCore: major >= 16,
+      zoneProviders: major >= ZONE_PROVIDER_MAJOR,
+      ionicImport: ionicAngularImport(major),
+      ionicStandaloneImport: ionicStandaloneImport(major),
       className,
       title,
       appId,
@@ -181,9 +200,15 @@ export default async function appGenerator(
       template: '',
     };
     generateFiles(tree, path.join(__dirname, 'files', 'angular'), projectPath, vars);
+    // NgModule apps: AppModule, AppRoutingModule, bootstrapModule; standalone apps: app.config.ts,
+    // app.routes.ts, bootstrapApplication.
+    generateFiles(tree, path.join(__dirname, 'files', `angular-${style}`), projectPath, vars);
     if (type === 'ionic') {
-      // Overlays the Angular files: IonicModule, <ion-app>, Ionic styles, Capacitor config.
+      // Overlays the Angular files: <ion-app>, Ionic styles, Capacitor config (and IonicModule).
       generateFiles(tree, path.join(__dirname, 'files', 'ionic'), projectPath, vars);
+      if (!standalone) {
+        generateFiles(tree, path.join(__dirname, 'files', 'ionic-module'), projectPath, vars);
+      }
     }
 
     // Server config rendered from the allowlist (pstack csp re-renders it after edits).

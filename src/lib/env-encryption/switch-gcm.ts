@@ -53,7 +53,8 @@ function environmentLocalName(text: string): string | undefined {
 
 /**
  * main.ts awaiting envReady before bootstrap; undefined for an unknown shape (no
- * `platformBrowserDynamic().bootstrapModule(…)`, unbalanced brackets, or another chained call);
+ * `platformBrowserDynamic().bootstrapModule(…)` or `bootstrapApplication(…)`, unbalanced brackets, or
+ * another chained call);
  * the same text when it already calls envReady. The bootstrap arguments and the catch handler are
  * kept as written.
  */
@@ -63,7 +64,8 @@ export function rewriteMainForGcm(
   metaName?: string,
 ): string | undefined {
   if (/\benvReady\s*\(/.test(blankStrings(stripComments(text)))) return text;
-  const re = /\bplatformBrowserDynamic\s*\(\s*\)\s*\.\s*bootstrapModule\s*\(/g;
+  const re =
+    /\bplatformBrowserDynamic\s*\(\s*\)\s*\.\s*bootstrapModule\s*\(|\bbootstrapApplication\s*\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) && !isCodeAt(text, m.index));
   if (!m) return undefined;
@@ -71,6 +73,7 @@ export function rewriteMainForGcm(
   const close = closingBracket(text, open);
   if (close < 0) return undefined;
   const args = text.slice(open + 1, close);
+  const callee = m[0].slice(0, -1).replace(/\s+/g, '');
   let end = close + 1;
   let handler: string | undefined;
   const c = /^\s*\.\s*catch\s*\(/.exec(text.slice(end));
@@ -87,7 +90,7 @@ export function rewriteMainForGcm(
   const local = environmentLocalName(text);
   const call =
     `${envReadyCall(local ?? 'environment', metaName)}\n` +
-    `  .then(() => platformBrowserDynamic().bootstrapModule(${args}))` +
+    `  .then(() => ${callee}(${args}))` +
     `${handler !== undefined ? `\n  .catch(${handler})` : ''};`;
   let out = text.slice(0, m.index) + call + text.slice(end);
   const imports: string[] = [`import { envReady } from '${RUNTIME}';`];

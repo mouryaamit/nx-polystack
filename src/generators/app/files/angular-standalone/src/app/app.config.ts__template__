@@ -1,0 +1,18 @@
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+<% if (applicationConfigFromCore) { %>import { ApplicationConfig<% if (zoneProviders) { %>, provideZoneChangeDetection<% } %> } from '@angular/core';
+<% } else { %>import { ApplicationConfig } from '@angular/platform-browser';
+<% } %>import { <% if (ionic) { %>RouteReuseStrategy, <% } %>provideRouter } from '@angular/router';
+<% if (ionic) { %>import { IonicRouteStrategy, provideIonicAngular } from '<%= ionicStandaloneImport %>';
+<% } %>
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+<% if (zoneProviders) { %>    // Angular 21 is zoneless by default; this app keeps zone.js change detection.
+    provideZoneChangeDetection(),
+<% } %>    provideRouter(routes),
+    provideHttpClient(withInterceptorsFromDi()),
+<% if (ionic) { %>    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+    provideIonicAngular(),
+<% } %>  ],
+};

@@ -72,6 +72,14 @@
       "type": "string",
       "description": "Ionic only — Capacitor appId in reverse-DNS form (default: com.example.<name without dashes>). With --from it must differ from the base app's."
     },
+    "standalone": {
+      "type": "boolean",
+      "description": "Angular/Ionic: standalone components (app.config.ts, bootstrapApplication) instead of NgModules. Default: the workspace's nx.json pstack.angular.style, else NgModules."
+    },
+    "module": {
+      "type": "boolean",
+      "description": "Angular/Ionic: NgModules even when the workspace default is standalone."
+    },
     "from": {
       "type": "string",
       "description": "Create the app from this existing app: its files and configuration are copied under the new name, its environment values emptied. --type, --i18n, --push, --deeplink, --envLayout and --cspConnectSrc do not apply."

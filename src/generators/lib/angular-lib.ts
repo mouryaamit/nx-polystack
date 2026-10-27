@@ -7,10 +7,12 @@ import {
   CONTROL_FLOW_MAJOR,
   ensureAngularDependencies,
   ionicAngularImport,
+  ionicStandaloneImport,
   ngPackagrDependencies,
   STANDALONE_FALSE_MAJOR,
   workspaceGeneratorMajor,
 } from '../../lib/utils/angular-deps';
+import { resolveAngularStyle } from '../../lib/utils/angular-style';
 import {
   addMissingDependencies,
   declaredVersion,
@@ -61,19 +63,40 @@ export function writeAngularLib(
   o: NormalizedLibOptions,
   opts: AngularLibOptions,
 ): GeneratorCallback | undefined {
+  // Read before ensureAngularDependencies: a workspace without Angular gets 15 (no flag needed).
+  const major = workspaceGeneratorMajor(tree);
+  const standalone =
+    resolveAngularStyle(tree, { standalone: o.standalone, module: o.module }, 'lib generator') ===
+    'standalone';
   const vars = {
     ...templateVars(o),
     prefixCamel: names(o.prefix).propertyName,
     componentSuffixes: opts.componentSuffixes ?? null,
-    // Read before ensureAngularDependencies: a workspace without Angular gets 15 (no flag needed).
-    standaloneFalse: workspaceGeneratorMajor(tree) >= STANDALONE_FALSE_MAJOR,
-    ionicImport: ionicAngularImport(workspaceGeneratorMajor(tree)),
-    controlFlow: workspaceGeneratorMajor(tree) >= CONTROL_FLOW_MAJOR,
+    standalone,
+    // NgModule declarations on 19+ say standalone: false; standalone ones on 15–18 say true.
+    standaloneFalse: !standalone && major >= STANDALONE_FALSE_MAJOR,
+    standaloneTrue: standalone && major < STANDALONE_FALSE_MAJOR,
+    ionicImport: ionicAngularImport(major),
+    ionicStandaloneImport: ionicStandaloneImport(major),
+    controlFlow: major >= CONTROL_FLOW_MAJOR,
     ...(opts.vars ?? {}),
   };
   const build = opts.build ?? (o.variant as AngularLibBuild);
   generateFiles(tree, path.join(__dirname, 'files', 'angular', 'config'), o.projectRoot, vars);
   generateFiles(tree, opts.srcTemplates, o.projectRoot, vars);
+  if (standalone) {
+    // Standalone libraries have no NgModules: components, directives and pipes are imported
+    // directly and providers come from provide*() functions.
+    for (const c of tree.listChanges()) {
+      if (
+        c.type !== 'DELETE' &&
+        c.path.startsWith(`${o.projectRoot}/src/`) &&
+        c.path.endsWith('.module.ts')
+      ) {
+        tree.delete(c.path);
+      }
+    }
+  }
 
   const depsTask = combineTasks(ensureLintDependencies(tree), ensureAngularDependencies(tree));
   // ensureAngularDependencies adds Angular 15 when missing, so core is declared from here on

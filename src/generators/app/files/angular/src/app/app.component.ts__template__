@@ -1,10 +1,14 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-
+<% if (standalone && ionic) { %>import { IonApp, IonRouterOutlet } from '<%= ionicStandaloneImport %>';
+<% } else if (standalone) { %>import { RouterOutlet } from '@angular/router';
+<% } %>
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 <% if (standaloneFalse) { %>  standalone: false,
+<% } %><% if (standaloneTrue) { %>  standalone: true,
+<% } %><% if (standalone) { %>  imports: [<%= ionic ? 'IonApp, IonRouterOutlet' : 'RouterOutlet' %>],
 <% } %>})
 export class AppComponent {}

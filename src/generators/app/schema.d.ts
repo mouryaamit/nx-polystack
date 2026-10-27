@@ -16,6 +16,10 @@ export interface AppGeneratorSchema {
   port?: number;
   /** Angular/Ionic: `per-env` gives environment.{dev,uat,prod}.ts and a shared environments/environment.ts. */
   envLayout?: 'default' | 'per-env';
+  /** Angular/Ionic: standalone components (app.config.ts, bootstrapApplication) instead of NgModules. */
+  standalone?: boolean;
+  /** Angular/Ionic: NgModules even when the workspace default (nx.json pstack.angular.style) is standalone. */
+  module?: boolean;
   /** Create the app from this existing app (copy, rename, empty env values). */
   from?: string;
   /** With `from`: environments to keep (default all; dev is always kept). */

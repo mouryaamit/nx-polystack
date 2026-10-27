@@ -1,8 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { repairHttpClientModule, runUpgrade, UpgradeDeps } from '../../src/cli/commands/upgrade';
+import {
+  frameworkPatchSpecs,
+  repairHttpClientModule,
+  runUpgrade,
+  UpgradeDeps,
+} from '../../src/cli/commands/upgrade';
 import { scriptedPrompter } from '../../src/cli/prompt';
+import { ANGULAR_PINS } from '../../src/lib/upgrade/pins';
 
 import { makeCtx, tmpDir, writeJson } from './helpers';
 
@@ -147,7 +153,7 @@ describe('pstack upgrade angular (NX-76)', () => {
     expect(readPkg(ws).engines?.['node']).toBe('>=22.12.0 <23.0.0');
     expect(fs.readFileSync(path.join(ws, '.nvmrc'), 'utf8')).toBe('22\n');
     expect(run[0]).toBe('npx nx migrate 22.7.12 --interactive=false');
-    expect(run).toContain('npx nx migrate @angular/core@21.2.24 --interactive=false');
+    expect(run).toContain('npx nx migrate @angular/core@21.2.25 --interactive=false');
     const ionic = calls.find((c) => c.args.includes('@ionic/migrate'));
     expect(ionic && line(ionic)).toBe('npx -y @ionic/migrate --force');
     expect(ionic?.env).toEqual({ CI: '1' });
@@ -222,11 +228,36 @@ describe('pstack upgrade angular (NX-76)', () => {
     await expect(
       runUpgrade(makeCtx({ cwd: ws, positionals: [] }), fakeDeps(ws).deps),
     ).rejects.toThrow(/pstack upgrade angular/);
-    const top = workspace('21.2.24');
+    const top = workspace('21.2.25');
     const { deps, calls, out } = fakeDeps(top);
     expect(await runUpgrade(makeCtx({ cwd: top, positionals: ['angular'] }), deps)).toBe(0);
     expect(calls).toEqual([]);
     expect(out.join('\n')).toContain('Nothing to do');
+  });
+
+  it('on the newest major, lists the Angular packages older than the tested release', async () => {
+    const ws = workspace('21.2.9');
+    const { deps, calls, out } = fakeDeps(ws);
+    expect(await runUpgrade(makeCtx({ cwd: ws, positionals: ['angular'] }), deps)).toBe(0);
+    expect(calls).toEqual([]);
+    expect(out.join('\n')).toContain('older than 21.2.25');
+    expect(out.join('\n')).toContain('@angular/core@~21.2.25');
+    expect(out.join('\n')).not.toContain('Nothing to do');
+  });
+
+  it('frameworkPatchSpecs: declared framework packages below the pin, other majors too', () => {
+    const pkg = {
+      dependencies: {
+        '@angular/core': '21.2.9',
+        '@angular/router': '~21.2.25',
+        '@angular/common': '^20.3.0',
+        '@angular/cdk': '21.0.0',
+      },
+    };
+    expect(frameworkPatchSpecs(pkg, ANGULAR_PINS[21])).toEqual([
+      '@angular/common@~21.2.25',
+      '@angular/core@~21.2.25',
+    ]);
   });
 
   it('--to runs one step at a time: stops without a terminal, continues with --yes or a yes', async () => {

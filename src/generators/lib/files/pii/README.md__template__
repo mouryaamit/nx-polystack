@@ -26,7 +26,9 @@ an empty element; `[piiReveal]="true"` shows the value.
 Custom formats and the mask character:
 
 ```ts
-PiiMaskModule.forRoot({
+<% if (standalone) { %>// app.config.ts providers; components import PiiMaskPipe / PiiMaskDirective
+providePiiMask({<% } else { %>// root module imports (or providePiiMask({ … }) in its providers)
+PiiMaskModule.forRoot({<% } %>
   maskChar: '•',
   rules: { passport: { valid: /^[A-Z]\d{7}$/, visibleEnd: 3 } },
 });

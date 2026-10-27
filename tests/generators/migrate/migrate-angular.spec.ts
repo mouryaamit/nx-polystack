@@ -1055,7 +1055,7 @@ describe('migrate generator: standalone Angular CLI app', () => {
       const rules = (app: string) =>
         readJson(tree, `apps/${app}/.eslintrc.json`).overrides[0].rules;
 
-      workspaceOn('~20.3.32', '21.6.11');
+      workspaceOn('~20.3.34', '21.6.11');
       await migrateGenerator(tree, { source: sourceOn('^20.3.0', true), name: 'portal' });
       expect(rules('portal')['@angular-eslint/prefer-inject']).toBe('off');
       expect(tree.read('docs/migrations/portal.md', 'utf8')).toContain(

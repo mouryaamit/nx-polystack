@@ -109,7 +109,7 @@ describe('app generator --type=ionic', () => {
       'package.json',
       JSON.stringify({
         scripts: {},
-        dependencies: { '@angular/core': '~21.2.24' },
+        dependencies: { '@angular/core': '~21.2.25' },
         devDependencies: { nx: '22.7.12' },
       }),
     );
@@ -125,6 +125,41 @@ describe('app generator --type=ionic', () => {
     );
     expect(tree.read('apps/field-ops/.gitignore', 'utf8')).toContain(
       'android/app/src/main/assets/public',
+    );
+  });
+
+  it('--standalone: provideIonicAngular and Ionic standalone components', async () => {
+    await appGenerator(tree, { name: 'field-ops', type: 'ionic', standalone: true });
+    expect(tree.exists('apps/field-ops/src/app/app.module.ts')).toBe(false);
+    const config = tree.read('apps/field-ops/src/app/app.config.ts', 'utf8') ?? '';
+    expect(config).toMatch(
+      /import \{\s*IonicRouteStrategy,\s*provideIonicAngular,?\s*\} from '@ionic\/angular\/standalone';/,
+    );
+    expect(config).toContain('{ provide: RouteReuseStrategy, useClass: IonicRouteStrategy }');
+    expect(config).toContain('provideIonicAngular()');
+    const cmp = tree.read('apps/field-ops/src/app/app.component.ts', 'utf8') ?? '';
+    expect(cmp).toContain("import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';");
+    expect(cmp).toContain('imports: [IonApp, IonRouterOutlet]');
+    expect(tree.read('apps/field-ops/src/app/app.component.html', 'utf8')).toContain('<ion-app>');
+  });
+
+  it('--standalone on Angular 21 imports from @ionic/angular (Ionic 9)', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        scripts: {},
+        dependencies: { '@angular/core': '~21.2.25' },
+        devDependencies: { nx: '22.7.12' },
+      }),
+    );
+    await appGenerator(tree, { name: 'field-ops', type: 'ionic', standalone: true });
+    const config = tree.read('apps/field-ops/src/app/app.config.ts', 'utf8') ?? '';
+    expect(config).toContain(
+      "import { IonicRouteStrategy, provideIonicAngular } from '@ionic/angular';",
+    );
+    expect(config).toContain('provideZoneChangeDetection(),');
+    expect(tree.read('apps/field-ops/src/app/app.component.ts', 'utf8')).toContain(
+      "import { IonApp, IonRouterOutlet } from '@ionic/angular';",
     );
   });
 

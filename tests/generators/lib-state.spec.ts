@@ -95,6 +95,7 @@ describe('lib generator --type=state', () => {
       await gen({ variant: 'ngrx' });
       expect(tree.children(`${ROOT}/src/lib`).sort()).toEqual([
         'orders-state.module.ts',
+        'orders-state.providers.ts',
         'orders.actions.ts',
         'orders.effects.ts',
         'orders.models.ts',
@@ -106,6 +107,10 @@ describe('lib generator --type=state', () => {
         expect(index).toContain(`export * from './lib/orders.${f}';`);
       }
       expect(index).toContain("export * from './lib/orders-state.module';");
+      expect(index).toContain("export * from './lib/orders-state.providers';");
+      expect(read('src/lib/orders-state.providers.ts')).toContain(
+        'provideState(ORDERS_FEATURE_KEY, ordersReducer)',
+      );
 
       const actions = read('src/lib/orders.actions.ts');
       expect(actions).toContain('export const OrdersActions = createActionGroup({');

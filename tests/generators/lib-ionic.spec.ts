@@ -22,7 +22,7 @@ describe('lib generator --type=ionic', () => {
       'package.json',
       JSON.stringify({
         name: '@acme/source',
-        dependencies: { '@angular/core': '~21.2.24' },
+        dependencies: { '@angular/core': '~21.2.25' },
         devDependencies: { nx: '22.7.12' },
       }),
     );
