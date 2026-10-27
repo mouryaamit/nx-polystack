@@ -3,6 +3,12 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.11.1
+
+- `pstack upgrade standalone` runs `eslint --fix` and Prettier on the `main.ts` files it rewrites
+  before the bootstrap step's check and commit, so imports are ordered and no blank lines are left
+  behind when the workspace's pre-commit hook formats before it lints.
+
 ## 1.11.0
 
 NgModules and standalone components, on every supported Angular (15–21), and a command that moves
