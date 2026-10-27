@@ -7,6 +7,7 @@ import {
   dropUnusedNamedImport,
   enablePreferStandalone,
   keepNonceImportFirst,
+  tidyMains,
 } from '../../src/cli/commands/upgrade-standalone';
 import { assertLocalSupports } from '../../src/cli/launcher';
 import { scriptedPrompter } from '../../src/cli/prompt';
@@ -107,6 +108,11 @@ describe('pstack upgrade standalone', () => {
       'npx nx g @angular/core:standalone --path=./ --mode=standalone-bootstrap --interactive=false',
     ]);
     expect(calls.filter((c) => c === 'npx nx run-many -t build lint')).toHaveLength(3);
+    // main.ts is tidied after the bootstrap mode, before its check and commit.
+    const tidy = calls.indexOf('npx --no-install eslint --fix apps/web/src/main.ts');
+    expect(tidy).toBeGreaterThan(calls.findIndex((c) => c.includes('--mode=standalone-bootstrap')));
+    expect(calls[tidy + 1]).toBe('npx --no-install prettier --write apps/web/src/main.ts');
+    expect(calls[tidy + 2]).toBe('npx nx run-many -t build lint');
     expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
       'git commit -m chore: standalone convert-to-standalone (pstack upgrade standalone)',
       'git commit -m chore: standalone prune-ng-modules (pstack upgrade standalone)',
@@ -242,5 +248,25 @@ describe('pstack upgrade standalone', () => {
         '@angular/platform-browser-dynamic',
       ),
     ).toBe("import { a } from '@angular/platform-browser-dynamic';\na();\n");
+  });
+
+  it('tidyMains keeps going when a tool is missing', () => {
+    const said: string[] = [];
+    const ran: string[] = [];
+    tidyMains(
+      '/ws',
+      ['apps/web/src/main.ts'],
+      {
+        exec: (cmd, args) => {
+          ran.push(args[1]);
+          if (args[1] === 'eslint') throw new Error('not installed');
+        },
+      },
+      (l) => void said.push(l),
+    );
+    expect(ran).toEqual(['eslint', 'prettier']);
+    expect(said[0]).toContain('eslint could not tidy');
+    tidyMains('/ws', [], { exec: () => ran.push('x') }, () => undefined);
+    expect(ran).toHaveLength(2);
   });
 });

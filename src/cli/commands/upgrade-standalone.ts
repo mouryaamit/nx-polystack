@@ -168,6 +168,34 @@ export function dropUnusedNamedImport(text: string, name: string, from: string):
   return text.slice(0, m.index) + replacement + text.slice(m.index + m[0].length);
 }
 
+/**
+ * ESLint --fix (import order) then Prettier on the rewritten main.ts files, so the commit holds them
+ * formatted: the schematic and the fix-ups add and drop imports, and a pre-commit hook that runs
+ * Prettier before ESLint would leave blank lines behind. Best effort: a workspace without either
+ * tool, or with lint errors left, keeps going (the check reports real problems).
+ */
+export function tidyMains(
+  root: string,
+  files: string[],
+  deps: { exec(cmd: string, args: string[], cwd: string): unknown },
+  say: (line: string) => void,
+): void {
+  if (files.length === 0) return;
+  const done: string[] = [];
+  for (const [tool, args] of [
+    ['eslint', ['--fix', ...files]],
+    ['prettier', ['--write', ...files]],
+  ] as const) {
+    try {
+      deps.exec('npx', ['--no-install', tool, ...args], root);
+      done.push(tool);
+    } catch {
+      say(`${tool} could not tidy ${files.join(', ')} (left as written)`);
+    }
+  }
+  if (done.length > 0) say(`${files.join(', ')}: tidied with ${done.join(' and ')}`);
+}
+
 /** Removes `@angular-eslint/prefer-standalone: off` from a project's .eslintrc.json. */
 export function enablePreferStandalone(file: string): boolean {
   if (!fs.existsSync(file)) return false;
@@ -369,6 +397,14 @@ export async function runUpgradeStandalone(
         }
         fs.writeFileSync(main, text);
       }
+      tidyMains(
+        root,
+        bootstrapApps
+          .map((p) => path.join(p.root, 'src', 'main.ts'))
+          .filter((f) => fs.existsSync(path.join(root, f))),
+        deps,
+        say,
+      );
     }
     if (check) {
       say('check: nx run-many -t build lint');
