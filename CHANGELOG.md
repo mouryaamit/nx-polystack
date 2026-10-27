@@ -3,6 +3,13 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.11.2
+
+- The generated workspace block in `CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md`
+  says whether the workspace uses NgModules or standalone components, with a rule to write new
+  Angular code that way, so AI assistants follow the workspace's style. Moving a workspace with
+  `pstack upgrade standalone --all` refreshes it; elsewhere run `pstack llm`.
+
 ## 1.11.1
 
 - `pstack upgrade standalone` runs `eslint --fix` and Prettier on the `main.ts` files it rewrites

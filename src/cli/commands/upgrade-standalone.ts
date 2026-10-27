@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { refreshLlmBlocks } from '../../lib/utils/llm-block';
+import { flushChanges, fsTree } from '../../lib/utils/nx-tree';
 import { flagBoolean, flagString } from '../args';
 import { findWorkspaceRoot } from '../context';
 import { CliError, CommandContext } from '../types';
@@ -230,6 +232,18 @@ function saveStandaloneStyle(root: string): void {
   fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
 }
 
+/** Refreshes the generated AI-assistant blocks (CLAUDE.md, …) on disk; returns the files written. */
+export function refreshLlmFiles(root: string): string[] {
+  try {
+    const tree = fsTree(root);
+    const changed = refreshLlmBlocks(tree);
+    flushChanges(root, tree.listChanges());
+    return changed;
+  } catch {
+    return [];
+  }
+}
+
 function angularCoreVersion(root: string): string | undefined {
   const file = path.join(root, 'node_modules', '@angular', 'core', 'package.json');
   if (!fs.existsSync(file)) return undefined;
@@ -357,6 +371,8 @@ export async function runUpgradeStandalone(
       if (all) {
         saveStandaloneStyle(root);
         say('nx.json pstack.angular.style = standalone (new apps and libraries follow it)');
+        const llm = refreshLlmFiles(root);
+        if (llm.length > 0) say(`${llm.join(', ')}: workspace block says standalone components`);
       }
     }
     if (mode === 'standalone-bootstrap') {
