@@ -11,6 +11,7 @@ import {
 } from '../../src/cli/commands/upgrade-standalone';
 import { assertLocalSupports } from '../../src/cli/launcher';
 import { scriptedPrompter } from '../../src/cli/prompt';
+import { LLM_PROVIDERS, upsertBlock } from '../../src/lib/utils/llm-block';
 
 import { makeCtx, tmpDir, writeJson } from './helpers';
 
@@ -132,6 +133,23 @@ describe('pstack upgrade standalone', () => {
       angular: { style: 'standalone' },
     });
     expect(out.join('\n')).toContain('of web, shared-ui:');
+  });
+
+  it('--all refreshes the AI-assistant block to say standalone components', async () => {
+    const ws = workspace();
+    fs.writeFileSync(
+      path.join(ws, 'CLAUDE.md'),
+      upsertBlock(null, 'old block', LLM_PROVIDERS.claude),
+    );
+    const { deps, out } = fakeDeps(ws);
+    await runUpgrade(
+      makeCtx({ cwd: ws, positionals: ['standalone'], flags: { all: true, skipCheck: true } }),
+      deps,
+    );
+    const claude = fs.readFileSync(path.join(ws, 'CLAUDE.md'), 'utf8');
+    expect(claude).toContain('- Angular style: standalone components');
+    expect(claude).not.toContain('old block');
+    expect(out.join('\n')).toContain('CLAUDE.md: workspace block says standalone components');
   });
 
   it('--project limits the paths; projects without NgModules are reported; no bootstrap for libs', async () => {

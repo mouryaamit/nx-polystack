@@ -170,6 +170,27 @@ describe('scanWorkspace', () => {
     expect(info.pluginVersion).toBe(PLUGIN_VERSION);
   });
 
+  it('reads the Angular style: NgModules by default, standalone from nx.json, none without Angular', () => {
+    const tree = polystack();
+    expect(scanWorkspace(tree).angularStyle).toBe('module');
+    let block = renderBlock(scanWorkspace(tree));
+    expect(block).toContain('- Angular style: NgModules');
+    expect(block).toContain('Declare new Angular components, directives and pipes in the NgModule');
+
+    const nx = JSON.parse(tree.read('nx.json', 'utf8') ?? '{}');
+    writeJson(tree, 'nx.json', { ...nx, pstack: { angular: { style: 'standalone' } } });
+    expect(scanWorkspace(tree).angularStyle).toBe('standalone');
+    block = renderBlock(scanWorkspace(tree));
+    expect(block).toContain('- Angular style: standalone components');
+    expect(block).toContain('Write Angular code as standalone components');
+    expect(block).not.toContain('NgModule of their');
+
+    const bare = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
+    writeJson(bare, 'package.json', { name: '@acme/workspace' });
+    expect(scanWorkspace(bare).angularStyle).toBeUndefined();
+    expect(renderBlock(scanWorkspace(bare))).not.toContain('Angular style');
+  });
+
   it('prefers the installed nx version', () => {
     const tree = polystack();
     writeJson(tree, 'node_modules/nx/package.json', { name: 'nx', version: '17.0.6' });
