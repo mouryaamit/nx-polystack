@@ -58,7 +58,7 @@ async function main(argv: string[]): Promise<number> {
     shouldDelegate({ command, flags, env: process.env, selfRoot, local })
   ) {
     try {
-      assertLocalSupports(command, local.version, flags);
+      assertLocalSupports(command, local.version, flags, positionals[0]);
     } catch (err: unknown) {
       console.error(`\nError: ${err instanceof Error ? err.message : String(err)}`);
       return 1;

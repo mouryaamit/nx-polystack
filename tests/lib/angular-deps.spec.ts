@@ -211,7 +211,7 @@ describe('ensureAngularDependencies', () => {
       capacitor: '^7.0.0',
     });
     expect(angularGeneratorVersions(20)).toEqual({
-      angular: '~20.3.32',
+      angular: '~20.3.34',
       zoneJs: '~0.15.0',
       typescript: '~5.9.3',
       typesNode: '~20.10.0',
@@ -220,7 +220,7 @@ describe('ensureAngularDependencies', () => {
       capacitor: '^7.0.0',
     });
     expect(angularGeneratorVersions(21)).toEqual({
-      angular: '~21.2.24',
+      angular: '~21.2.25',
       zoneJs: '~0.16.0',
       typescript: '~5.9.3',
       typesNode: '~22.10.0',

@@ -1,0 +1,17 @@
+import { EnvironmentProviders } from '@angular/core';
+import { provideEffects } from '@ngrx/effects';
+import { provideState } from '@ngrx/store';
+
+import { <%= className %>Effects } from './<%= fileName %>.effects';
+import { <%= constantName %>_FEATURE_KEY, <%= propertyName %>Reducer } from './<%= fileName %>.reducer';
+
+/**
+ * Registers the <%= title %> feature state in standalone apps (or a route's providers). The app
+ * must provide `provideStore()` and `provideEffects()` once.
+ */
+export function provide<%= className %>State(): EnvironmentProviders[] {
+  return [
+    provideState(<%= constantName %>_FEATURE_KEY, <%= propertyName %>Reducer),
+    provideEffects(<%= className %>Effects),
+  ];
+}

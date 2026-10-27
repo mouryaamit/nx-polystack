@@ -45,6 +45,14 @@
       "type": "string",
       "description": "angular/ionic: internal | buildable | publishable (default: buildable). state: simple-service | ngrx (default: simple-service); state libs are always buildable."
     },
+    "standalone": {
+      "type": "boolean",
+      "description": "angular/ionic/pii/session/state: standalone components, directives and pipes and provide*() functions instead of NgModules. Default: the workspace's nx.json pstack.angular.style, else NgModules."
+    },
+    "module": {
+      "type": "boolean",
+      "description": "angular/ionic/pii/session/state: NgModules even when the workspace default is standalone."
+    },
     "prefix": {
       "type": "string",
       "description": "angular/ionic: component selector prefix (default: lib).",

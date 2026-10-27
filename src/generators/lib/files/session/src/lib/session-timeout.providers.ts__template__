@@ -1,0 +1,11 @@
+import { EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
+
+import { SessionTimeoutConfig } from './session-clock';
+import { SESSION_TIMEOUT_CONFIG } from './session-timeout.config';
+
+/** In the app's providers: provideSessionTimeout({ idleMs: 10 * 60_000 }). */
+export function provideSessionTimeout(
+  config: Partial<SessionTimeoutConfig> = {},
+): EnvironmentProviders {
+  return makeEnvironmentProviders([{ provide: SESSION_TIMEOUT_CONFIG, useValue: config }]);
+}

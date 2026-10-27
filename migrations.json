@@ -97,6 +97,11 @@
       "version": "1.5.2",
       "description": "Move per-environment files into environments/<project>/: the .htaccess an app's build copied becomes htaccess.<env> per release env (htaccess: false when it had none), Flutter env JSON moves to environment.<env>.json, and Flutter targets on tools/scripts/flutter/flutter-build.js move to the plugin executor",
       "implementation": "./src/migrations/env-files-layout/env-files-layout"
+    },
+    "lint-staged-eslint-resolve": {
+      "version": "1.10.4",
+      "description": "Fix the lint-staged ESLint script so commits with staged TypeScript files find ESLint 8 and later again (it resolved bin/eslint.js, which ESLint no longer exports)",
+      "implementation": "./src/migrations/lint-staged-eslint-resolve/lint-staged-eslint-resolve"
     }
   }
 }

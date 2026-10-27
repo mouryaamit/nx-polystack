@@ -8,7 +8,9 @@ import {
   Output,
   ViewChild,
 } from '@angular/core';
-import { map } from 'rxjs';
+<% if (standalone && controlFlow) { %>import { AsyncPipe } from '@angular/common';
+<% } else if (standalone) { %>import { AsyncPipe, NgIf } from '@angular/common';
+<% } %>import { map } from 'rxjs';
 
 import { SessionState } from '../session-clock';
 import { SessionTimeoutService } from '../session-timeout.service';
@@ -47,6 +49,8 @@ let nextId = 0;
   styleUrls: ['./session-warning.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 <% if (standaloneFalse) { %>  standalone: false,
+<% } %><% if (standaloneTrue) { %>  standalone: true,
+<% } %><% if (standalone) { %>  imports: [<%= controlFlow ? 'AsyncPipe' : 'NgIf, AsyncPipe' %>],
 <% } %>})
 export class SessionWarningComponent {
   /** Overrides of the default (English) texts. */

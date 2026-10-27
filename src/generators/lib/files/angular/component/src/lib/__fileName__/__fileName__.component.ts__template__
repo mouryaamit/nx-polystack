@@ -6,5 +6,6 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   styleUrls: ['./<%= fileName %>.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 <% if (standaloneFalse) { %>  standalone: false,
+<% } %><% if (standaloneTrue) { %>  standalone: true,
 <% } %>})
 export class <%= className %>Component {}

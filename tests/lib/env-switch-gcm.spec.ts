@@ -55,7 +55,23 @@ describe('switch to aes-gcm', () => {
       'envReady(environment, { inPlace: true })\n  .then(() => platformBrowserDynamic().bootstrapModule(AppModule))',
     );
     expect(rewriteMainForGcm(out, 'x')).toBe(out);
-    expect(rewriteMainForGcm('bootstrapApplication(App);', 'x')).toBeUndefined();
+    expect(rewriteMainForGcm('platformBrowser().bootstrapModule(App);', 'x')).toBeUndefined();
+  });
+
+  it('rewrites a standalone main.ts (bootstrapApplication)', () => {
+    const main =
+      "import { bootstrapApplication } from '@angular/platform-browser';\n" +
+      "import { AppComponent } from './app/app.component';\n" +
+      "import { appConfig } from './app/app.config';\n" +
+      "import { environment } from '@env/web/environment';\n\n" +
+      'bootstrapApplication(AppComponent, appConfig).catch((err) => console.error(err));\n';
+    const out = rewriteMainForGcm(main, '@env/web/environment')!;
+    expect(out).toContain(
+      'envReady(environment, { inPlace: true })\n' +
+        '  .then(() => bootstrapApplication(AppComponent, appConfig))\n' +
+        '  .catch((err) => console.error(err));',
+    );
+    expect(rewriteMainForGcm(out, 'x')).toBe(out);
   });
 
   it('adds the environment import when main.ts has none', () => {
@@ -141,7 +157,7 @@ await decryptEnvironmentAsync(other);
         release: { executor: '@mouryaamit/nx-polystack:build', options: { envProject: 'odd' } },
       },
     });
-    tree.write('apps/odd/main.ts', 'bootstrapApplication(App);\n');
+    tree.write('apps/odd/main.ts', 'platformBrowser().bootstrapModule(App);\n');
     addProjectConfiguration(tree, 'shared', { root: 'libs/shared', sourceRoot: 'libs/shared/src' });
     tree.write('libs/shared/src/config/env-secret.ts', OLD_WRAPPER);
     const notes = switchAppsToGcm(tree, ['envName']);
@@ -358,7 +374,7 @@ describe('switch to aes-gcm: workspace', () => {
 
   it('prints metaName in instructions for an unknown main.ts', () => {
     const tree = createTreeWithEmptyWorkspace();
-    release(tree, 'bootstrapApplication(App);\n');
+    release(tree, 'platformBrowser().bootstrapModule(App);\n');
     expect(switchAppsToGcm(tree, [], { metaName: 'x-app' }).join('\n')).toContain(
       "await envReady(environment, { inPlace: true, metaName: 'x-app' })",
     );

@@ -25,6 +25,10 @@ export interface LibGeneratorSchema {
    * state: simple-service | ngrx (default simple-service); state libs are always buildable.
    */
   variant?: string;
+  /** angular/ionic/pii/session/state: standalone components and provider functions, no NgModules. */
+  standalone?: boolean;
+  /** angular/ionic/pii/session/state: NgModules even when the workspace default is standalone. */
+  module?: boolean;
   /** angular/ionic: component selector prefix (default lib). */
   prefix?: string;
   tags?: string[];

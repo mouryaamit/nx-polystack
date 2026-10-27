@@ -12,6 +12,7 @@ import {
   ensureAngularDependencies,
   GENERATOR_ANGULAR_MAJORS,
 } from '../../lib/utils/angular-deps';
+import { saveWorkspaceAngularStyle } from '../../lib/utils/angular-style';
 import { typescriptEslintVersion } from '../../lib/utils/dependencies';
 import { LINT_STAGED_CONFIG } from '../../lib/utils/lint-staged';
 import {
@@ -139,6 +140,7 @@ export default async function presetGenerator(
 
   // `pstack new --angular=N`: the workspace starts on that Angular, so apps, libraries and
   // migrated projects are generated for it (pstack new installs after the preset).
+  if (options.standalone) saveWorkspaceAngularStyle(tree, 'standalone');
   if (options.angular !== undefined) {
     if (!GENERATOR_ANGULAR_MAJORS.includes(options.angular)) {
       throw new Error(

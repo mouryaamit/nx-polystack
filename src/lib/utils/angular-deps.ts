@@ -60,6 +60,14 @@ export const CONTROL_FLOW_MAJOR = 21;
  */
 export const BUNDLER_RESOLUTION_MAJOR = 21;
 
+/**
+ * Where generated standalone code imports Ionic's standalone components and providers from:
+ * `@ionic/angular/standalone` on Ionic 7.5–8, `@ionic/angular` on Ionic 9 (Angular 21).
+ */
+export function ionicStandaloneImport(major: number): string {
+  return major >= IONIC_LAZY_MAJOR ? '@ionic/angular' : '@ionic/angular/standalone';
+}
+
 /** Where generated NgModule code imports Ionic from, for an Angular major. */
 export function ionicAngularImport(major: number): string {
   return major >= IONIC_LAZY_MAJOR ? '@ionic/angular/lazy' : '@ionic/angular';

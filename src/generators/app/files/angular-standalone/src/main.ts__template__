@@ -1,0 +1,15 @@
+// Gives <script>/<style> elements added at runtime the page's CSP nonce (keep it first).
+import '@mouryaamit/nx-polystack/runtime/csp-nonce';
+
+import { enableProdMode } from '@angular/core';
+import { bootstrapApplication } from '@angular/platform-browser';
+
+import { AppComponent } from './app/app.component';
+import { appConfig } from './app/app.config';
+import { environment } from '<%= envImport %>';
+
+if (environment.production) {
+  enableProdMode();
+}
+
+bootstrapApplication(AppComponent, appConfig).catch((err) => console.error(err));

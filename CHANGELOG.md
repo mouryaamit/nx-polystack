@@ -3,7 +3,84 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
-## 1.10.0
+## 1.11.0
+
+NgModules and standalone components, on every supported Angular (15–21), and a command that moves
+one to the other.
+
+- **Choose the style:** `pstack new --standalone` creates a standalone workspace and saves the choice
+  in `nx.json` (`pstack.angular.style`). `pstack app` and `pstack lib` (angular, ionic, pii, session,
+  state) follow it, or take `--standalone` / `--module` per project. NgModules stay the default.
+- **Standalone apps** bootstrap with `bootstrapApplication`, `app.config.ts` and `app.routes.ts`;
+  Ionic apps use `provideIonicAngular()` and Ionic's standalone components. **Standalone libraries**
+  have no NgModules, and the PII, session and NgRx state libraries export provider functions in both
+  styles.
+- **`pstack upgrade standalone`** moves an NgModule workspace (`--all`) or some projects
+  (`--project`) with Angular's standalone schematic: convert, prune, bootstrap, each checked with
+  build and lint and committed. It keeps the CSP nonce import first and zone.js on Angular 21.
+- **Security:** Angular 21 is pinned to 21.2.25 and Angular 20 to 20.3.34, and
+  `pstack upgrade angular` also moves framework packages that `nx migrate` left on an older patch.
+- **Fix:** the pre-commit ESLint step found no ESLint 8+ in warn mode and failed every commit with
+  staged TypeScript files; `pstack update` rewrites the script.
+
+Checked by:
+
+- new standalone workspaces on Angular 15 to 21 (apps, an Ionic app, a library and the session, PII
+  and state libraries): build, lint, test and release builds, plus migrated `ng new`, Ionic and
+  `create-nx-workspace` sources;
+- `pstack upgrade standalone --all` on NgModule workspaces on Angular 15 and 21: every step builds,
+  lints and commits, and the release build passes.
+
+The 1.10.1 to 1.10.5 entries below were development releases leading to this one.
+
+## 1.10.5
+
+- `pstack upgrade standalone` on Angular 21: `main.ts` no longer imports
+  `provideZoneChangeDetection` twice (Angular's bootstrap schematic keeps the import of the
+  `applicationProviders` it drops, so the build failed). The `platformBrowserDynamic` import the
+  schematic leaves unused is removed.
+
+## 1.10.4
+
+- Fix: the pre-commit ESLint step (`tools/scripts/lint-staged-eslint.js`, warn mode) reported
+  "ESLint is not installed" on every commit with staged TypeScript files, because ESLint 8 and later
+  do not export `bin/eslint.js`. `pstack update` rewrites the script.
+- `pstack upgrade standalone` turns `@angular-eslint/prefer-standalone` back on after its last
+  mode, not after the first: the bootstrapped `AppComponent` only becomes standalone in the
+  bootstrap mode, so the first check failed lint on Angular 19+.
+
+## 1.10.3
+
+- `pstack upgrade standalone` moves an NgModule workspace to standalone components with Angular's
+  schematic, on Angular 15.2–21: convert, prune the NgModules, then `bootstrapApplication`, one
+  checked commit per mode. `--all` also sets the workspace style to standalone; `--project` limits
+  it to some projects. The CSP nonce import stays first in `main.ts`, and Angular 21 apps keep
+  zone.js.
+- Security: Angular 21 is pinned to 21.2.25 and Angular 20 to 20.3.34, the patches with the
+  latest Angular advisories fixed (template sanitization, `HttpTransferCache`, router SSR).
+  `pstack upgrade angular` also moves framework packages that `nx migrate` left on an older patch,
+  and on Angular 21 prints the `npm install` command for a workspace whose packages are behind.
+
+## 1.10.2
+
+- `pstack lib --standalone` for `angular`, `ionic`, `pii`, `session` and `state` libraries: no
+  NgModules; standalone components, directives and pipes that import what they use. Without the
+  flag, libraries follow the workspace style (`pstack new --standalone`); `--module` keeps
+  NgModules.
+- The PII, session and NgRx state libraries also export provider functions in both styles:
+  `providePiiMask()`, `provideSessionTimeout()` and `provide<Name>State()`.
+
+## 1.10.1
+
+- `pstack app --type=angular|ionic --standalone` creates an app on standalone components:
+  `bootstrapApplication` in `main.ts`, `app.config.ts` and `app.routes.ts` instead of `AppModule`
+  and `AppRoutingModule`, on every supported Angular (15–21). Ionic apps get
+  `provideIonicAngular()` and Ionic's standalone components. `--module` keeps NgModules.
+- `pstack new --standalone` makes standalone the workspace default (nx.json
+  `pstack.angular.style`); apps follow it unless `--module` is passed. Without it, nothing changes:
+  new apps use NgModules.
+- `pstack encryption --cipher=aes-gcm` also rewrites a `bootstrapApplication(…)` main.ts to await
+  `envReady` first.
 
 Angular 21 is supported, the sixth release of one public release per Angular major, and the last
 major `pstack upgrade angular` reaches today.

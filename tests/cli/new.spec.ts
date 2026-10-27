@@ -150,13 +150,23 @@ describe('pstack new', () => {
       recorder().deps,
     );
     const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'ws', 'package.json'), 'utf8'));
-    expect(pkg.dependencies['@angular/core']).toBe('~20.3.32');
+    expect(pkg.dependencies['@angular/core']).toBe('~20.3.34');
     expect(pkg.dependencies['zone.js']).toBe('~0.15.0');
     for (const name of ['nx', '@nx/devkit', '@nx/eslint', '@nx/eslint-plugin', '@nx/angular']) {
       expect(pkg.devDependencies[name]).toBe('~21.6.11');
     }
     expect(pkg.devDependencies.typescript).toBe('~5.9.3');
     expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~20.7.0');
+  });
+
+  it('--standalone saves nx.json pstack.angular.style', async () => {
+    const cwd = tmpDir();
+    await runNew(
+      makeCtx({ cwd, positionals: ['ws'], flags: { skipFormat: true, standalone: true } }),
+      recorder().deps,
+    );
+    const nx = JSON.parse(fs.readFileSync(path.join(cwd, 'ws', 'nx.json'), 'utf8'));
+    expect(nx.pstack.angular).toEqual({ style: 'standalone' });
   });
 
   it('--angular=21 moves the workspace to Nx 22.7 and Node 22', async () => {
@@ -166,7 +176,7 @@ describe('pstack new', () => {
       recorder().deps,
     );
     const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'ws', 'package.json'), 'utf8'));
-    expect(pkg.dependencies['@angular/core']).toBe('~21.2.24');
+    expect(pkg.dependencies['@angular/core']).toBe('~21.2.25');
     expect(pkg.dependencies['zone.js']).toBe('~0.16.0');
     for (const name of ['nx', '@nx/devkit', '@nx/eslint', '@nx/eslint-plugin', '@nx/angular']) {
       expect(pkg.devDependencies[name]).toBe('~22.7.12');

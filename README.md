@@ -67,6 +67,21 @@ Known breakpoints when upgrading:
   npm 10.9 that ships with Node 22 fails to install new Angular 21 projects (`ng new`,
   `create-nx-workspace`).
 
+### NgModules or standalone components
+
+Every supported major (15–21) works both ways. New workspaces use NgModules unless you pass
+`pstack new --standalone`, which saves the choice in `nx.json` (`pstack.angular.style`); new apps and
+libraries follow it, and `pstack app` / `pstack lib` take `--standalone` or `--module` per project.
+Standalone apps bootstrap with `bootstrapApplication`, `app.config.ts` and `app.routes.ts`; the PII,
+session and NgRx state libraries also export `providePiiMask()`, `provideSessionTimeout()` and
+`provide<Name>State()`.
+
+`pstack upgrade standalone --all` moves an existing NgModule workspace with Angular's own schematic
+(Angular 15.2+): convert, prune the NgModules, then `bootstrapApplication`, with a build and lint
+check and one commit per step. It keeps the CSP nonce import first in `main.ts` and, on Angular 21,
+zone.js change detection. `--project=a,b` limits it to some projects; `--dry-run` shows the plan.
+Ionic apps keep `IonicModule`; Ionic's own codemod moves them to Ionic's standalone components.
+
 ## What you get
 
 - **Generators** for apps (Angular, Ionic, Flutter), shared libraries (TypeScript, Angular, Ionic,
@@ -94,6 +109,7 @@ Known breakpoints when upgrading:
 | `pstack update`                          | Upgrade the workspace's plugin and run its migrations                                      |
 | `pstack upgrade angular`                 | Move the workspace to the next Angular major (one commit per step)                         |
 | `pstack upgrade nx`                      | Move an Nx 15 or 16 workspace to Nx 17 (Angular unchanged)                                 |
+| `pstack upgrade standalone`              | Move NgModules to standalone components (one commit per mode)                              |
 | `pstack app` / `pstack lib`              | Add an application or a shared library                                                     |
 | `pstack env`                             | Add an environment to some or all apps                                                     |
 | `pstack migrate`                         | Copy an existing project into the workspace (the source is never modified)                 |

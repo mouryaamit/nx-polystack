@@ -221,6 +221,15 @@ describe('quality (NX-45)', () => {
       const fakeEslint = () => {
         const bin = path.join(ws, 'node_modules', 'eslint', 'bin');
         fs.mkdirSync(bin, { recursive: true });
+        // Like ESLint 8+: bin/eslint.js is not exported, only "." and package.json.
+        fs.writeFileSync(
+          path.join(ws, 'node_modules', 'eslint', 'package.json'),
+          JSON.stringify({
+            name: 'eslint',
+            bin: { eslint: './bin/eslint.js' },
+            exports: { './package.json': './package.json', '.': './api.js' },
+          }),
+        );
         fs.writeFileSync(
           path.join(bin, 'eslint.js'),
           "require('fs').writeFileSync(__dirname + '/args.json', JSON.stringify(process.argv.slice(2)));\n" +

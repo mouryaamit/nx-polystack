@@ -75,6 +75,7 @@ export async function runNew(ctx: CommandContext, deps: NewDeps = defaultDeps): 
       llm: flagString(ctx.flags, 'llm'),
       projectDescription: flagString(ctx.flags, 'projectDescription'),
       angular,
+      standalone: ctx.flags['standalone'] === true || undefined,
       // Prettier cannot resolve config for a folder that does not exist yet (dry run).
       skipFormat: ctx.dryRun || !!ctx.flags['skipFormat'],
       pluginVersion: ctx.selfVersion,

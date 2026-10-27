@@ -4,7 +4,7 @@ import { maskPii, PiiMaskOptions } from './pii-mask';
 import { PII_MASK_OPTIONS } from './pii-mask.options';
 
 /** {{ customer.pan | piiMask: 'pan' }} → XXXXX1234F */
-@Pipe({ name: 'piiMask'<% if (standaloneFalse) { %>, standalone: false<% } %> })
+@Pipe({ name: 'piiMask'<% if (standaloneFalse) { %>, standalone: false<% } %><% if (standaloneTrue) { %>, standalone: true<% } %> })
 export class PiiMaskPipe implements PipeTransform {
   private readonly options: PiiMaskOptions | null = inject(PII_MASK_OPTIONS, { optional: true });
 

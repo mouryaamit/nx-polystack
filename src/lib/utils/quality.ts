@@ -219,12 +219,16 @@ export const LINT_STAGED_ESLINT_JS = `#!/usr/bin/env node
 // Written by nx-polystack. lint-staged runs it for staged *.ts files: ESLint fixes what it can and
 // reports the rest without blocking the commit.
 const { spawnSync } = require('child_process');
+const path = require('path');
 
 const args = process.argv.slice(2);
 if (!args.some((a) => !a.startsWith('-'))) process.exit(0);
 let eslint;
 try {
-  eslint = require.resolve('eslint/bin/eslint.js', { paths: [process.cwd()] });
+  // ESLint 8+ does not export bin/eslint.js; its package.json (always exported) names the bin.
+  const pkgFile = require.resolve('eslint/package.json', { paths: [process.cwd()] });
+  const bin = require(pkgFile).bin;
+  eslint = path.join(path.dirname(pkgFile), (bin && (bin.eslint || bin)) || 'bin/eslint.js');
 } catch {
   console.error('lint-staged-eslint: ESLint is not installed in this workspace (npm install).');
   process.exit(2);

@@ -82,6 +82,10 @@
       "enum": [15, 16, 17, 18, 19, 20, 21],
       "description": "Angular major to add to the workspace now. Without it, the first Angular or Ionic app adds Angular 15."
     },
+    "standalone": {
+      "type": "boolean",
+      "description": "New Angular and Ionic apps and libraries use standalone components instead of NgModules (saved as nx.json pstack.angular.style)."
+    },
     "pluginVersion": {
       "type": "string",
       "description": "nx-polystack version to pin in the generated package.json (default: the running plugin's version)."

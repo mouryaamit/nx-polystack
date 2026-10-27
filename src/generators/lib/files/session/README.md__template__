@@ -4,8 +4,9 @@ Session and idle timeout for Angular apps. It reports; it never signs anyone out
 and server calls stay in the app.
 
 ```ts
-// app.module.ts (root module only)
-imports: [SessionTimeoutModule.forRoot({ idleMs: 15 * 60_000, warningMs: 60_000, absoluteMs: 8 * 60 * 60_000 })]
+<% if (standalone) { %>// app.config.ts providers (the root injector only); components import SessionWarningComponent
+providers: [provideSessionTimeout({ idleMs: 15 * 60_000, warningMs: 60_000, absoluteMs: 8 * 60 * 60_000 })]<% } else { %>// app.module.ts (root module only)
+imports: [SessionTimeoutModule.forRoot({ idleMs: 15 * 60_000, warningMs: 60_000, absoluteMs: 8 * 60 * 60_000 })]<% } %>
 
 // after login (loginTime in milliseconds, persisted so a reload keeps the absolute limit)
 this.session.start(loginTime);

@@ -17,6 +17,8 @@ export interface PresetGeneratorSchema {
   skipInstall?: boolean;
   /** Angular major to add now (15, 16 or 17); without it Angular 15 is added by the first Angular app. */
   angular?: number;
+  /** New Angular and Ionic apps and libraries use standalone components (nx.json pstack.angular.style). */
+  standalone?: boolean;
   /** nx-polystack version to pin in the generated package.json (default: this plugin's version). */
   pluginVersion?: string;
 }

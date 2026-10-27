@@ -35,6 +35,9 @@ export interface NormalizedLibOptions {
   propertyName: string;
   /** snake_case of the name (Dart package / file names) */
   snakeName: string;
+  /** --standalone / --module (Angular-based types); unset: the workspace style. */
+  standalone?: boolean;
+  module?: boolean;
 }
 
 /** Per-type behaviour, registered in types/index.ts. */
@@ -88,6 +91,15 @@ export function projectNameTaken(tree: Tree, name: string): boolean {
   return ['apps', 'libs'].some((root) => tree.exists(root) && visit(root, 4));
 }
 
+/** Library types whose Angular code comes as NgModules or standalone components. */
+export const ANGULAR_STYLE_TYPES: readonly string[] = [
+  'angular',
+  'ionic',
+  'pii',
+  'session',
+  'state',
+];
+
 export function normalizeOptions(
   tree: Tree,
   schema: LibGeneratorSchema,
@@ -118,6 +130,14 @@ export function normalizeOptions(
   const prefix = schema.prefix ?? 'lib';
   if (!KEBAB.test(prefix)) {
     throw new Error(`lib generator: --prefix="${prefix}" must be kebab-case.`);
+  }
+
+  if ((schema.standalone || schema.module) && !ANGULAR_STYLE_TYPES.includes(type)) {
+    throw new Error(
+      `lib generator: --standalone and --module are for ${ANGULAR_STYLE_TYPES.join(
+        ', ',
+      )} libraries.`,
+    );
   }
 
   let variant: string | undefined;
@@ -191,6 +211,8 @@ export function normalizeOptions(
     className: n.className,
     propertyName: n.propertyName,
     snakeName,
+    standalone: schema.standalone,
+    module: schema.module,
   };
 }
 

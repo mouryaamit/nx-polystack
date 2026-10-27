@@ -202,7 +202,7 @@ describe('app generator --type=angular', () => {
       'package.json',
       JSON.stringify({
         scripts: {},
-        dependencies: { '@angular/core': '~20.3.32' },
+        dependencies: { '@angular/core': '~20.3.34' },
         devDependencies: { nx: '21.6.11' },
       }),
     );
@@ -215,7 +215,7 @@ describe('app generator --type=angular', () => {
     );
     const pkg = JSON.parse(tree.read('package.json')!.toString());
     expect(pkg.dependencies['zone.js']).toBe('~0.15.0');
-    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~20.3.32');
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~20.3.34');
     expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('~20.7.0');
     expect(pkg.devDependencies['@nx/angular']).toBe('21.6.11');
     expect(pkg.devDependencies.typescript).toBe('~5.9.3');
@@ -228,7 +228,7 @@ describe('app generator --type=angular', () => {
       'package.json',
       JSON.stringify({
         scripts: {},
-        dependencies: { '@angular/core': '~21.2.24' },
+        dependencies: { '@angular/core': '~21.2.25' },
         devDependencies: { nx: '22.7.12' },
       }),
     );
@@ -242,9 +242,86 @@ describe('app generator --type=angular', () => {
     );
     const pkg = JSON.parse(tree.read('package.json')!.toString());
     expect(pkg.dependencies['zone.js']).toBe('~0.16.0');
-    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~21.2.24');
+    expect(pkg.devDependencies['@angular-devkit/build-angular']).toBe('~21.2.25');
     expect(pkg.devDependencies['@angular-eslint/eslint-plugin']).toBe('^21.0.0');
     expect(pkg.devDependencies['@nx/angular']).toBe('22.7.12');
+  });
+
+  describe('--standalone', () => {
+    const setAngular = (core: string, nx: string) =>
+      tree.write(
+        'package.json',
+        JSON.stringify({
+          scripts: {},
+          dependencies: { '@angular/core': core },
+          devDependencies: { nx },
+        }),
+      );
+    const read = (f: string) => tree.read(`apps/my-app/src/${f}`, 'utf8') ?? '';
+
+    it('on Angular 15: bootstrapApplication, app.config.ts, standalone: true, no NgModules', async () => {
+      await appGenerator(tree, { name: 'my-app', type: 'angular', standalone: true });
+      expect(tree.exists('apps/my-app/src/app/app.module.ts')).toBe(false);
+      expect(tree.exists('apps/my-app/src/app/app-routing.module.ts')).toBe(false);
+      const main = read('main.ts');
+      expect(main).toMatch(/^\/\/ .*\nimport '@mouryaamit\/nx-polystack\/runtime\/csp-nonce';\n/);
+      expect(main).toContain('bootstrapApplication(AppComponent, appConfig)');
+      const config = read('app/app.config.ts');
+      expect(config).toContain("import { ApplicationConfig } from '@angular/platform-browser';");
+      expect(config).toContain('provideRouter(routes)');
+      expect(config).toContain('provideHttpClient(withInterceptorsFromDi())');
+      expect(config).not.toContain('provideZoneChangeDetection');
+      expect(read('app/app.routes.ts')).toContain('export const routes: Routes = [];');
+      const cmp = read('app/app.component.ts');
+      expect(cmp).toContain('  standalone: true,\n');
+      expect(cmp).toContain('  imports: [RouterOutlet],\n');
+      const rules = JSON.parse(tree.read('apps/my-app/.eslintrc.json', 'utf8') ?? '{}').overrides[0]
+        .rules;
+      expect(rules['@angular-eslint/prefer-standalone']).toBeUndefined();
+    });
+
+    it('on Angular 19 omits standalone: true and keeps prefer-standalone on', async () => {
+      setAngular('~19.2.25', '20.8.4');
+      await appGenerator(tree, { name: 'my-app', type: 'angular', standalone: true });
+      const cmp = read('app/app.component.ts');
+      expect(cmp).not.toContain('standalone:');
+      expect(read('app/app.config.ts')).toContain(
+        "import { ApplicationConfig } from '@angular/core';",
+      );
+      const rules = JSON.parse(tree.read('apps/my-app/.eslintrc.json', 'utf8') ?? '{}').overrides[0]
+        .rules;
+      expect(rules['@angular-eslint/prefer-standalone']).toBeUndefined();
+    });
+
+    it('on Angular 21 provides zone change detection in app.config.ts', async () => {
+      setAngular('~21.2.25', '22.7.12');
+      await appGenerator(tree, { name: 'my-app', type: 'angular', standalone: true });
+      const config = read('app/app.config.ts');
+      expect(config).toContain(
+        "import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';",
+      );
+      expect(config).toContain('provideZoneChangeDetection(),');
+      expect(read('main.ts')).not.toContain('provideZoneChangeDetection');
+    });
+
+    it('follows nx.json pstack.angular.style; --module overrides it; both flags are refused', async () => {
+      const nx = JSON.parse(tree.read('nx.json', 'utf8') ?? '{}');
+      tree.write(
+        'nx.json',
+        JSON.stringify({ ...nx, pstack: { angular: { style: 'standalone' } } }),
+      );
+      await appGenerator(tree, { name: 'my-app', type: 'angular' });
+      expect(tree.exists('apps/my-app/src/app/app.config.ts')).toBe(true);
+      await appGenerator(tree, { name: 'old', type: 'angular', module: true });
+      expect(tree.exists('apps/old/src/app/app.module.ts')).toBe(true);
+      expect(tree.exists('apps/old/src/app/app.config.ts')).toBe(false);
+      await expect(
+        appGenerator(tree, { name: 'both', type: 'angular', standalone: true, module: true }),
+      ).rejects.toThrow('pass --standalone or --module, not both');
+      await expect(
+        appGenerator(tree, { name: 'mob', type: 'flutter', standalone: true }),
+      ).rejects.toThrow('--standalone and --module are for Angular and Ionic apps');
+    });
   });
 
   it('adds @mouryaamit/<name> path alias to tsconfig.base.json', async () => {
