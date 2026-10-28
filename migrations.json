@@ -102,6 +102,11 @@
       "version": "1.10.4",
       "description": "Fix the lint-staged ESLint script so commits with staged TypeScript files find ESLint 8 and later again (it resolved bin/eslint.js, which ESLint no longer exports)",
       "implementation": "./src/migrations/lint-staged-eslint-resolve/lint-staged-eslint-resolve"
+    },
+    "nx-analytics-off": {
+      "version": "1.11.3",
+      "description": "Set nx.json \"analytics\": false when the workspace has not answered Nx's usage-data prompt, so Nx 22 no longer stops to ask",
+      "implementation": "./src/migrations/nx-analytics-off/nx-analytics-off"
     }
   }
 }

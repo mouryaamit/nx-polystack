@@ -3,6 +3,12 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.11.3
+
+- New workspaces have `"analytics": false` in `nx.json`, so Nx 22 no longer stops the first
+  command to ask whether to share usage data. `pstack update` adds it to existing workspaces that
+  have not answered; an answer already there is kept.
+
 ## 1.11.2
 
 - The generated workspace block in `CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md`
