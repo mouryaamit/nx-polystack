@@ -4,6 +4,7 @@
   "affected": {
     "defaultBase": "<%= baseBranch %>"
   },
+  "analytics": false,
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": ["default"],

@@ -36,6 +36,8 @@ describe('preset generator', () => {
     });
     expect(tree.read('.gitignore', 'utf8')).toContain('.env.local');
     expect(tree.exists('tools/config/sri-cdn-allowlist.json')).toBe(true);
+    // Nx 22 does not stop to ask about usage data.
+    expect(nx.analytics).toBe(false);
   });
 
   it('npmScope propagates into nx.json', async () => {
