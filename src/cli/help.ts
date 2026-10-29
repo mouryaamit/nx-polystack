@@ -32,8 +32,9 @@ COMMANDS
               app and TypeScript library packages of an npm, Yarn or pnpm workspaces repo
               (apps/, libs/)
   adopt       Move the Angular apps that still build with the workspace's own scripts to the
-              plugin's release target, in place (base hrefs, nonce and obfuscation read from the
-              script, environments/<app>/htaccess.<env>, env encryption, build:<app>:<env>)
+              plugin's release target, and Flutter web builds to flutter-build, in place (base
+              hrefs, nonce and obfuscation read from the script, environments/<app>/htaccess.<env>,
+              env encryption, build:<app>:<env>)
   encryption  Show or change the env encryption settings of release builds (nx.json
               pstack.envEncryption)
   build       Build every app (or some) for one environment: release targets of Angular/Ionic
@@ -62,7 +63,7 @@ OPTIONS — new / preset
   --llm=<tools>                AI-assistant files, as pstack llm: claude | agents | copilot
                                (codex, openai-gpt → agents; comma-separated)
   --projectDescription=<text>  Short project description
-  --angular=<major>            Start on this Angular: 15 | 16 | 17 | 18 | 19 | 20 | 21 (default: Angular 15, added by the
+  --angular=<major>            Start on this Angular: 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 (default: Angular 15, added by the
                                first Angular or Ionic app)
   --standalone                 New Angular and Ionic apps and libraries use standalone components
                                (default: NgModules; saved as nx.json pstack.angular.style)
@@ -233,7 +234,8 @@ OPTIONS — migrate
   --adapter the most confident adapter is used if its confidence is at least 0.80.
 
 OPTIONS — adopt
-  --app=<a,b>                  Only these apps (default: every Angular app without a release target)
+  --app=<a,b>                  Only these apps (default: every Angular app without a release target
+                               and every Flutter app whose web build does not use flutter-build)
   --no-scripts                 Leave the build:<app>:<env> and build:all:<env> npm scripts as they are
   --remove-old-scripts         Delete the old build scripts nothing uses any more (also on its own,
                                after an earlier adopt)

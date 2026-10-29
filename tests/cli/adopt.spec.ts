@@ -312,6 +312,53 @@ describe('pstack adopt', () => {
     );
   });
 
+  it('--remove-old-scripts also removes or rewrites what still names the removed scripts', async () => {
+    const ws = workspace();
+    const file = (f: string, text: string) => {
+      fs.mkdirSync(path.dirname(path.join(ws, f)), { recursive: true });
+      fs.writeFileSync(path.join(ws, f), text);
+    };
+    const read = (f: string) => fs.readFileSync(path.join(ws, f), 'utf8');
+    file('.prettierignore', 'dist\ntools/scripts/build.js\n/coverage\n');
+    file('knip.json', '{\n  "ignore": ["tools/scripts/obfuscate.js", "tools/other/**"]\n}\n');
+    file(
+      'apps/portal/src/main.ts',
+      "// Built by tools/scripts/build.js (see there for the nonce).\nimport './app';\n" +
+        'const x = 1; // stamped by ./tools/scripts/timestamp.js\n/**\n * Old: tools/scripts/inject-nonce.js\n * Keeps this.\n */\nexport { x };\n',
+    );
+    file(
+      'README.md',
+      '# App\n\nBuild with `node tools/scripts/build.js --app=portal --env=prod`.\n\n' +
+        '```bash\nnode tools/scripts/build.js --app=portal --env=uat\n```\n\n' +
+        'The nonce is set by tools/scripts/inject-nonce.js.\n',
+    );
+    file('CHANGELOG.md', '# Changes\n\n- added tools/scripts/build.js\n');
+    file('apps/portal/src/index.html', '<!-- tools/scripts/inject-nonce.js fills this -->\n');
+
+    await runAdopt(makeCtx({ cwd: ws, flags: { removeOldScripts: true } }));
+
+    expect(read('.prettierignore')).toBe('dist\n/coverage\n');
+    expect(JSON.parse(read('knip.json'))).toEqual({ ignore: ['tools/other/**'] });
+    expect(read('apps/portal/src/main.ts')).toBe(
+      "import './app';\nconst x = 1;\n/**\n * Keeps this.\n */\nexport { x };\n",
+    );
+    expect(read('README.md')).toBe(
+      '# App\n\nBuild with `nx run <app>:release:<env>`.\n\n' +
+        '```bash\nnpx nx run <app>:release:<env>\n```\n\n' +
+        'The nonce is set by the release target (`nx run <app>:release:<env>`).\n',
+    );
+    // History and HTML comments are left; the HTML mention is reported.
+    expect(read('CHANGELOG.md')).toContain('tools/scripts/build.js');
+    expect(read('apps/portal/src/index.html')).toContain('inject-nonce.js');
+    const report = read('docs/migrations/adopt.md');
+    expect(report).toContain('References to them that were removed or rewritten:');
+    expect(report).toContain('`.prettierignore:2`: entry removed');
+    expect(report).toContain('`apps/portal/src/main.ts:1`: comment line removed');
+    expect(report).toContain('Still named here (not edited): `apps/portal/src/index.html:1`.');
+    // The report still records what was removed.
+    expect(report).toContain('`tools/scripts/build.js`');
+  });
+
   it('moves build:all to nx run-many in a workspace adopted app by app, then removes its script', async () => {
     const ws = workspace();
     await runAdopt(makeCtx({ cwd: ws, flags: { app: 'admin,portal' } }));
@@ -417,12 +464,126 @@ describe('pstack adopt', () => {
   it('refuses an app that is not a candidate, and does nothing a second time', async () => {
     const ws = workspace();
     await expect(runAdopt(makeCtx({ cwd: ws, flags: { app: 'nope' } }))).rejects.toThrow(
-      '"nope" is not an Angular app that builds without the plugin (candidates: admin, portal)',
+      '"nope" is not an app that builds without the plugin (candidates: admin, portal)',
     );
     await runAdopt(makeCtx({ cwd: ws, flags: {} }));
     const before = fs.readFileSync(path.join(ws, 'apps/portal/project.json'), 'utf8');
     await runAdopt(makeCtx({ cwd: ws, flags: {} }));
     expect(fs.readFileSync(path.join(ws, 'apps/portal/project.json'), 'utf8')).toBe(before);
+  });
+
+  it('moves the .htaccess of an app already on the plugin whose build still copies it', async () => {
+    const ws = workspace();
+    await runAdopt(makeCtx({ cwd: ws, flags: {} }));
+    // A new app made by copying an adopted app's project.json, with its own .htaccess asset.
+    const pj = readJsonFile(ws, 'apps/portal/project.json');
+    const text = JSON.stringify(pj, null, 2)
+      .replace(/portal/g, 'fresh')
+      .replace(
+        '"apps/fresh/src/favicon.ico"',
+        '"apps/fresh/src/favicon.ico",\n          { "glob": ".htaccess", "input": "apps/fresh/src/", "output": "./" }',
+      );
+    fs.mkdirSync(path.join(ws, 'apps/fresh/src'), { recursive: true });
+    fs.writeFileSync(path.join(ws, 'apps/fresh/project.json'), `${text}\n`);
+    fs.writeFileSync(path.join(ws, 'apps/fresh/src/.htaccess'), '# fresh rules\n');
+    const portalBefore = fs.readFileSync(path.join(ws, 'apps/portal/project.json'), 'utf8');
+    const adminBefore = fs.readFileSync(path.join(ws, 'apps/admin/project.json'), 'utf8');
+
+    await runAdopt(makeCtx({ cwd: ws, flags: {} }));
+
+    for (const env of ['dev', 'uat', 'prod']) {
+      expect(fs.readFileSync(path.join(ws, `environments/fresh/htaccess.${env}`), 'utf8')).toBe(
+        '# fresh rules\n',
+      );
+    }
+    expect(fs.existsSync(path.join(ws, 'apps/fresh/src/.htaccess'))).toBe(false);
+    const fresh = readJsonFile(ws, 'apps/fresh/project.json');
+    expect(fresh.targets.build.options.assets).toEqual(['apps/fresh/src/favicon.ico']);
+    expect(fresh.targets.release.options.htaccess).toBeUndefined();
+    // Only the asset entry left the file: the release target is not written a second time.
+    const freshText = fs.readFileSync(path.join(ws, 'apps/fresh/project.json'), 'utf8');
+    expect(freshText.match(/"release":/g)).toHaveLength(1);
+    expect(freshText).toBe(`${text.replace(/,\n\s*\{ "glob": "\.htaccess"[^}]*\}/, '')}\n`);
+    expect(fs.readFileSync(path.join(ws, 'apps/portal/project.json'), 'utf8')).toBe(portalBefore);
+    expect(fs.readFileSync(path.join(ws, 'apps/admin/project.json'), 'utf8')).toBe(adminBefore);
+    expect(jest.mocked(logger.info).mock.calls.flat().join('\n')).toContain('adopt: fresh:');
+
+    // A second run changes nothing.
+    jest.mocked(logger.info).mockClear();
+    await runAdopt(makeCtx({ cwd: ws, flags: {} }));
+    expect(fs.readFileSync(path.join(ws, 'apps/fresh/project.json'), 'utf8')).toBe(freshText);
+    expect(fs.readFileSync(path.join(ws, 'environments/fresh/htaccess.dev'), 'utf8')).toBe(
+      '# fresh rules\n',
+    );
+    expect(jest.mocked(logger.info).mock.calls.flat().join('\n')).toContain('nothing to do');
+  });
+
+  it('leaves apps with htaccess: false alone, and finds a .htaccess copied by a configuration only', async () => {
+    const ws = workspace();
+    await runAdopt(makeCtx({ cwd: ws, flags: {} }));
+    const add = (app: string, edit: (pj: ReturnType<typeof readJsonFile>) => void) => {
+      const file = path.join(ws, `apps/${app}/project.json`);
+      const pj = JSON.parse(fs.readFileSync(file, 'utf8'));
+      edit(pj);
+      fs.writeFileSync(file, `${JSON.stringify(pj, null, 2)}\n`);
+      fs.mkdirSync(path.join(ws, `apps/${app}/src`), { recursive: true });
+      fs.writeFileSync(path.join(ws, `apps/${app}/src/.htaccess`), `# ${app} again\n`);
+      return file;
+    };
+    const asset = (app: string) => ({ glob: '.htaccess', input: `apps/${app}/src/`, output: './' });
+    // portal: release builds make no .htaccess on purpose; its build copies one itself.
+    const portal = add('portal', (pj) => {
+      pj.targets.release.options.htaccess = false;
+      pj.targets.build.options.assets.push(asset('portal'));
+    });
+    const portalBefore = fs.readFileSync(portal, 'utf8');
+    // admin: only the production configuration copies it.
+    add('admin', (pj) => {
+      pj.targets.build.configurations.production.assets = [asset('admin')];
+    });
+    for (const env of ['dev', 'uat', 'prod']) {
+      fs.rmSync(path.join(ws, `environments/admin/htaccess.${env}`), { force: true });
+    }
+
+    await runAdopt(makeCtx({ cwd: ws, flags: {} }));
+
+    expect(fs.readFileSync(portal, 'utf8')).toBe(portalBefore);
+    expect(fs.existsSync(path.join(ws, 'apps/portal/src/.htaccess'))).toBe(true);
+    expect(fs.readFileSync(path.join(ws, 'environments/admin/htaccess.prod'), 'utf8')).toBe(
+      '# admin again\n',
+    );
+    expect(
+      readJsonFile(ws, 'apps/admin/project.json').targets.build.configurations.production.assets,
+    ).toEqual([]);
+  });
+
+  it('--app names an app already on the plugin that still copies its .htaccess', async () => {
+    const ws = workspace();
+    await runAdopt(makeCtx({ cwd: ws, flags: { app: 'admin' } }));
+    const pjPath = path.join(ws, 'apps/admin/project.json');
+    const pj = JSON.parse(fs.readFileSync(pjPath, 'utf8'));
+    pj.targets.build.options.assets.push({
+      glob: '.htaccess',
+      input: 'apps/admin/src/',
+      output: './',
+    });
+    fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2));
+    fs.mkdirSync(path.join(ws, 'apps/admin/src'), { recursive: true });
+    fs.writeFileSync(path.join(ws, 'apps/admin/src/.htaccess'), '# admin v2\n');
+    fs.rmSync(path.join(ws, 'environments/admin/htaccess.uat'));
+
+    await runAdopt(makeCtx({ cwd: ws, flags: { app: 'admin' } }));
+
+    // Existing env files are kept; the missing one is written from the app's .htaccess.
+    expect(fs.readFileSync(path.join(ws, 'environments/admin/htaccess.uat'), 'utf8')).toBe(
+      '# admin v2\n',
+    );
+    expect(fs.readFileSync(path.join(ws, 'environments/admin/htaccess.prod'), 'utf8')).toBe(
+      '# admin rules\n',
+    );
+    expect(fs.existsSync(path.join(ws, 'apps/admin/src/.htaccess'))).toBe(false);
+    // portal was not named: not adopted.
+    expect(readJsonFile(ws, 'apps/portal/project.json').targets.release).toBeUndefined();
   });
 
   it('--dry-run writes nothing', async () => {

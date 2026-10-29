@@ -11,10 +11,12 @@ export interface SourcePipeline {
   /** CSP nonce written into index.html; undefined when no step writes one. */
   nonce?: {
     placeholder?: string;
-    tags?: 'all' | 'legacy';
+    tags?: 'all' | 'legacy' | 'every';
     position?: 'end' | 'after-tag-name';
     replaceTokens: string[];
     addMeta: boolean;
+    /** Root element given ngCspNonce (Angular 16+ runtime styles), e.g. app-root. */
+    ngCspNonce?: string;
   };
   /** HTML comments removed from index.html in every env. */
   stripHtmlComments: boolean;
@@ -104,7 +106,11 @@ function nonceOf(text: string): SourcePipeline['nonce'] | undefined {
   if (!/\bnonce\b/i.test(text) || !/<script/i.test(text)) return undefined;
   const placeholder = /\bconst\s+NONCE\s*=\s*(['"`])((?:(?!\1).)*)\1/.exec(text)?.[2];
   // Inline scripts only: the <script pattern skips tags with src.
-  const tags = /<script\(\?!\[\^>\]\*\\bsrc=\)/.test(text) ? 'legacy' : undefined;
+  const inlineOnly = /<script\(\?!\[\^>\]\*\\bsrc=\)/.test(text);
+  // Every link: a <link pattern with no rel filter.
+  const everyLink = /<link\(\?!\[\^>\]\*\\bnonce=\)\(\[\^>\]\*\)>/.test(text);
+  const tags = inlineOnly ? 'legacy' : everyLink ? 'every' : undefined;
+  const ngCspNonce = /<([a-z][\w]*(?:-[\w]+)+)\(\?!\[\^>\]\*ngCspNonce\)/i.exec(text)?.[1];
   const position = /`<(?:script|link|style) nonce=/.test(text) ? 'after-tag-name' : undefined;
   const replaceTokens = [
     ...new Set(
@@ -112,7 +118,14 @@ function nonceOf(text: string): SourcePipeline['nonce'] | undefined {
     ),
   ].sort();
   const addMeta = /property=\\?["']csp-nonce/.test(text);
-  return { placeholder, tags, position, replaceTokens, addMeta };
+  return {
+    placeholder,
+    tags,
+    position,
+    replaceTokens,
+    addMeta,
+    ...(ngCspNonce ? { ngCspNonce: ngCspNonce.toLowerCase() } : {}),
+  };
 }
 
 /** Reads the custom build scripts and the step scripts they run. */

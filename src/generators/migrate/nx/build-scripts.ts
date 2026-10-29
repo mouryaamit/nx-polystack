@@ -85,9 +85,39 @@ export function baseHrefsInScript(
     const hrefs = map ? hrefsInMap(map, project) : undefined;
     if (hrefs) found.push(hrefs);
   }
+  // Per-app config maps: `const APPS = { project: { baseHref: '/x/', dist: '…' } }`.
+  // Only when no base href map names the project (the map has the per-env values).
+  const href = found.length === 0 ? appFieldInScript(text, project, 'baseHref') : undefined;
+  if (href && href.startsWith('/')) found.push({ '*': href });
   if (found.length === 0) return undefined;
   const first = JSON.stringify(found[0]);
   return found.every((f) => JSON.stringify(f) === first) ? found[0] : undefined;
+}
+
+/**
+ * A plain string field of a project's entry in a per-app config map of a build script
+ * (`project: { type: 'flutter', dist: 'dist/x', baseHref: '/x/' }`). Undefined when the project
+ * has no such entry, the field is missing or not one quoted string, or two entries disagree.
+ */
+export function appFieldInScript(text: string, project: string, field: string): string | undefined {
+  const values = new Set<string>();
+  const key = new RegExp(`(?:^|[\\s,{])(['"]?)${escape(project)}\\1\\s*:\\s*\\{`, 'gm');
+  for (const m of text.matchAll(key)) {
+    const body = objectAt(text, (m.index ?? 0) + m[0].length - 1);
+    if (!body) continue;
+    // Top-level fields of the entry only (nested objects removed).
+    let flat = body.slice(1, -1);
+    for (let open = flat.indexOf('{'); open >= 0; open = flat.indexOf('{')) {
+      const inner = objectAt(flat, open);
+      if (!inner) break;
+      flat = flat.slice(0, open) + flat.slice(open + inner.length);
+    }
+    const v = new RegExp(
+      `(?:^|[\\s,])(['"]?)${escape(field)}\\1\\s*:\\s*(['"\`])([^'"\`]*)\\2`,
+    ).exec(flat);
+    if (v) values.add(v[3]);
+  }
+  return values.size === 1 ? [...values][0] : undefined;
 }
 
 export function readBuildScripts(

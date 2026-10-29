@@ -15,7 +15,7 @@ export interface PresetGeneratorSchema {
   lintCommand?: string;
   skipFormat?: boolean;
   skipInstall?: boolean;
-  /** Angular major to add now (15, 16 or 17); without it Angular 15 is added by the first Angular app. */
+  /** Angular major to add now (14–21); without it Angular 15 is added by the first Angular app. */
   angular?: number;
   /** New Angular and Ionic apps and libraries use standalone components (nx.json pstack.angular.style). */
   standalone?: boolean;

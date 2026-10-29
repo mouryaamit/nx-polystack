@@ -31,6 +31,50 @@ function htaccessAsset(entry: unknown): string | undefined {
   return undefined;
 }
 
+/** The release target, its options and the Angular target it builds, when there is a release. */
+function releaseAndBuild(
+  pj: Json,
+): { release: Json; options: Json; build: Json | undefined } | undefined {
+  const targets = isObject(pj['targets']) ? (pj['targets'] as Record<string, Json>) : {};
+  const release = Object.values(targets).find(
+    (t) => isObject(t) && t['executor'] === RELEASE_EXECUTOR,
+  );
+  if (!release) return undefined;
+  const options = isObject(release['options']) ? release['options'] : (release['options'] = {});
+  // The Angular target the release builds (options.buildTarget "project:target[:config]").
+  const buildTargetName =
+    typeof options['buildTarget'] === 'string'
+      ? String(options['buildTarget']).split(':')[1] ?? 'build'
+      : 'build';
+  return { release, options, build: targets[buildTargetName] ?? targets['build'] };
+}
+
+/** The option sets of a target: its options and every configuration. */
+function optionSets(target: Json | undefined): unknown[] {
+  return [
+    target?.['options'],
+    ...Object.values(
+      isObject(target?.['configurations']) ? (target?.['configurations'] as Json) : {},
+    ),
+  ];
+}
+
+/**
+ * True when the project is on the plugin's release target (with env .htaccess files, not
+ * `htaccess: false`) but the Angular target it builds still copies a .htaccess through its assets
+ * (options or any configuration): an app whose .htaccess was never moved to the env files.
+ */
+export function copiesHtaccess(pj: Json): boolean {
+  const r = releaseAndBuild(JSON.parse(JSON.stringify(pj)) as Json);
+  if (!r || r.options['htaccess'] === false) return false;
+  return optionSets(r.build).some(
+    (o) =>
+      isObject(o) &&
+      Array.isArray(o['assets']) &&
+      (o['assets'] as unknown[]).some((a) => htaccessAsset(a) !== undefined),
+  );
+}
+
 /** Drops .htaccess entries from an assets list; returns the paths they copied. */
 function dropHtaccessAssets(options: unknown): string[] {
   if (!isObject(options) || !Array.isArray(options['assets'])) return [];
@@ -52,24 +96,12 @@ function dropHtaccessAssets(options: unknown): string[] {
 export function adoptHtaccess(tree: Tree, projectJsonPath: string): AdoptHtaccessResult {
   const result: AdoptHtaccessResult = { written: [], kept: [], disabled: false, missing: [] };
   const pj = readJson<Json>(tree, projectJsonPath);
-  const targets = isObject(pj['targets']) ? (pj['targets'] as Record<string, Json>) : {};
-  const release = Object.values(targets).find((t) => t['executor'] === RELEASE_EXECUTOR);
-  if (!release) return result;
-  const options = isObject(release['options']) ? release['options'] : (release['options'] = {});
+  const r = releaseAndBuild(pj);
+  if (!r) return result;
+  const { release, options, build } = r;
   if (options['htaccess'] === false) return result;
 
-  // The Angular target the release builds (options.buildTarget "project:target[:config]").
-  const buildTargetName =
-    typeof options['buildTarget'] === 'string'
-      ? String(options['buildTarget']).split(':')[1] ?? 'build'
-      : 'build';
-  const build = targets[buildTargetName] ?? targets['build'];
-  const copied = [
-    ...dropHtaccessAssets(build?.['options']),
-    ...Object.values(
-      isObject(build?.['configurations']) ? (build?.['configurations'] as Json) : {},
-    ).flatMap((c) => dropHtaccessAssets(c)),
-  ];
+  const copied = optionSets(build).flatMap((o) => dropHtaccessAssets(o));
   const source = copied.find((p) => tree.exists(p) && tree.isFile(p));
   const envProject = String(options['envProject'] ?? pj['name']);
   const configs = isObject(release['configurations']) ? (release['configurations'] as Json) : {};

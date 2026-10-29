@@ -7,6 +7,7 @@ import { flagBoolean, flagString } from '../args';
 import { findWorkspaceRoot } from '../context';
 import { CliError, CommandContext } from '../types';
 
+import { loadTypescript, ProvidersResult, tidyStandaloneProviders } from './standalone-providers';
 import type { UpgradeDeps } from './upgrade';
 
 /**
@@ -16,7 +17,11 @@ import type { UpgradeDeps } from './upgrade';
  *
  *   convert-to-standalone → prune-ng-modules → standalone-bootstrap (apps that bootstrap a module)
  *
- * and the pstack parts the schematic does not know: the CSP nonce import stays first in main.ts,
+ * then pstack's own step, standalone-providers: the bootstrap file's importProvidersFrom loses
+ * BrowserModule, and the root routing module becomes provideRouter(routes) (standalone-providers.ts).
+ * It also runs alone on apps already bootstrapped with bootstrapApplication.
+ *
+ * And the pstack parts the schematic does not know: the CSP nonce import stays first in main.ts,
  * Angular 21 apps keep zone.js change detection, `prefer-standalone` is turned back on, and with
  * --all the workspace style (nx.json pstack.angular.style) becomes standalone.
  */
@@ -31,11 +36,15 @@ export const STANDALONE_MODES = [
   'standalone-bootstrap',
 ] as const;
 type Mode = (typeof STANDALONE_MODES)[number];
+/** pstack's step after the schematic's modes. */
+const PROVIDERS_STEP = 'standalone-providers' as const;
+type Step = Mode | typeof PROVIDERS_STEP;
 
-const MODE_TITLE: Record<Mode, string> = {
+const MODE_TITLE: Record<Step, string> = {
   'convert-to-standalone': 'components, directives and pipes to standalone',
   'prune-ng-modules': 'remove the NgModules nothing needs any more',
   'standalone-bootstrap': 'bootstrapApplication instead of bootstrapModule',
+  'standalone-providers': 'provideRouter instead of the root routing module, no BrowserModule',
 };
 
 const CSP_NONCE_IMPORT = /^import ['"]@mouryaamit\/nx-polystack\/runtime\/csp-nonce['"];?[ \t]*\n/m;
@@ -93,11 +102,79 @@ function tsFiles(dir: string): string[] {
   return out;
 }
 
-/** Whether any source file of the project declares an NgModule. */
+/**
+ * Whether any source file of the project declares an NgModule the schematic still has work on.
+ * Two kinds do not count, because the schematic keeps them and a rerun would change nothing:
+ * - a root routing module (RouterModule.forRoot) of an app already on bootstrapApplication (the
+ *   standalone-providers step turns it into provideRouter);
+ * - a module that only provides services (providers, no declarations or bootstrap).
+ */
 export function hasNgModules(root: string, project: AngularProject): boolean {
-  return tsFiles(path.join(root, project.root, 'src')).some((f) =>
-    /@NgModule\s*\(/.test(fs.readFileSync(f, 'utf8')),
+  const bootstrapped = standaloneMain(root, project) !== undefined;
+  return tsFiles(path.join(root, project.root, 'src')).some((f) => {
+    const text = fs.readFileSync(f, 'utf8');
+    if (!/@NgModule\s*\(/.test(text)) return false;
+    if (bootstrapped && /RouterModule\s*\.\s*forRoot\s*\(/.test(text)) return false;
+    return !providersOnly(text);
+  });
+}
+
+/** An NgModule file whose modules declare and bootstrap nothing but provide something. */
+export function providersOnly(text: string): boolean {
+  const nonEmpty = (key: string) => new RegExp(`\\b${key}\\s*:\\s*\\[\\s*[^\\]\\s]`).test(text);
+  return !nonEmpty('declarations') && !/\bbootstrap\s*:/.test(text) && nonEmpty('providers');
+}
+
+/** The app's main.ts (src/main.ts) when it calls bootstrapApplication. */
+function standaloneMain(root: string, project: AngularProject): string | undefined {
+  if (!project.app) return undefined;
+  const main = path.join(root, project.root, 'src', 'main.ts');
+  return fs.existsSync(main) && /\bbootstrapApplication\s*\(/.test(fs.readFileSync(main, 'utf8'))
+    ? main
+    : undefined;
+}
+
+/** main.ts and app.config.ts of an app, when they use importProvidersFrom. */
+function providerFiles(root: string, project: AngularProject): string[] {
+  return [
+    path.join(root, project.root, 'src', 'main.ts'),
+    path.join(root, project.root, 'src', 'app', 'app.config.ts'),
+  ].filter(
+    (f) => fs.existsSync(f) && /\bimportProvidersFrom\s*\(/.test(fs.readFileSync(f, 'utf8')),
   );
+}
+
+/**
+ * The standalone-providers step on these apps: writes the changes, renames routing modules to
+ * routes files, and returns the files to tidy.
+ */
+export function runProvidersStep(
+  root: string,
+  apps: AngularProject[],
+  angularMajor: number,
+  say: (line: string) => void,
+  log: (line: string) => void,
+): string[] {
+  const ts = loadTypescript(root);
+  if (!ts) {
+    log('  typescript is not installed in the workspace; standalone-providers skipped.');
+    return [];
+  }
+  const result: ProvidersResult = { writes: new Map(), renames: new Map(), done: [], notes: [] };
+  for (const p of apps) {
+    if (!standaloneMain(root, p)) continue;
+    for (const f of providerFiles(root, p)) {
+      tidyStandaloneProviders(ts, root, f, path.join(root, p.root, 'src'), angularMajor, result);
+    }
+  }
+  for (const [file, text] of result.writes) fs.writeFileSync(file, text);
+  for (const [from, to] of result.renames) fs.renameSync(from, to);
+  for (const d of result.done) say(d);
+  for (const n of result.notes) log(`  ${n}`);
+  if (result.done.length === 0) say('nothing to change');
+  return [...result.writes.keys()]
+    .map((f) => result.renames.get(f) ?? f)
+    .map((f) => path.relative(root, f).split(path.sep).join('/'));
 }
 
 /** The project's main.ts (src/main.ts) when it bootstraps an NgModule. */
@@ -300,21 +377,34 @@ export async function runUpgradeStandalone(
       if (!targets.some((p) => p.name === n)) deps.log(`${n}: no NgModules, nothing to convert.`);
     }
   }
-  if (targets.length === 0) {
+  const selected = all ? projects : projects.filter((p) => wanted?.includes(p.name));
+  const bootstrapApps = targets.filter((p) => p.app && moduleBootstrapMain(root, p));
+  // Apps for the providers step: those the bootstrap mode converts, and those already on
+  // bootstrapApplication that still use importProvidersFrom.
+  const providerApps = selected.filter(
+    (p) =>
+      bootstrapApps.includes(p) ||
+      (standaloneMain(root, p) !== undefined && providerFiles(root, p).length > 0),
+  );
+  if (targets.length === 0 && providerApps.length === 0) {
     deps.log('No NgModules in the selected projects; nothing to do.');
     return 0;
   }
   const paths = all ? ['./'] : targets.map((p) => p.root);
-  const bootstrapApps = targets.filter((p) => p.app && moduleBootstrapMain(root, p));
-  const modes = STANDALONE_MODES.filter(
-    (m) => m !== 'standalone-bootstrap' || bootstrapApps.length > 0,
-  );
+  const modes: Step[] = [
+    ...(targets.length > 0
+      ? STANDALONE_MODES.filter((m) => m !== 'standalone-bootstrap' || bootstrapApps.length > 0)
+      : []),
+    ...(providerApps.length > 0 ? [PROVIDERS_STEP] : []),
+  ];
   const check = !flagBoolean(ctx.flags, 'skipCheck');
   const commit = !flagBoolean(ctx.flags, 'noCommit');
 
-  deps.log(`Standalone migration (Angular ${core}) of ${targets.map((p) => p.name).join(', ')}:`);
+  const names = [...new Set([...targets, ...providerApps].map((p) => p.name))];
+  deps.log(`Standalone migration (Angular ${core}) of ${names.join(', ')}:`);
   modes.forEach((m, i) => {
-    deps.log(`  ${i + 1}. ${m}: ${MODE_TITLE[m]} (${paths.join(', ')})`);
+    const where = m === PROVIDERS_STEP ? providerApps.map((p) => `${p.root}/src`) : paths;
+    deps.log(`  ${i + 1}. ${m}: ${MODE_TITLE[m]} (${where.join(', ')})`);
   });
   deps.log(
     '  then: CSP nonce import kept first in main.ts, prefer-standalone back on' +
@@ -329,7 +419,8 @@ export async function runUpgradeStandalone(
   }
   // The schematic converts bootstrapped components only in its last mode, so the lint rule comes
   // back on once every mode has run (not after convert-to-standalone).
-  const lastMode = modes[modes.length - 1];
+  const schematicModes = modes.filter((m) => m !== PROVIDERS_STEP);
+  const lastMode = schematicModes[schematicModes.length - 1];
   if (!commit && modes.length > 1) {
     deps.log('--no-commit: only the first mode runs; commit it, then run again.');
     modes.splice(1);
@@ -345,7 +436,12 @@ export async function runUpgradeStandalone(
 
   for (const mode of modes) {
     const say = (line: string) => deps.log(`\n▶ ${mode}: ${line}`);
-    for (const p of paths) {
+    if (mode === PROVIDERS_STEP) {
+      const changed = runProvidersStep(root, providerApps, major, say, deps.log);
+      if (changed.length === 0) continue;
+      tidyMains(root, changed, deps, say);
+    }
+    for (const p of mode === PROVIDERS_STEP ? [] : paths) {
       say(`nx g @angular/core:standalone --path=${p} --mode=${mode}`);
       deps.exec(
         'npx',
@@ -421,6 +517,11 @@ export async function runUpgradeStandalone(
         deps,
         say,
       );
+    }
+    // A mode can find nothing to change (a rerun, or modules the schematic leaves as they are).
+    if (deps.gitStatus(root)?.trim() === '') {
+      say('no changes');
+      continue;
     }
     if (check) {
       say('check: nx run-many -t build lint');

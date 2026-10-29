@@ -378,3 +378,93 @@ describe('flutterBuildExecutor build meta (NX-85)', () => {
     expect(runner).not.toHaveBeenCalled();
   });
 });
+
+describe('flutterBuildExecutor CSP nonce (NX-108)', () => {
+  let tmpDir: string;
+  let runner: jest.MockedFunction<Runner>;
+  const PLACEHOLDER = "<!--#echo var='UNIQUE_ID' -->";
+  // Flutter's index.html: an inline loader whose JS mentions "<script>" in a string.
+  const PAGE = [
+    '<!DOCTYPE html><html><head>',
+    '  <!-- build notes -->',
+    '  <base href="/resources/">',
+    '  <link rel="manifest" href="manifest.json">',
+    '  <style>body { margin: 0 }</style>',
+    '</head><body>',
+    '  <script>const msg = "Injecting <script> tag"; console.log(msg);</script>',
+    '  <script src="flutter_bootstrap.js" async></script>',
+    '</body></html>',
+  ].join('\n');
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flutter-nonce-'));
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'my-app'), { recursive: true });
+    writeEnvs(tmpDir);
+    const out = path.join(tmpDir, 'dist', 'apps', 'my-app');
+    runner = jest.fn<void, Parameters<Runner>>(() => {
+      fs.mkdirSync(out, { recursive: true });
+      fs.writeFileSync(path.join(out, 'index.html'), PAGE);
+    });
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const html = () => fs.readFileSync(path.join(tmpDir, 'dist/apps/my-app/index.html'), 'utf8');
+
+  it('secure: nonce on every script, link and style; the loader script body untouched', async () => {
+    await flutterBuildExecutor(
+      {
+        target: 'web',
+        env: 'prod',
+        dist: 'dist/apps/my-app',
+        secure: true,
+        stripHtmlComments: true,
+        nonce: {
+          placeholder: PLACEHOLDER,
+          tags: 'every',
+          position: 'after-tag-name',
+          replaceTokens: ['random-csp-nonce'],
+        },
+      },
+      makeContext('my-app', tmpDir),
+      runner,
+    );
+    const out = html();
+    const nonce = `nonce="${PLACEHOLDER}"`;
+    expect(out).toContain(`<link ${nonce} rel="manifest"`);
+    expect(out).toContain(`<style ${nonce}>body`);
+    expect(out).toContain(`<script ${nonce}>const msg = "Injecting <script> tag";`);
+    expect(out).toContain(`<script ${nonce} src="flutter_bootstrap.js" async>`);
+    expect(out).toContain(`<meta property="csp-nonce" content="${PLACEHOLDER}">`);
+    expect(out).not.toContain('build notes');
+    expect(out).toContain('<base href="/resources/">');
+  });
+
+  it('leaves the page alone without secure, and refuses bad nonce settings before building', async () => {
+    await flutterBuildExecutor(
+      { target: 'web', env: 'dev', dist: 'dist/apps/my-app', buildMeta: { gen: false } },
+      makeContext('my-app', tmpDir),
+      runner,
+    );
+    expect(html()).not.toContain('nonce=');
+    expect(html()).toContain('build notes');
+    runner.mockClear();
+    await expect(
+      flutterBuildExecutor(
+        {
+          target: 'web',
+          dist: 'dist/apps/my-app',
+          secure: true,
+          nonce: { tags: 'some' as unknown as 'all' },
+        },
+        makeContext('my-app', tmpDir),
+        runner,
+      ),
+    ).rejects.toThrow('flutter-build: nonce.tags must be "all", "legacy" or "every"');
+    expect(runner).not.toHaveBeenCalled();
+  });
+});

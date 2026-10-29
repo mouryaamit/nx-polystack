@@ -3,6 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import {
+  angular15RuntimeSpecs,
+  es2022Targets,
+  polyfillsToArray,
+} from '../../lib/upgrade/angular15';
+import {
   filterMigrations,
   fixVersionPrefixes,
   isRevertable,
@@ -22,6 +27,7 @@ import {
   MIN_ANGULAR,
   pinRange,
 } from '../../lib/upgrade/pins';
+import { ngPackagrDependencies } from '../../lib/utils/angular-deps';
 import { withDevkitPin } from '../../lib/utils/devkit-pin';
 import {
   keepJsonLayout,
@@ -41,7 +47,7 @@ import { runUpgradeStandalone } from './upgrade-standalone';
 /**
  * `pstack upgrade angular`: moves the workspace to the next Angular major, one step at a time,
  * with the companion versions of that step (claude/angular-21-plan.md section 3). The recipe is
- * the one the NX-72 walk proved from Angular 15 to 21:
+ * the one the NX-72 walk proved from Angular 15 to 21 (14 → 15 since NX-106):
  *
  *   Node (engines/.nvmrc) → nx migrate → install → migrations → Angular second pass when Nx left
  *   Angular behind → build/CLI/lint packages and TypeScript → Ionic (`@ionic/migrate` for 9) →
@@ -412,7 +418,7 @@ export function stepPlan(from: number, to: number, root: string): string[] {
     lines.push(`Node: engines.node and .nvmrc → ${pins.node}`);
   }
   lines.push(
-    to === 16 && pins.nx === ANGULAR_PINS[from].nx
+    pins.nx === ANGULAR_PINS[from].nx
       ? `nx migrate @angular/core@${pins.angular} (Nx stays ${pins.nx})`
       : `nx migrate ${pins.nx}`,
   );
@@ -424,6 +430,12 @@ export function stepPlan(from: number, to: number, root: string): string[] {
       pins.angularEslint,
     )}, ` + `TypeScript ~${pins.typescript} (only the declared ones that differ)`,
   );
+  if (to === 15) {
+    lines.push(
+      'Angular 15 fix-ups: tsconfig target es2022 (useDefineForClassFields: false), ' +
+        'polyfills files that only load zone.js → polyfills: ["zone.js"], zone.js 0.12, NgRx 15',
+    );
+  }
   if (to === INJECT_MIGRATION_ANGULAR) {
     lines.push(
       'constructor injection to inject(): nx g @angular/core:inject (prefer-inject lint rule)',
@@ -485,7 +497,7 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
 
   if (pinNode(root, pins.node)) say(`engines.node and .nvmrc set to Node ${pins.node}`);
 
-  if (to === 16 && pins.nx === ANGULAR_PINS[o.from].nx) {
+  if (pins.nx === ANGULAR_PINS[o.from].nx) {
     say(`nx migrate @angular/core@${pins.angular}`);
     nxMigrate(root, [`@angular/core@${pins.angular}`], deps, say, attempts);
   } else {
@@ -523,6 +535,32 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
   if (specs.length > 0) {
     say(`build, CLI, lint packages and TypeScript: ${specs.join(' ')}`);
     npm(['install', '--save-dev', ...specs]);
+  }
+
+  // Libraries built with ng-packagr: the PostCSS packages @nx/angular's executors load, when the
+  // older Angular brought them in as its own dependencies (postcss-import, 14 → 15).
+  const after = readJsonFile(path.join(root, 'package.json'));
+  if (declared(after, 'ng-packagr') !== undefined) {
+    const libBuild = Object.entries(ngPackagrDependencies(declared(after, '@angular/core')))
+      .filter(([name]) => name !== 'ng-packagr' && declared(after, name) === undefined)
+      .map(([name, range]) => `${name}@${range}`);
+    if (libBuild.length > 0) {
+      say(`packages the library builds load: ${libBuild.join(' ')}`);
+      npm(['install', '--save-dev', ...libBuild]);
+    }
+  }
+
+  if (to === 15) {
+    // Nx stays 17.0 from 14 to 15, so neither Nx's nor the CLI's Angular 15 migrations run.
+    const targets = es2022Targets(root);
+    if (targets.length > 0) say(`tsconfig target es2022: ${targets.join(', ')}`);
+    const polyfills = polyfillsToArray(root);
+    if (polyfills.length > 0) say(`polyfills: ["zone.js"]: ${polyfills.join(', ')}`);
+    const runtime = angular15RuntimeSpecs(readJsonFile(path.join(root, 'package.json')));
+    if (runtime.length > 0) {
+      say(`zone.js and NgRx for Angular 15: ${runtime.join(' ')}`);
+      npm(['install', ...runtime]);
+    }
   }
 
   if (to === INJECT_MIGRATION_ANGULAR) {

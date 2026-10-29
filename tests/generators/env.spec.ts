@@ -317,10 +317,8 @@ describe('env generator', () => {
     );
   });
 
-  it('throws for reserved name: uat', async () => {
-    await expect(envGenerator(tree, { all: true, name: 'uat' })).rejects.toThrow(
-      /reserved environment name/,
-    );
+  it('refuses uat for apps that have it already (uat is not reserved: NX-108)', async () => {
+    await expect(envGenerator(tree, { all: true, name: 'uat' })).rejects.toThrow(/already exists/);
   });
 
   it('throws for reserved name: prod', async () => {

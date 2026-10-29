@@ -79,7 +79,9 @@ session and NgRx state libraries also export `providePiiMask()`, `provideSession
 `pstack upgrade standalone --all` moves an existing NgModule workspace with Angular's own schematic
 (Angular 15.2+): convert, prune the NgModules, then `bootstrapApplication`, with a build and lint
 check and one commit per step. It keeps the CSP nonce import first in `main.ts` and, on Angular 21,
-zone.js change detection. `--project=a,b` limits it to some projects; `--dry-run` shows the plan.
+zone.js change detection. A last step swaps the root routing module for `provideRouter(routes)`
+(in `app.routes.ts`) and drops `BrowserModule`; on an already converted workspace it runs alone.
+`--project=a,b` limits it to some projects; `--dry-run` shows the plan.
 Ionic apps keep `IonicModule`; Ionic's own codemod moves them to Ionic's standalone components.
 
 ## What you get

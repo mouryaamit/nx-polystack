@@ -8,8 +8,11 @@ import { applyInsertions, attr, HtmlTag, Insertion, scanTags } from '../html/tag
 /** Filled per request by the server config `pstack csp` writes (Apache SSI, Nginx sub_filter). */
 export const NONCE_SSI_PLACEHOLDER = '<!--#echo var="CSP_NONCE" -->';
 
-/** Which tags get the nonce: all = every script, style and stylesheet link; legacy = inline scripts, every link, every style. */
-export type NonceTags = 'all' | 'legacy';
+/**
+ * Which tags get the nonce: all = every script, style and stylesheet link; legacy = inline
+ * scripts, every link, every style; every = every script, link and style.
+ */
+export type NonceTags = 'all' | 'legacy' | 'every';
 export type NoncePosition = 'end' | 'after-tag-name';
 
 export interface NonceSettings {
@@ -22,6 +25,11 @@ export interface NonceSettings {
   replaceTokens?: string[];
   /** Add <meta property="csp-nonce" content="…"> to <head> (default true). */
   addMeta?: boolean;
+  /**
+   * Tag name of the Angular root element (e.g. "app-root") that gets ngCspNonce="<placeholder>":
+   * Angular 16+ puts that nonce on the <style> elements it adds at runtime. Default: none.
+   */
+  ngCspNonce?: string;
   /** Pages to rewrite, relative to the served root (default ["index.html"]). */
   files?: string[];
   /** Remove HTML comments (SSI directives and IE conditionals stay) from those pages. */
@@ -51,7 +59,16 @@ export function resolveNonceSettings(raw: NonceSettings | undefined): Required<N
     throw new Error('nonce.placeholder must be one non-empty line');
   }
   const tags = s.tags ?? 'all';
-  if (tags !== 'all' && tags !== 'legacy') throw new Error('nonce.tags must be "all" or "legacy"');
+  if (tags !== 'all' && tags !== 'legacy' && tags !== 'every') {
+    throw new Error('nonce.tags must be "all", "legacy" or "every"');
+  }
+  const ngCspNonce = s.ngCspNonce ?? '';
+  if (
+    typeof ngCspNonce !== 'string' ||
+    (ngCspNonce !== '' && !/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/i.test(ngCspNonce))
+  ) {
+    throw new Error('nonce.ngCspNonce must be the tag name of the root element, e.g. "app-root"');
+  }
   const position = s.position ?? 'end';
   if (position !== 'end' && position !== 'after-tag-name') {
     throw new Error('nonce.position must be "end" or "after-tag-name"');
@@ -89,6 +106,7 @@ export function resolveNonceSettings(raw: NonceSettings | undefined): Required<N
     position,
     replaceTokens,
     addMeta: s.addMeta ?? true,
+    ngCspNonce: ngCspNonce.toLowerCase(),
     files,
     stripComments: s.stripComments ?? false,
   };
@@ -96,9 +114,9 @@ export function resolveNonceSettings(raw: NonceSettings | undefined): Required<N
 
 function wantsNonce(tag: HtmlTag, mode: NonceTags): boolean {
   if (tag.name === 'style') return true;
-  if (tag.name === 'script') return mode === 'all' || !attr(tag, 'src');
+  if (tag.name === 'script') return mode !== 'legacy' || !attr(tag, 'src');
   if (tag.name === 'link') {
-    if (mode === 'legacy') return true;
+    if (mode !== 'all') return true;
     return /(^|\s)stylesheet(\s|$)/i.test(attr(tag, 'rel')?.value ?? '');
   }
   return false;
@@ -162,7 +180,17 @@ export function injectNonceIntoHtml(
 
   const insertions: Insertion[] = [];
   const nonceAttr = `nonce="${settings.placeholder}"`;
+  let rootDone = false;
   for (const tag of scanTags(html)) {
+    if (
+      !rootDone &&
+      settings.ngCspNonce &&
+      tag.name === settings.ngCspNonce &&
+      !attr(tag, 'ngcspnonce')
+    ) {
+      insertions.push({ at: tag.nameEnd, text: ` ngCspNonce="${settings.placeholder}"` });
+      rootDone = true;
+    }
     if (!wantsNonce(tag, settings.tags) || attr(tag, 'nonce')) continue;
     insertions.push(
       settings.position === 'after-tag-name'

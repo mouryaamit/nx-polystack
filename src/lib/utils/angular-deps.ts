@@ -12,7 +12,29 @@ export const ANGULAR_MAJOR = 15;
  * Angular majors the generators write for: `pstack new --angular=<major>`, and `pstack app` / `:lib`
  * fill in packages for a workspace on one of them. One major is added per public release.
  */
-export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [15, 16, 17, 18, 19, 20, 21];
+export const GENERATOR_ANGULAR_MAJORS: readonly number[] = [14, 15, 16, 17, 18, 19, 20, 21];
+
+/**
+ * From this major the browser builder takes `polyfills: ['zone.js']`; Angular 14 apps load zone.js
+ * from a `src/polyfills.ts` file and target ES2020.
+ */
+export const POLYFILLS_ARRAY_MAJOR = 15;
+
+/**
+ * From this major apps and libraries can be standalone, and providers come from
+ * `makeEnvironmentProviders()` (Angular 14 has standalone components only as a developer preview).
+ */
+export const STANDALONE_MIN_MAJOR = 15;
+
+/** Refuses standalone code on a workspace below Angular 15. */
+export function assertStandaloneSupported(major: number, what: string): void {
+  if (major < STANDALONE_MIN_MAJOR) {
+    throw new Error(
+      `${what}: standalone components need Angular ${STANDALONE_MIN_MAJOR} or later (the workspace ` +
+        `is on Angular ${major}). Leave out --standalone, or move the workspace with "pstack upgrade angular" first.`,
+    );
+  }
+}
 
 /**
  * From this major, generated apps provide HttpClient with `provideHttpClient(withInterceptorsFromDi())`
@@ -82,9 +104,17 @@ export interface AngularGeneratorVersions {
   angularEslint: string;
   ionicAngular: string;
   capacitor: string;
+  /**
+   * @angular/cli and @angular-devkit/build-angular when their line differs from the framework's:
+   * Angular 14's last framework release is 14.3.0, its CLI's 14.2.13.
+   */
+  angularCli?: string;
 }
 
+const ANGULAR_CLI: Record<number, string> = { 14: '~14.2.13' };
+
 const ZONE_JS: Record<number, string> = {
+  14: '~0.11.4',
   15: '~0.12.0',
   16: '~0.13.0',
   17: '~0.14.0',
@@ -95,6 +125,7 @@ const ZONE_JS: Record<number, string> = {
 };
 /** @types/node the major's TypeScript can parse (a latest one uses newer syntax: TS1139). */
 const TYPES_NODE: Record<number, string> = {
+  14: '~18.16.9',
   15: '~18.16.9',
   16: '~20.10.0',
   17: '~20.10.0',
@@ -128,6 +159,7 @@ export function angularGeneratorVersions(major: number): AngularGeneratorVersion
   }
   return {
     angular: `~${pins.angular}`,
+    ...(ANGULAR_CLI[major] ? { angularCli: ANGULAR_CLI[major] } : {}),
     zoneJs: ZONE_JS[major],
     typescript: `~${pins.typescript}`,
     typesNode: TYPES_NODE[major],
@@ -182,8 +214,8 @@ function buildAndLintPackages(
   v: AngularGeneratorVersions,
 ): Record<string, string> {
   return {
-    '@angular-devkit/build-angular': angular,
-    '@angular/cli': angular,
+    '@angular-devkit/build-angular': v.angularCli ?? angular,
+    '@angular/cli': v.angularCli ?? angular,
     '@angular/compiler-cli': angular,
     '@nx/angular': nx,
     '@nx/eslint': nx,
@@ -273,6 +305,9 @@ export function ngPackagrDependencies(angularCore: string | undefined): Record<s
     // ng-packagr releases don't follow Angular patch numbers, so pin the major only.
     'ng-packagr': `^${major ?? ANGULAR_MAJOR}.0.0`,
     postcss: '^8.4.5',
+    // @nx/angular's stylesheet processor requires it on load; ng-packagr 14 and
+    // @angular-devkit/build-angular 14 brought it in, 15 does not (14 → 15 then fails).
+    'postcss-import': '~14.1.0',
     'postcss-preset-env': '~7.5.0',
     'postcss-url': '~10.1.3',
     autoprefixer: '^10.4.0',

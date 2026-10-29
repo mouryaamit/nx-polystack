@@ -53,6 +53,59 @@
       "default": true,
       "description": "Web builds: remove EXIF from the images in dist (only images that have EXIF are rewritten). Set false to leave the output as Flutter wrote it. Ignored for apk / ios."
     },
+    "secure": {
+      "type": "boolean",
+      "default": false,
+      "description": "Web builds: write the CSP nonce placeholder into the served index.html (and the other nonce.files), as Angular release builds do. Ignored for apk / ios."
+    },
+    "nonce": {
+      "type": "object",
+      "description": "secure: how the nonce placeholder is written. Defaults keep the standard markup; set them to match an existing server setup.",
+      "additionalProperties": false,
+      "properties": {
+        "placeholder": {
+          "type": "string",
+          "description": "What the server replaces per request. Default: <!--#echo var=\"CSP_NONCE\" --> (what pstack csp configures)."
+        },
+        "tags": {
+          "type": "string",
+          "enum": ["all", "legacy", "every"],
+          "description": "all (default): every script, style and stylesheet link. legacy: inline scripts (no src), every link and every style. every: every script, link and style."
+        },
+        "position": {
+          "type": "string",
+          "enum": ["end", "after-tag-name"],
+          "description": "Where the nonce attribute goes in a tag (default end)."
+        },
+        "replaceTokens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Text replaced by the placeholder anywhere in the page, e.g. [\"random-csp-nonce\"]. The build fails when a token sits in quotes the placeholder also uses."
+        },
+        "addMeta": {
+          "type": "boolean",
+          "description": "Add <meta property=\"csp-nonce\"> to <head> (default true)."
+        },
+        "ngCspNonce": {
+          "type": "string",
+          "description": "Tag name of the Angular root element (e.g. app-root) that gets ngCspNonce=\"<placeholder>\"; Angular 16+ puts that nonce on the <style> elements it adds at runtime. Default: none."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Pages to rewrite, relative to the served root (default [\"index.html\"]); never under assets/."
+        }
+      }
+    },
+    "stripHtmlComments": {
+      "type": "boolean",
+      "default": false,
+      "description": "Web builds: remove HTML comments from index.html (and the other nonce.files). SSI directives and IE conditional comments stay. Ignored for apk / ios."
+    },
     "buildMeta": {
       "type": "object",
       "description": "Web builds: the build meta (<meta name=\"x-build\">) written into index.html. gen (default true) adds gen (nx-polystack@<version>), ng and nx to its payload; set false to leave them out.",

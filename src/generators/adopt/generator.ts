@@ -5,7 +5,7 @@ import {
   readEnvEncryptionBlock,
   writeEnvEncryptionBlock,
 } from '../../lib/env-encryption/workspace';
-import { adoptHtaccess, htaccessNote } from '../../lib/release/htaccess-adopt';
+import { adoptHtaccess, copiesHtaccess, htaccessNote } from '../../lib/release/htaccess-adopt';
 import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
 import { devkitPinFor, installedVersion, withDevkitPin } from '../../lib/utils/devkit-pin';
 import { keepJsonLayout, loadJsonc } from '../../lib/utils/json-layout';
@@ -14,6 +14,8 @@ import { addReleaseTarget, angularAppNpmScripts } from '../migrate/angular-proje
 import { readBuildScripts, shapeReleaseTarget } from '../migrate/nx/build-scripts';
 import { applySourceEnvEncryption } from '../migrate/nx/env-encryption';
 
+import { adoptFlutterApp, FlutterCandidate, flutterAdoptCandidates } from './flutter';
+import { removeScriptReferences } from './old-script-refs';
 import { findOldScripts, recordedScripts } from './old-scripts';
 import { readSourcePipeline, SourcePipeline } from './pipeline';
 
@@ -114,6 +116,14 @@ export interface AdoptResult {
   unreferenced: string[];
   /** removeOldScripts looked (so the report's "Old scripts" section is current). */
   oldScriptsChecked?: boolean;
+  /** What still named the removed scripts and was edited (`file:line: what`). */
+  referencesEdited?: string[];
+  /** Mentions of removed scripts left for a person to look at (`file:line`). */
+  referencesReview?: string[];
+  /** Flutter apps (also in adopted) whose web build moved to the flutter-build executor. */
+  flutter?: string[];
+  /** Apps already on the plugin whose build still copied a .htaccess, moved to the env files. */
+  htaccessMoved?: string[];
 }
 
 /** Angular apps of the workspace that build without the plugin: build target, no release target. */
@@ -135,6 +145,43 @@ export function adoptCandidates(tree: Tree): { name: string; root: string; reaso
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Apps already on the plugin's release target whose build still copies a .htaccess (added by hand
+ * or copied from another app's project.json): the .htaccess becomes environments/<app>/htaccess.<env>
+ * as adopt does for the apps it moves, and leaves the build assets.
+ */
+export function strayHtaccessApps(tree: Tree): { name: string; root: string }[] {
+  return readProjects(tree)
+    .filter(({ json }) => copiesHtaccess(json as Json))
+    .map(({ name, root }) => ({ name, root }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function moveStrayHtaccess(
+  tree: Tree,
+  apps: { name: string; root: string }[],
+  result: AdoptResult,
+): void {
+  result.htaccessMoved = [];
+  for (const { name, root } of apps) {
+    const pjPath = `${root}/project.json`;
+    const original = tree.read(pjPath, 'utf8') ?? '';
+    const notes: string[] = [];
+    const moved = adoptHtaccess(tree, pjPath);
+    htaccessNote(moved, name, notes);
+    if (notes.length === 0) {
+      // The env files were all there already: only the build's asset entry went.
+      notes.push(
+        `the build no longer copies a \`.htaccess\`; kept ${moved.kept.map(code).join(', ')}`,
+      );
+    }
+    keepFormatting(tree, pjPath, original);
+    result.htaccessMoved.push(name);
+    result.notes.push(...notes.map((n) => `${code(name)}: ${n}`));
+    logger.info(`adopt: ${name}: ${notes.join('; ').replace(/`/g, '') || '.htaccess moved'}`);
+  }
 }
 
 /** The build stamp time zone the workspace's own script used (e.g. Asia/Kolkata). */
@@ -181,8 +228,16 @@ function keepFormatting(tree: Tree, file: string, original: string): void {
     .replace(/,\s*"[^"]*\/\.htaccess"/g, '')
     .replace(/"[^"]*\/\.htaccess"\s*,?\s*/g, '');
   const release = (target['targets'] as Json | undefined)?.['release'];
+  // An app already on the plugin keeps its release target where it is (only an asset left).
+  let hadRelease: boolean;
+  try {
+    const before = (JSON.parse(original) as Json)['targets'];
+    hadRelease = isObject(before) && before['release'] !== undefined;
+  } catch {
+    return;
+  }
   const targetsKey = /"targets"\s*:\s*\{/.exec(text);
-  if (release !== undefined && targetsKey) {
+  if (release !== undefined && !hadRelease && targetsKey) {
     const open = targetsKey.index + targetsKey[0].length - 1;
     const close = closingBrace(text, open);
     if (close < 0) return;
@@ -212,6 +267,7 @@ function applyPipeline(release: Json, pipeline: SourcePipeline, notes: string[])
     if (n.position) nonce['position'] = n.position;
     if (n.replaceTokens.length > 0) nonce['replaceTokens'] = n.replaceTokens;
     if (!n.addMeta) nonce['addMeta'] = false;
+    if (n.ngCspNonce) nonce['ngCspNonce'] = n.ngCspNonce;
     if (Object.keys(nonce).length > 0) options['nonce'] = nonce;
   }
   if (pipeline.stripHtmlComments) options['stripHtmlComments'] = true;
@@ -241,11 +297,34 @@ function appScripts(
 ): Record<string, string> {
   const wanted = angularAppNpmScripts(name, false, releases);
   const out: Record<string, string> = {};
+  // Scripts under other names that built this app through the workspace's script
+  // (build:<app>:production …) keep their names and run the release target.
+  const covered = new Set<string>();
+  for (const [key, cmd] of Object.entries(custom)) {
+    if (wanted[key] !== undefined || flagValue(cmd, ['project', 'app']) !== name) continue;
+    const e = flagValue(cmd, ['env', 'configuration', 'c']);
+    const env = e ? ENV_ALIAS[e] ?? e : undefined;
+    if (!env || !releases.includes(env)) continue;
+    out[key] = `nx run ${name}:release:${env}`;
+    covered.add(env);
+  }
   for (const [key, cmd] of Object.entries(wanted)) {
     if (current[key] === cmd) continue;
+    const env = /^build:[^:]+:([\w-]+)$/.exec(key)?.[1];
+    if (env && covered.has(env) && current[key] === undefined) continue;
     if (current[key] === undefined || custom[key] !== undefined) out[key] = cmd;
   }
   return out;
+}
+
+const ENV_ALIAS: Record<string, string> = { development: 'dev', production: 'prod' };
+
+function flagValue(cmd: string, names: string[]): string | undefined {
+  for (const n of names) {
+    const m = new RegExp(`(?:^|\\s)--?${n}(?:=|\\s+)(['"]?)([^\\s'"]+)\\1`).exec(cmd);
+    if (m) return m[2];
+  }
+  return undefined;
 }
 
 /**
@@ -385,11 +464,22 @@ function removeOldScripts(
 ): void {
   const from = [file, ADOPT_REPORT].find((f): f is string => !!f && tree.exists(f));
   const previous = from ? tree.read(from, 'utf8') ?? '' : '';
-  const found = findOldScripts(tree, [...oldScripts, ...recordedScripts(previous)]);
+  const recorded = recordedScripts(previous);
+  const found = findOldScripts(tree, [...oldScripts, ...recorded]);
   for (const f of found.removable) tree.delete(f);
   result.oldScriptsChecked = true;
   result.removed = found.removable;
   result.unreferenced = found.unreferenced;
+  // What still names them (and the ones an earlier run removed): ignore files, config lists,
+  // comments and docs. The adopt report keeps its record.
+  const gone = [...new Set([...found.removable, ...recorded.filter((r) => !tree.exists(r))])];
+  const refs = removeScriptReferences(
+    tree,
+    gone.sort(),
+    [file, ADOPT_REPORT].filter((f): f is string => !!f),
+  );
+  result.referencesEdited = refs.edited;
+  result.referencesReview = refs.review;
   logger.info(
     found.removable.length > 0
       ? `adopt: removed the old build scripts nothing uses any more: ${found.removable.join(', ')}`
@@ -402,12 +492,40 @@ function removeOldScripts(
       )}`,
     );
   }
+  if (refs.edited.length > 0) {
+    logger.info(`adopt: references to the removed scripts:\n  ${refs.edited.join('\n  ')}`);
+  }
+  if (refs.review.length > 0) {
+    logger.info(
+      `adopt: still named in code (not edited; look at these): ${refs.review.join(', ')}`,
+    );
+  }
+}
+
+function referenceLines(result: AdoptResult): string[] {
+  const edited = result.referencesEdited ?? [];
+  const review = result.referencesReview ?? [];
+  const lines: string[] = [];
+  if (edited.length > 0) {
+    lines.push('References to them that were removed or rewritten:', '');
+    lines.push(...edited.map((e) => `- ${e.replace(/^([^:]+:\d+|[^:]+)/, (m) => code(m))}`), '');
+  }
+  if (review.length > 0) {
+    lines.push(`Still named here (not edited): ${review.map(code).join(', ')}.`, '');
+  }
+  return lines;
 }
 
 function removalLines(result: AdoptResult): string[] {
   if (result.removed.length === 0 && result.unreferenced.length === 0) {
     return result.oldScriptsChecked
-      ? ['## Old scripts', '', 'None left: no old build script is still in the workspace.', '']
+      ? [
+          '## Old scripts',
+          '',
+          'None left: no old build script is still in the workspace.',
+          '',
+          ...referenceLines(result),
+        ]
       : [];
   }
   const lines = ['## Old scripts', ''];
@@ -421,6 +539,7 @@ function removalLines(result: AdoptResult): string[] {
       '',
     );
   }
+  lines.push(...referenceLines(result));
   return lines;
 }
 
@@ -442,12 +561,22 @@ function appendRemovalReport(tree: Tree, result: AdoptResult, file: string | nul
 
 function report(result: AdoptResult, pipeline: SourcePipeline, customScripts: string[]): string {
   const lines = ['# pstack adopt', ''];
+  const flutter = result.flutter ?? [];
+  const angular = result.adopted.filter((a) => !flutter.includes(a));
   lines.push(
     `Apps moved to the polystack \`release\` target: ${
-      result.adopted.length > 0 ? result.adopted.map(code).join(', ') : 'none'
+      angular.length > 0 ? angular.map(code).join(', ') : 'none'
     }.`,
     '',
   );
+  if (flutter.length > 0) {
+    lines.push(
+      `Flutter apps whose web build moved to the \`flutter-build\` executor: ${flutter
+        .map(code)
+        .join(', ')}.`,
+      '',
+    );
+  }
   if (result.skipped.length > 0) {
     lines.push('## Not changed', '', ...result.skipped.map((s) => `- ${s}`), '');
   }
@@ -465,7 +594,11 @@ function report(result: AdoptResult, pipeline: SourcePipeline, customScripts: st
               pipeline.nonce.replaceTokens.length > 0
                 ? `, replaces ${pipeline.nonce.replaceTokens.map(code).join(', ')}`
                 : ''
-            }, ${pipeline.nonce.addMeta ? 'adds' : 'no'} csp-nonce meta`
+            }, ${pipeline.nonce.addMeta ? 'adds' : 'no'} csp-nonce meta${
+              pipeline.nonce.ngCspNonce
+                ? `, ngCspNonce on ${code(`<${pipeline.nonce.ngCspNonce}>`)}`
+                : ''
+            }`
           : 'none found'
       }`,
       `- HTML comments stripped in every env: ${pipeline.stripHtmlComments ? 'yes' : 'no'}`,
@@ -521,24 +654,44 @@ export default async function adoptGenerator(
   };
   const reportFile = resolveReport(tree, options.report);
   let candidates = adoptCandidates(tree);
+  let flutter: FlutterCandidate[] = flutterAdoptCandidates(tree);
+  let stray = strayHtaccessApps(tree);
   if (options.projects && options.projects.length > 0) {
     const wanted = new Set(options.projects);
-    const known = new Set(candidates.map((c) => c.name));
-    const unknown = options.projects.filter((p) => !known.has(p));
+    stray = stray.filter((a) => wanted.has(a.name));
+    const strayNames = new Set(stray.map((a) => a.name));
+    const known = new Set([...candidates, ...flutter].map((c) => c.name));
+    const unknown = options.projects.filter((p) => !known.has(p) && !strayNames.has(p));
     if (unknown.length > 0) {
       throw new Error(
         `adopt: ${unknown.map((p) => `"${p}"`).join(', ')} ${
-          unknown.length === 1 ? 'is not an Angular app' : 'are not Angular apps'
+          unknown.length === 1 ? 'is not an app' : 'are not apps'
         } that builds without the plugin (candidates: ${[...known].join(', ') || 'none'})`,
       );
     }
     candidates = candidates.filter((c) => wanted.has(c.name));
+    flutter = flutter.filter((c) => wanted.has(c.name));
   }
-  for (const c of candidates.filter((c) => c.reason)) {
+  moveStrayHtaccess(tree, stray, result);
+  // A Flutter app without a web build to move is only reported when it was asked for.
+  const named = new Set(options.projects ?? []);
+  for (const c of [...candidates, ...flutter.filter((f) => named.has(f.name))].filter(
+    (c) => c.reason,
+  )) {
     result.skipped.push(`${code(c.name)}: ${c.reason}`);
   }
   candidates = candidates.filter((c) => !c.reason);
-  if (candidates.length === 0) {
+  const flutterApps = flutter.filter(
+    (c): c is FlutterCandidate & { webTarget: string } => !c.reason && !!c.webTarget,
+  );
+  // nx.json is written as plain JSON (env encryption, report setting); its layout is put back at
+  // the end (only the changed values move).
+  const layouts = new Map<string, string>();
+  for (const f of ['nx.json']) {
+    const text = tree.exists(f) ? tree.read(f, 'utf8') : null;
+    if (text !== null) layouts.set(f, text);
+  }
+  if (candidates.length === 0 && flutterApps.length === 0) {
     // Adopted earlier (before adopt moved build:all, or app by app): move it now.
     const replaced = result.skipped.length === 0 ? switchBuildAll(tree, options, result) : [];
     if (options.removeOldScripts) removeOldScripts(tree, replaced, result, reportFile);
@@ -546,14 +699,15 @@ export default async function adoptGenerator(
       appendRemovalReport(tree, result, reportFile);
       return result;
     }
-    logger.info('adopt: no Angular app builds without the plugin; nothing to do.');
+    if (result.htaccessMoved.length > 0) return result;
+    logger.info('adopt: no Angular or Flutter app builds without the plugin; nothing to do.');
     return result;
   }
 
   const pkg = tree.exists('package.json')
     ? readJson<{ scripts?: Record<string, string> }>(tree, 'package.json')
     : {};
-  const names = candidates.map((c) => c.name);
+  const names = [...candidates, ...flutterApps].map((c) => c.name);
   const buildScripts = readBuildScripts(tree.root, pkg.scripts, names);
   const pipeline = readSourcePipeline(tree.root, buildScripts.customScripts);
 
@@ -588,9 +742,17 @@ export default async function adoptGenerator(
       );
     }
   }
-  if (buildScripts.unread.length > 0) {
+  for (const app of flutterApps) {
+    const out = adoptFlutterApp(tree, app, {}, buildScripts, pipeline);
+    result.adopted.push(app.name);
+    result.flutter = [...(result.flutter ?? []), app.name];
+    result.notes.push(...out.notes.map((n) => `${code(app.name)}: ${n}`));
+    if (options.scripts !== false) Object.assign(scripts, out.scripts);
+  }
+  const unread = buildScripts.unread.filter((n) => !flutterApps.some((f) => f.name === n));
+  if (unread.length > 0) {
     result.notes.push(
-      `Base hrefs for ${buildScripts.unread.map(code).join(', ')} could not be read from the ` +
+      `Base hrefs for ${unread.map(code).join(', ')} could not be read from the ` +
         "build scripts; set `baseHref` on their release target's configurations.",
     );
   }
@@ -613,11 +775,30 @@ export default async function adoptGenerator(
   const oldScripts = [...new Set([...buildScripts.customScripts, ...replacedAll])].sort();
   if (options.removeOldScripts) removeOldScripts(tree, oldScripts, result, reportFile);
   if (reportFile) tree.write(reportFile, report(result, pipeline, oldScripts));
+  const flutterNames = result.flutter ?? [];
+  const angularNames = result.adopted.filter((a) => !flutterNames.includes(a));
   logger.info(
-    `adopt: ${result.adopted.length} app(s) now build with nx run <app>:release:<env> ` +
-      `(${result.adopted.join(', ')}).` +
+    `adopt: ${angularNames.length} app(s) now build with nx run <app>:release:<env> ` +
+      `(${angularNames.join(', ')})` +
+      (flutterNames.length > 0
+        ? `; Flutter web builds on flutter-build: ${flutterNames.join(', ')}`
+        : '') +
+      '.' +
       (reportFile ? ` Report: ${reportFile}` : ''),
   );
   for (const s of result.skipped) logger.warn(`adopt: not changed: ${s.replace(/`/g, '')}`);
+  restoreLayouts(tree, layouts);
   return result;
+}
+
+/** Files of `before` that changed get their old layout back, with only the values changed. */
+function restoreLayouts(tree: Tree, before: Map<string, string>): void {
+  const jsonc = loadJsonc(tree.root);
+  if (!jsonc) return;
+  for (const [file, text] of before) {
+    const now = tree.exists(file) ? tree.read(file, 'utf8') : null;
+    if (now === null || now === text) continue;
+    const kept = keepJsonLayout(jsonc, text, now);
+    if (kept !== null && kept !== now) tree.write(file, kept);
+  }
 }

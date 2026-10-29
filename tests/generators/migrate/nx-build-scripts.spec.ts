@@ -1,4 +1,5 @@
 import {
+  appFieldInScript,
   baseHrefsInScript,
   readBuildScripts,
 } from '../../../src/generators/migrate/nx/build-scripts';
@@ -6,6 +7,21 @@ import {
 import { put, tmpSource } from './helpers';
 
 describe('build script reading', () => {
+  it('reads fields of per-app config maps (NX-108)', () => {
+    const text = [
+      'const APPS = {',
+      "  web: { type: 'angular', dist: 'dist/site', baseHref: '/', envFiles: { dev: 'a.ts' } },",
+      "  res: { type: 'flutter', dist: \"dist/res\", baseHref: '/res/' },",
+      '};',
+    ].join('\n');
+    expect(appFieldInScript(text, 'res', 'dist')).toBe('dist/res');
+    expect(appFieldInScript(text, 'web', 'dist')).toBe('dist/site');
+    expect(appFieldInScript(text, 'web', 'dev')).toBeUndefined();
+    expect(appFieldInScript(text, 'other', 'dist')).toBeUndefined();
+    expect(baseHrefsInScript(text, 'res')).toEqual({ '*': '/res/' });
+    expect(baseHrefsInScript(text, 'web')).toEqual({ '*': '/' });
+  });
+
   it('reads base href maps', () => {
     const text =
       `const OUT = { web: '/dist/web' };\n` +

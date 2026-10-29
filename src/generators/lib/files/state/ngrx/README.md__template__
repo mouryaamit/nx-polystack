@@ -1,8 +1,8 @@
 # <%= projectName %>
 
 Feature state for Angular apps with NgRx (`--variant=ngrx`): actions (`<%= className %>Actions`),
-reducer (feature key `'<%= propertyName %>'`), selectors, effects and `provide<%= className %>State()`<% if (!standalone) { %>
-(`<%= className %>StateModule` for NgModule apps)<% } %>.
+reducer (feature key `'<%= propertyName %>'`), selectors, effects and <% if (environmentProviders) { %>`provide<%= className %>State()`<% if (!standalone) { %>
+(`<%= className %>StateModule` for NgModule apps)<% } %><% } else { %>`<%= className %>StateModule`<% } %>.
 
 ## Use it in an app
 

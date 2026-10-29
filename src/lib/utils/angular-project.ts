@@ -1,5 +1,6 @@
 import { DEFAULT_DROP_CONSOLE } from '../hardening/options';
 
+import { POLYFILLS_ARRAY_MAJOR } from './angular-deps';
 import { typecheckTarget } from './quality';
 
 export const POLYSTACK_BUILD_EXECUTOR = '@mouryaamit/nx-polystack:build';
@@ -74,6 +75,7 @@ export function angularBuildTarget(
   name: string,
   root = `apps/${name}`,
   layout: EnvLayout = 'default',
+  angularMajor?: number,
 ): Record<string, unknown> {
   return {
     executor: '@angular-devkit/build-angular:browser',
@@ -82,7 +84,11 @@ export function angularBuildTarget(
       outputPath: `dist/${root}`,
       index: `${root}/src/index.html`,
       main: `${root}/src/main.ts`,
-      polyfills: ['zone.js'],
+      // Angular 14's browser builder takes a file (src/polyfills.ts imports zone.js).
+      polyfills:
+        (angularMajor ?? POLYFILLS_ARRAY_MAJOR) >= POLYFILLS_ARRAY_MAJOR
+          ? ['zone.js']
+          : `${root}/src/polyfills.ts`,
       tsConfig: `${root}/tsconfig.app.json`,
       inlineStyleLanguage: 'scss',
       // .htaccess is per env (environments/<app>/htaccess.<env>): the release build adds it.
@@ -169,7 +175,7 @@ export function angularProjectTargets(
   opts: AngularTargetOptions = {},
 ): Record<string, unknown> {
   return {
-    build: angularBuildTarget(name, root, opts.envLayout ?? 'default'),
+    build: angularBuildTarget(name, root, opts.envLayout ?? 'default', opts.angularMajor),
     serve: angularServeTarget(name, opts.port, opts.angularMajor),
     release: angularReleaseTarget(name, root),
     clean: cleanTarget(root),

@@ -87,7 +87,7 @@ describe('pstack new', () => {
           makeCtx({ cwd: tmpDir(), positionals: ['ws'], flags: { skipFormat: true, angular } }),
           recorder().deps,
         ),
-      ).rejects.toThrow(/--angular must be one of 15, 16, 17, 18, 19, 20, 21/);
+      ).rejects.toThrow(/--angular must be one of 14, 15, 16, 17, 18, 19, 20, 21/);
     }
   });
 

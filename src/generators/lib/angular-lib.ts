@@ -4,12 +4,15 @@ import { generateFiles, GeneratorCallback, names, Tree, writeJson } from '@nx/de
 
 import {
   ANGULAR_VERSION,
+  assertStandaloneSupported,
   CONTROL_FLOW_MAJOR,
   ensureAngularDependencies,
   ionicAngularImport,
   ionicStandaloneImport,
   ngPackagrDependencies,
+  POLYFILLS_ARRAY_MAJOR,
   STANDALONE_FALSE_MAJOR,
+  STANDALONE_MIN_MAJOR,
   workspaceGeneratorMajor,
 } from '../../lib/utils/angular-deps';
 import { resolveAngularStyle } from '../../lib/utils/angular-style';
@@ -68,6 +71,7 @@ export function writeAngularLib(
   const standalone =
     resolveAngularStyle(tree, { standalone: o.standalone, module: o.module }, 'lib generator') ===
     'standalone';
+  if (standalone) assertStandaloneSupported(major, 'lib generator');
   const vars = {
     ...templateVars(o),
     prefixCamel: names(o.prefix).propertyName,
@@ -79,11 +83,26 @@ export function writeAngularLib(
     ionicImport: ionicAngularImport(major),
     ionicStandaloneImport: ionicStandaloneImport(major),
     controlFlow: major >= CONTROL_FLOW_MAJOR,
+    // provide*() functions (makeEnvironmentProviders, NgRx provideState) need Angular 15.
+    environmentProviders: major >= STANDALONE_MIN_MAJOR,
+    tsTarget: major < POLYFILLS_ARRAY_MAJOR ? 'es2020' : 'es2022',
     ...(opts.vars ?? {}),
   };
   const build = opts.build ?? (o.variant as AngularLibBuild);
   generateFiles(tree, path.join(__dirname, 'files', 'angular', 'config'), o.projectRoot, vars);
   generateFiles(tree, opts.srcTemplates, o.projectRoot, vars);
+  if (major < STANDALONE_MIN_MAJOR) {
+    // Angular 14: NgModules with forRoot() only, no provide*() functions.
+    for (const c of tree.listChanges()) {
+      if (
+        c.type !== 'DELETE' &&
+        c.path.startsWith(`${o.projectRoot}/src/`) &&
+        c.path.endsWith('.providers.ts')
+      ) {
+        tree.delete(c.path);
+      }
+    }
+  }
   if (standalone) {
     // Standalone libraries have no NgModules: components, directives and pipes are imported
     // directly and providers come from provide*() functions.

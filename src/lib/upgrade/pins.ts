@@ -20,6 +20,17 @@ export interface AngularPins {
 }
 
 export const ANGULAR_PINS: Readonly<Record<number, AngularPins>> = {
+  // Nx 17.0 is the last Nx with Angular 14 in its matrix (so 14 → 15 keeps Nx 17.0.6); Ionic 7 and
+  // Capacitor 5 as on 15.
+  14: {
+    angular: '14.3.0',
+    nx: '17.0.6',
+    typescript: '4.8.4',
+    ionic: '7.8.6',
+    capacitor: 5,
+    node: 20,
+    angularEslint: '14.4.0',
+  },
   15: {
     angular: '15.2.10',
     nx: '17.0.6',
@@ -85,7 +96,7 @@ export const ANGULAR_PINS: Readonly<Record<number, AngularPins>> = {
   },
 };
 
-export const MIN_ANGULAR = 15;
+export const MIN_ANGULAR = 14;
 export const MAX_ANGULAR = 21;
 
 /**

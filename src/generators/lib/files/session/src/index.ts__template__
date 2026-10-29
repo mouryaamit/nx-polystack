@@ -1,6 +1,6 @@
 export * from './lib/session-clock';
 export * from './lib/session-timeout.config';
-export * from './lib/session-timeout.providers';
-export * from './lib/session-timeout.service';
+<% if (environmentProviders) { %>export * from './lib/session-timeout.providers';
+<% } %>export * from './lib/session-timeout.service';
 <% if (!standalone) { %>export * from './lib/session-timeout.module';
 <% } %>export * from './lib/session-warning/session-warning.component';
