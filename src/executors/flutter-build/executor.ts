@@ -4,8 +4,10 @@ import * as path from 'path';
 
 import { ExecutorContext } from '@nx/devkit';
 
+import { stripHtmlComments as stripHtmlCommentsText } from '../../lib/hardening/strip';
 import { generatorInfo } from '../../lib/helpers/build-gen';
 import { injectBuildMeta } from '../../lib/helpers/inject-meta';
+import { injectCspNonce, resolveNonceSettings } from '../../lib/helpers/inject-nonce';
 import { stripExif, stripExifSummary } from '../../lib/helpers/strip-exif';
 import {
   ENVIRONMENTS_DIR,
@@ -73,8 +75,17 @@ export default async function flutterBuildExecutor(
   if (!dist) {
     throw new Error('flutter-build: "dist" option is required for non-serve builds');
   }
-  // Checked before the Flutter build, so a bad buildMeta option fails fast.
+  // Checked before the Flutter build, so a bad buildMeta or nonce option fails fast.
   const gen = generatorInfo(repoRoot, options.buildMeta);
+  let nonceSettings: ReturnType<typeof resolveNonceSettings>;
+  try {
+    nonceSettings = resolveNonceSettings(options.nonce);
+  } catch (err) {
+    throw new Error(`flutter-build: ${(err as Error).message}`);
+  }
+  if (target !== 'web' && (options.secure || options.stripHtmlComments)) {
+    console.log(`ℹ secure / stripHtmlComments ignored for ${target}: they apply to web pages.`);
+  }
   // Web: the env's Apache config, checked before building (no fallback to another env).
   const htaccessSource =
     target === 'web' && options.htaccess !== false
@@ -157,6 +168,24 @@ export default async function flutterBuildExecutor(
       buildNumber: ci.buildNumber,
       gen,
     });
+  }
+
+  // Web: HTML comments out and the CSP nonce placeholder on the page's tags, as Angular release
+  // builds do (Flutter's inline loader script keeps its body byte for byte).
+  if (target === 'web' && fs.existsSync(outDir)) {
+    if (options.stripHtmlComments) {
+      for (const rel of nonceSettings.files) {
+        const file = path.join(outDir, rel);
+        if (!fs.existsSync(file)) continue;
+        const html = fs.readFileSync(file, 'utf8');
+        const out = stripHtmlCommentsText(html);
+        if (out !== html) fs.writeFileSync(file, out);
+      }
+    }
+    if (options.secure) {
+      const written = injectCspNonce({ distDir: outDir, ...nonceSettings, stripComments: false });
+      console.log(`ℹ csp nonce: ${written.length > 0 ? written.join(', ') : 'no page changed'}`);
+    }
   }
 
   console.log('✅ Flutter build complete');

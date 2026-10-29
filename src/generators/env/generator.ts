@@ -15,7 +15,9 @@ import { addNpmScripts } from '../../lib/utils/npm-scripts';
 
 import { EnvGeneratorSchema } from './schema.d';
 
-const RESERVED = new Set(['dev', 'development', 'uat', 'prod', 'production']);
+// uat is one of the standard envs, but apps without one (migrated or adopted with dev and prod
+// only) can add it; an app that has it already is refused per app.
+const RESERVED = new Set(['dev', 'development', 'prod', 'production']);
 const NAME_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 interface AngularApp {
@@ -53,7 +55,7 @@ type FlutterApp = FlutterPluginApp | FlutterRunCommandsApp;
 export default async function envGenerator(tree: Tree, options: EnvGeneratorSchema): Promise<void> {
   const { name, apiUrl, production, baseHref } = options;
   // Without --from: uat, else prod (migrated apps may only have production).
-  const sources = options.from ? [options.from] : ['uat', 'prod'];
+  const sources = options.from ? [options.from] : name === 'uat' ? ['prod'] : ['uat', 'prod'];
 
   if (!NAME_RE.test(name)) {
     throw new Error(
@@ -290,7 +292,9 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
         const targets = (json['targets'] ?? {}) as Record<string, Record<string, unknown>>;
         for (const targetName of ['build-web', 'build-android', 'build-ios']) {
           const target = targets[targetName] as Record<string, unknown> | undefined;
-          if (!target) continue;
+          // Targets that do not build with flutter-build (an adopted app's run-commands apk /
+          // ios builds) have no env configurations to copy.
+          if (!target || !isFlutterBuild(target)) continue;
           const configs = (target['configurations'] ?? {}) as Record<
             string,
             Record<string, unknown>
@@ -310,9 +314,20 @@ export default async function envGenerator(tree: Tree, options: EnvGeneratorSche
         return json;
       });
 
-      npmScripts[`build:${app.name}:${name}:web`] = `nx run ${app.name}:build-web:${name}`;
-      npmScripts[`build:${app.name}:${name}:apk`] = `nx run ${app.name}:build-android:${name}`;
-      npmScripts[`build:${app.name}:${name}:ios`] = `nx run ${app.name}:build-ios:${name}`;
+      const built = (readJson(tree, `${app.root}/project.json`).targets ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      const flutterTargets: [string, string][] = [
+        ['web', 'build-web'],
+        ['apk', 'build-android'],
+        ['ios', 'build-ios'],
+      ];
+      for (const [kind, t] of flutterTargets) {
+        if (built[t] && isFlutterBuild(built[t])) {
+          npmScripts[`build:${app.name}:${name}:${kind}`] = `nx run ${app.name}:${t}:${name}`;
+        }
+      }
     } else {
       // run-commands: env is passed at runtime via {args.env} — no project.json patch needed
       npmScripts[
@@ -549,7 +564,7 @@ function planFlutter(
     >;
     for (const t of ['build-web', 'build-android', 'build-ios']) {
       const target = targets[t];
-      if (!target) continue;
+      if (!target || !isFlutterBuild(target as Record<string, unknown>)) continue;
       if (target.configurations?.[name]) {
         problems.push(`${app.name}: ${t} configuration "${name}" already exists`);
       }
@@ -560,6 +575,11 @@ function planFlutter(
     }
   }
   return { app, newEnvFile: file, sourceJson: source, htaccess, problems };
+}
+
+/** A target that builds with the plugin's flutter-build executor. */
+function isFlutterBuild(target: Record<string, unknown>): boolean {
+  return /:flutter-build$/.test(String(target['executor'] ?? ''));
 }
 
 /** The polystack release target (any name), else a target named release. */

@@ -22,6 +22,8 @@ import {
   workspaceGeneratorMajor,
   workspaceGeneratorVersions,
   ZONE_PROVIDER_MAJOR,
+  assertStandaloneSupported,
+  POLYFILLS_ARRAY_MAJOR,
 } from '../../lib/utils/angular-deps';
 import { resolveAngularStyle } from '../../lib/utils/angular-style';
 import {
@@ -169,6 +171,9 @@ export default async function appGenerator(
       'app generator',
     );
     const standalone = style === 'standalone';
+    if (standalone) assertStandaloneSupported(major, 'app generator');
+    // Angular 14: zone.js from src/polyfills.ts, ES2020.
+    const polyfillsFile = major < POLYFILLS_ARRAY_MAJOR;
     const vars = {
       name: projectName,
       // Capacitor for the workspace's Angular (5 on 15, 6 on 16–17, 7 on 18–20, 8 on 21); Angular itself is added below.
@@ -182,6 +187,8 @@ export default async function appGenerator(
       // ApplicationConfig moved from @angular/platform-browser to @angular/core in Angular 16.
       applicationConfigFromCore: major >= 16,
       zoneProviders: major >= ZONE_PROVIDER_MAJOR,
+      polyfillsFile,
+      tsTarget: polyfillsFile ? 'es2020' : 'es2022',
       ionicImport: ionicAngularImport(major),
       ionicStandaloneImport: ionicStandaloneImport(major),
       className,
@@ -203,6 +210,12 @@ export default async function appGenerator(
     // NgModule apps: AppModule, AppRoutingModule, bootstrapModule; standalone apps: app.config.ts,
     // app.routes.ts, bootstrapApplication.
     generateFiles(tree, path.join(__dirname, 'files', `angular-${style}`), projectPath, vars);
+    if (polyfillsFile) {
+      tree.write(
+        `${projectPath}/src/polyfills.ts`,
+        "// Loaded before the app (the build's polyfills option). Zone.js is required by Angular.\nimport 'zone.js';\n",
+      );
+    }
     if (type === 'ionic') {
       // Overlays the Angular files: <ion-app>, Ionic styles, Capacitor config (and IonicModule).
       generateFiles(tree, path.join(__dirname, 'files', 'ionic'), projectPath, vars);

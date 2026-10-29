@@ -115,12 +115,36 @@ function splitTopLevel(body: string): string[] {
 
 export interface SourceEnvEncryption {
   script: string;
+  /**
+   * listed: the script encrypts only the fields it names (`ENCRYPTED_ENV_KEYS = [...]`), raw
+   * CryptoJS ciphertext keyed by the commit; all (default): deny by default, `ENC(...)` values.
+   */
+  mode?: 'listed' | 'all';
+  /** listed: the fields it encrypts. */
+  keys?: string[];
   publicKeys: string[];
   profileFiles: string[];
   timeField?: string;
   branchField?: string;
   /** Set by applySourceEnvEncryption when the workspace settings were changed to match. */
   applied?: boolean;
+}
+
+/**
+ * The fields a listed-mode script encrypts: CryptoJS AES with the commit as passphrase, the
+ * field names in one `<NAME>_KEYS = [ ... ]` list. Undefined for any other script.
+ */
+function listedKeys(text: string): string[] | undefined {
+  if (!/\bAES\.encrypt\s*\(/.test(text)) return undefined;
+  const names = [...text.matchAll(/\b(?:const|let|var)\s+([A-Z][A-Z0-9_]*KEYS)\s*=\s*\[/g)].map(
+    (m) => m[1],
+  );
+  // A PUBLIC_* list names what stays plain: never read it as the keys to encrypt.
+  const lists = names
+    .filter((n) => !/^PUBLIC/.test(n))
+    .map((n) => stringArrayConst(text, n))
+    .filter((l): l is string[] => !!l);
+  return lists.length === 1 && lists[0].length > 0 ? lists[0] : undefined;
 }
 
 /** The source's own env encryption, when it has the known shape. */
@@ -131,8 +155,9 @@ export function detectSourceEnvEncryption(
   const scripts = findSourceFiles(sourceDir, 'tools', /^encrypt-env\.(c?js|ts)$/);
   for (const script of scripts) {
     const text = readSource(sourceDir, script) ?? '';
-    if (!text.includes('ENC(')) continue;
-    const publicKeys = stringArrayConst(text, 'PUBLIC_ENV_KEYS');
+    const listed = !text.includes('ENC(') ? listedKeys(text) : undefined;
+    if (!text.includes('ENC(') && !listed) continue;
+    const publicKeys = listed ? [] : stringArrayConst(text, 'PUBLIC_ENV_KEYS');
     if (!publicKeys) {
       unreadable = script;
       continue;
@@ -149,8 +174,9 @@ export function detectSourceEnvEncryption(
     }
     return {
       script,
+      ...(listed ? { mode: 'listed' as const, keys: listed } : {}),
       publicKeys,
-      profileFiles: profiles.length > 0 ? ['app.profile.ts'] : [],
+      profileFiles: listed ? [] : profiles.length > 0 ? ['app.profile.ts'] : [],
       timeField: declared.has('timeStamp') ? 'timeStamp' : undefined,
       branchField: declared.has('branchName')
         ? 'branchName'
@@ -237,10 +263,13 @@ export function applySourceEnvEncryption(
   const found = detected as SourceEnvEncryption | undefined;
   if (!found || !tree.exists('nx.json')) return found;
   const raw = readEnvEncryptionBlock(tree);
+  const listed = found.mode === 'listed';
   const settings = [
-    'mode `all`',
-    'format `enc`',
-    `publicKeys ${found.publicKeys.map(code).join(', ')}`,
+    listed ? 'mode `listed`' : 'mode `all`',
+    listed ? 'format `raw`' : 'format `enc`',
+    listed
+      ? `keys ${(found.keys ?? []).map(code).join(', ')}`
+      : `publicKeys ${found.publicKeys.map(code).join(', ')}`,
     found.profileFiles.length > 0 ? `profileFiles ${code('app.profile.ts')}` : '',
     found.timeField || found.branchField
       ? `stamp fields ${[found.timeField, found.branchField]
@@ -275,10 +304,14 @@ export function applySourceEnvEncryption(
   const base = normalizeEnvEncryption(raw);
   writeEnvEncryptionBlock(tree, {
     ...base,
-    mode: 'all',
-    format: 'enc',
-    publicKeys: found.publicKeys,
-    profileFiles: found.profileFiles,
+    ...(listed
+      ? { mode: 'listed' as const, format: 'raw' as const, keys: { default: found.keys ?? [] } }
+      : {
+          mode: 'all' as const,
+          format: 'enc' as const,
+          publicKeys: found.publicKeys,
+          profileFiles: found.profileFiles,
+        }),
     stamp:
       found.timeField || found.branchField
         ? {

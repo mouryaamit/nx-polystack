@@ -126,6 +126,81 @@ describe('pstack upgrade angular (NX-76)', () => {
     expect(readPkg(ws).devDependencies['typescript']).toBe('~5.1.6');
   });
 
+  it('14 → 15: Nx stays 17.0.6; ES2022 targets, polyfills: ["zone.js"], zone.js 0.12, NgRx 15', async () => {
+    const ws = workspace('14.3.0', { 'zone.js': '~0.11.4', '@ngrx/store': '~14.3.0' });
+    const pkg = readPkg(ws);
+    pkg.devDependencies['@angular-devkit/build-angular'] = '~14.2.13';
+    pkg.devDependencies['@angular/cli'] = '~14.2.13';
+    pkg.devDependencies['@angular-eslint/eslint-plugin'] = '~14.4.0';
+    pkg.devDependencies['typescript'] = '~4.8.4';
+    // ng-packagr 14 brought postcss-import with it; the library builds need it on 15.
+    pkg.devDependencies['ng-packagr'] = '^14.0.0';
+    pkg.devDependencies['postcss'] = '^8.4.5';
+    writePkg(ws, pkg);
+    const file = (f: string, text: string) => {
+      fs.mkdirSync(path.dirname(path.join(ws, f)), { recursive: true });
+      fs.writeFileSync(path.join(ws, f), text);
+    };
+    file(
+      'apps/web/project.json',
+      '{\n  "name": "web",\n  "targets": {\n    "build": {\n      "options": {\n        "main": "apps/web/src/main.ts",\n        "polyfills": "apps/web/src/polyfills.ts"\n      }\n    }\n  }\n}\n',
+    );
+    file(
+      'apps/web/src/polyfills.ts',
+      "// Loaded before the app.\nimport 'zone.js'; // Included with Angular CLI.\n",
+    );
+    file(
+      'apps/web/tsconfig.app.json',
+      '{\n  "extends": "./tsconfig.json",\n  "files": ["src/main.ts", "src/polyfills.ts"]\n}\n',
+    );
+    file(
+      'apps/web/tsconfig.json',
+      '/* comment */\n{\n  "compilerOptions": {\n    "target": "es2020",\n    "strict": true\n  }\n}\n',
+    );
+    // A polyfills file with more than zone.js stays.
+    file(
+      'apps/admin/project.json',
+      '{ "targets": { "build": { "options": { "polyfills": "apps/admin/src/polyfills.ts" } } } }\n',
+    );
+    file('apps/admin/src/polyfills.ts', "import 'zone.js';\nimport '@angular/localize/init';\n");
+    file(
+      'libs/ui/tsconfig.json',
+      '{\n  "compilerOptions": {\n    "target": "es2020",\n    "useDefineForClassFields": false\n  }\n}\n',
+    );
+
+    const { deps, calls, out } = fakeDeps(ws);
+    expect(await runUpgrade(makeCtx({ cwd: ws, positionals: ['angular'] }), deps)).toBe(0);
+    const run = calls.map(line);
+    expect(run[0]).toBe('npx nx migrate @angular/core@15.2.10 --interactive=false');
+    expect(run).toContain(
+      'npm install --save-dev @angular-devkit/build-angular@~15.2.10 @angular/cli@~15.2.10 ' +
+        '@angular/compiler-cli@~15.2.10 @angular-eslint/eslint-plugin@~15.2.1 ng-packagr@^15.0.0 ' +
+        'typescript@~4.9.5',
+    );
+    expect(run).toContain(
+      'npm install --save-dev postcss-import@~14.1.0 postcss-preset-env@~7.5.0 ' +
+        'postcss-url@~10.1.3 autoprefixer@^10.4.0',
+    );
+    expect(run).toContain('npm install @ngrx/store@~15.4.0 zone.js@~0.12.0');
+    expect(readPkg(ws).devDependencies['nx']).toBe('17.0.6');
+    const read = (f: string) => fs.readFileSync(path.join(ws, f), 'utf8');
+    expect(read('apps/web/project.json')).toContain('"polyfills": ["zone.js"]');
+    expect(fs.existsSync(path.join(ws, 'apps/web/src/polyfills.ts'))).toBe(false);
+    expect(read('apps/web/tsconfig.app.json')).toContain('"files": ["src/main.ts"]');
+    expect(read('apps/web/tsconfig.json')).toBe(
+      '/* comment */\n{\n  "compilerOptions": {\n    "target": "es2022",\n    "useDefineForClassFields": false,\n    "strict": true\n  }\n}\n',
+    );
+    expect(read('libs/ui/tsconfig.json')).toBe(
+      '{\n  "compilerOptions": {\n    "target": "es2022",\n    "useDefineForClassFields": false\n  }\n}\n',
+    );
+    expect(read('apps/admin/project.json')).toContain('"polyfills": "apps/admin/src/polyfills.ts"');
+    expect(fs.existsSync(path.join(ws, 'apps/admin/src/polyfills.ts'))).toBe(true);
+    expect(out.join('\n')).toContain('Angular 14 → 15:');
+    expect(run.slice(-1)).toEqual([
+      'git commit -m chore: upgrade to Angular 15 (pstack upgrade angular)',
+    ]);
+  });
+
   it('20 → 21: Node 22, second Angular pass, Ionic 9 through @ionic/migrate, Capacitor 8', async () => {
     const ws = workspace('20.3.9', { '@ionic/angular': '~8.7.11' });
     writePkg(ws, {

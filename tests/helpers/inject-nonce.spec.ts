@@ -246,3 +246,44 @@ describe('review fixes (NX-70)', () => {
     );
   });
 });
+
+describe('injectNonceIntoHtml every tag and ngCspNonce (NX-108)', () => {
+  const P = "<!--#echo var='UNIQUE_ID' -->";
+  const every = resolveNonceSettings({
+    placeholder: P,
+    tags: 'every',
+    position: 'after-tag-name',
+    ngCspNonce: 'app-root',
+  });
+
+  it('puts the nonce on every script, link and style, and ngCspNonce on the root element', () => {
+    const out = injectNonceIntoHtml(
+      [
+        '<head><link rel="modulepreload" href="chunk.js"><link rel="icon" href="f.ico">',
+        '<link rel="stylesheet" href="s.css"></head>',
+        '<body><app-root></app-root><script src="main.js" type="module"></script></body>',
+      ].join(''),
+      every,
+    );
+    const n = `nonce="${P}"`;
+    expect(out).toContain(`<link ${n} rel="modulepreload"`);
+    expect(out).toContain(`<link ${n} rel="icon"`);
+    expect(out).toContain(`<link ${n} rel="stylesheet"`);
+    expect(out).toContain(`<script ${n} src="main.js"`);
+    expect(out).toContain(`<app-root ngCspNonce="${P}"></app-root>`);
+  });
+
+  it('keeps an ngCspNonce already there, and all still skips non-stylesheet links', () => {
+    expect(injectNonceIntoHtml('<app-root ngCspNonce="x"></app-root>', every)).toBe(
+      '<app-root ngCspNonce="x"></app-root>',
+    );
+    const all = resolveNonceSettings({ placeholder: P });
+    expect(injectNonceIntoHtml('<link rel="icon" href="f.ico">', all)).not.toContain('nonce');
+  });
+
+  it('refuses an ngCspNonce that is not a custom element name', () => {
+    expect(() => resolveNonceSettings({ ngCspNonce: 'div' })).toThrow(
+      'nonce.ngCspNonce must be the tag name of the root element',
+    );
+  });
+});

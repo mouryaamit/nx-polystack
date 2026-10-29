@@ -46,8 +46,8 @@
         },
         "tags": {
           "type": "string",
-          "enum": ["all", "legacy"],
-          "description": "all (default): every script, style and stylesheet link. legacy: inline scripts (no src), every link and every style."
+          "enum": ["all", "legacy", "every"],
+          "description": "all (default): every script, style and stylesheet link. legacy: inline scripts (no src), every link and every style. every: every script, link and style."
         },
         "position": {
           "type": "string",
@@ -64,6 +64,10 @@
         "addMeta": {
           "type": "boolean",
           "description": "Add <meta property=\"csp-nonce\"> to <head> (default true)."
+        },
+        "ngCspNonce": {
+          "type": "string",
+          "description": "Tag name of the Angular root element (e.g. app-root) that gets ngCspNonce=\"<placeholder>\"; Angular 16+ puts that nonce on the <style> elements it adds at runtime. Default: none."
         },
         "files": {
           "type": "array",

@@ -3,13 +3,13 @@
   "cli": "nx",
   "id": "adopt",
   "title": "Adopt Apps",
-  "description": "Move the Angular apps of this workspace that build without the plugin to its release target, in place: release target (base hrefs and post-build steps read from the workspace's own build script), environments/<app>/htaccess.<env>, env encryption settings, build:<app>:<env> npm scripts. Old scripts are kept.",
+  "description": "Move the Angular and Flutter apps of this workspace that build without the plugin to its release target (Angular) or flutter-build target (Flutter web), in place: base hrefs and post-build steps read from the workspace's own build script, environments/<app>/htaccess.<env> and env files, env encryption settings, build:<app>:<env> npm scripts. Old scripts are kept.",
   "type": "object",
   "properties": {
     "projects": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Apps to adopt (default: every Angular app without a release target)."
+      "description": "Apps to adopt (default: every Angular app without a release target and every Flutter app whose web build does not use flutter-build)."
     },
     "scripts": {
       "type": "boolean",

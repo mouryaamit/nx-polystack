@@ -7,6 +7,7 @@ import {
   dropUnusedNamedImport,
   enablePreferStandalone,
   keepNonceImportFirst,
+  providersOnly,
   tidyMains,
 } from '../../src/cli/commands/upgrade-standalone';
 import { assertLocalSupports } from '../../src/cli/launcher';
@@ -53,16 +54,24 @@ function fakeDeps(
   ws: string,
   onSchematic?: (mode: string) => void,
   over: Partial<UpgradeDeps> = {},
+  unchanged: string[] = [],
 ) {
   const calls: string[] = [];
   const out: string[] = [];
+  // The tree is clean at the start and after each commit; a schematic mode changes files unless
+  // it is listed as unchanged.
+  let dirty = false;
   const deps: UpgradeDeps = {
     exec(cmd, args) {
       calls.push(`${cmd} ${args.join(' ')}`);
       const mode = args.find((a) => a.startsWith('--mode='))?.slice('--mode='.length);
-      if (mode) onSchematic?.(mode);
+      if (mode) {
+        onSchematic?.(mode);
+        if (!unchanged.includes(mode)) dirty = true;
+      }
+      if (cmd === 'git' && args[0] === 'commit') dirty = false;
     },
-    gitStatus: () => '',
+    gitStatus: () => (dirty ? ' M x' : ''),
     nodeMajor: () => 20,
     interactive: false,
     prompter: () => scriptedPrompter([]),
@@ -200,6 +209,56 @@ describe('pstack upgrade standalone', () => {
         fakeDeps(old).deps,
       ),
     ).rejects.toThrow('needs Angular 15.2 or later (installed: 15.1.5)');
+  });
+
+  it('a mode that changes nothing is neither checked nor committed, and the run goes on', async () => {
+    const ws = workspace();
+    const { deps, calls, out } = fakeDeps(ws, undefined, {}, ['prune-ng-modules']);
+    expect(
+      await runUpgrade(
+        makeCtx({ cwd: ws, positionals: ['standalone'], flags: { all: true } }),
+        deps,
+      ),
+    ).toBe(0);
+    expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
+      'git commit -m chore: standalone convert-to-standalone (pstack upgrade standalone)',
+      'git commit -m chore: standalone standalone-bootstrap (pstack upgrade standalone)',
+    ]);
+    expect(calls.filter((c) => c === 'npx nx run-many -t build lint')).toHaveLength(2);
+    expect(out.join('\n')).toContain('▶ prune-ng-modules: no changes');
+  });
+
+  it('an NgModule that only provides services does not start the schematic again', async () => {
+    expect(
+      providersOnly(
+        '@NgModule({ exports: [], imports: [], providers: [provideHttpClient(withInterceptorsFromDi())] })\nexport class DataModule {}\n',
+      ),
+    ).toBe(true);
+    expect(providersOnly('@NgModule({ declarations: [A], providers: [B] })')).toBe(false);
+    expect(providersOnly('@NgModule({ imports: [CommonModule], exports: [CommonModule] })')).toBe(
+      false,
+    );
+    // A workspace already converted, with such a module left: nothing to do.
+    const ws = workspace();
+    const file = (f: string, text: string) => fs.writeFileSync(path.join(ws, f), text);
+    file(
+      'apps/web/src/main.ts',
+      "import { bootstrapApplication } from '@angular/platform-browser';\nbootstrapApplication(AppComponent, { providers: [] });\n",
+    );
+    fs.rmSync(path.join(ws, 'apps/web/src/app/app.module.ts'));
+    file(
+      'libs/shared/ui/src/lib/ui.module.ts',
+      '@NgModule({ providers: [provideHttpClient()] })\nexport class UiModule {}\n',
+    );
+    const { deps, calls, out } = fakeDeps(ws);
+    expect(
+      await runUpgrade(
+        makeCtx({ cwd: ws, positionals: ['standalone'], flags: { all: true } }),
+        deps,
+      ),
+    ).toBe(0);
+    expect(calls).toEqual([]);
+    expect(out.join('\n')).toContain('nothing to do');
   });
 
   it('Angular 21: keeps zone change detection in the bootstrapApplication providers', async () => {

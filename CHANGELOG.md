@@ -3,6 +3,70 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.11.10
+
+- `pstack adopt --remove-old-scripts` also removes or rewrites what still names the scripts it
+  deletes: ignore-file and `CODEOWNERS` lines, JSON list entries, comment lines in code, CI and
+  shell files, and Markdown mentions (now the release target). Changelogs and the adopt reports are
+  kept; mentions it cannot edit safely are listed in the report.
+
+## 1.11.9
+
+- `pstack upgrade angular` adds the PostCSS packages that `@nx/angular`'s library builds load when
+  they are missing (`postcss-import` after 14 → 15: Angular 14's build packages brought it, 15's do
+  not, so buildable libraries failed with "Cannot find module 'postcss-import'"). New buildable
+  libraries get `postcss-import` too.
+
+## 1.11.8
+
+- `pstack adopt` adopts Flutter apps: a web build that runs `flutter build web` (directly or
+  through the workspace's build script) becomes a `flutter-build` target, with `dist` and base href
+  from the script's per-app map, env files and `web/.htaccess` moved under `environments/<app>/`,
+  the nonce and HTML comment steps as options, and the npm scripts pointed at it.
+- `flutter-build` web builds take `secure`, `nonce` and `stripHtmlComments`, as the release target
+  does; the nonce goes on the tags only, so Flutter's inline loader script is kept byte for byte.
+- `nonce.tags: "every"` (every script, link and style) and `nonce.ngCspNonce` (the Angular root
+  element that gets `ngCspNonce`, for the styles Angular 16+ adds at runtime).
+- `pstack adopt` on Angular 17+ application-builder apps keeps `outputPath.base`, reads `baseHref`
+  and `dist` from a per-app map in the build script, keeps the names of npm scripts such as
+  `build:<app>:production` (now running the release target), and mirrors a listed-mode env
+  encryption script (`mode: "listed"`, raw CryptoJS, the listed keys).
+- `pstack env --name=uat` works for apps without a UAT env (copied from prod), and only adds env
+  configurations and npm scripts to Flutter targets that build with `flutter-build`.
+
+## 1.11.7
+
+- `pstack upgrade angular` starts from Angular 14: the 14 → 15 step keeps Nx 17.0.6, moves tsconfig
+  targets to ES2022 (`useDefineForClassFields: false`), turns polyfills files that only load
+  zone.js into `polyfills: ["zone.js"]`, and moves zone.js to 0.12 and NgRx to 15.4 when declared.
+
+## 1.11.6
+
+- Angular 14 workspaces get `@angular/cli` and `@angular-devkit/build-angular` 14.2.13, the last
+  Angular 14 CLI release (there is no 14.3.0 of them; `pstack new --angular=14` failed to install).
+
+## 1.11.5
+
+- `pstack new --angular=14`: workspaces on Angular 14.3 (Nx 17.0.6, TypeScript 4.8). Apps load
+  zone.js from `src/polyfills.ts` and target ES2020; Ionic apps get Ionic 7.8 and Capacitor 5.
+  Standalone code is refused on 14, and the starter libraries keep their NgModules without
+  `provide*()` functions (NgRx 14.3). `pstack migrate` and `pstack upgrade angular` from 14 follow.
+- `pstack upgrade standalone` skips the check and the commit of a step that changed nothing (it
+  stopped with "nothing to commit"), and an NgModule that only provides services no longer starts
+  Angular's schematic again on an already converted workspace.
+
+## 1.11.4
+
+- `pstack upgrade standalone` has a fourth step, standalone-providers: `importProvidersFrom` in
+  `main.ts` and `app.config.ts` loses `BrowserModule`, and the root routing module becomes
+  `provideRouter(routes, ...features)` with its router options as features, its file becoming
+  `app.routes.ts`. Routing modules it cannot convert safely are left as they are and named. On a
+  workspace already converted, `pstack upgrade standalone --all` runs only this step.
+- `pstack adopt` also moves the `.htaccess` of apps that already have the release target but whose
+  build still copies it (for example an app made by copying another app's `project.json`) to
+  `environments/<app>/htaccess.<env>`, keeping env files that exist; `--app` accepts such an app.
+  A `project.json` that already had a release target no longer gets a second one.
+
 ## 1.11.3
 
 - New workspaces have `"analytics": false` in `nx.json`, so Nx 22 no longer stops the first

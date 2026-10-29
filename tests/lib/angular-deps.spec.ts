@@ -116,7 +116,7 @@ describe('ensureAngularDependencies', () => {
       expect(readJson(tree, 'package.json')).toEqual(before);
       expect(warn).toHaveBeenCalledWith(
         expect.stringMatching(
-          /Angular 22; the generators support Angular 15, 16, 17, 18, 19, 20, 21.*@angular-devkit\/build-angular/s,
+          /Angular 22; the generators support Angular 14, 15, 16, 17, 18, 19, 20, 21.*@angular-devkit\/build-angular/s,
         ),
       );
       warn.mockRestore();
@@ -229,7 +229,7 @@ describe('ensureAngularDependencies', () => {
       capacitor: '^8.0.0',
     });
     expect(() => angularGeneratorVersions(22)).toThrow(
-      /not supported by the generators \(15, 16, 17, 18, 19, 20, 21\)/,
+      /not supported by the generators \(14, 15, 16, 17, 18, 19, 20, 21\)/,
     );
     expect(ionicAngularImport(20)).toBe('@ionic/angular');
     expect(ionicAngularImport(21)).toBe('@ionic/angular/lazy');

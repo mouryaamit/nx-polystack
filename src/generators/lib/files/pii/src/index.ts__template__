@@ -1,7 +1,7 @@
 export * from './lib/pii-mask';
 export * from './lib/pii-mask.options';
-export * from './lib/pii-mask.providers';
-export * from './lib/pii-mask.pipe';
+<% if (environmentProviders) { %>export * from './lib/pii-mask.providers';
+<% } %>export * from './lib/pii-mask.pipe';
 export * from './lib/pii-mask.directive';
 <% if (!standalone) { %>export * from './lib/pii-mask.module';
 <% } %>
