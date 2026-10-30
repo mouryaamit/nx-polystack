@@ -48,6 +48,12 @@ describe('buildExecutor', () => {
       JSON.stringify({ _default: ['password', 'key'], web: ['password', 'key'] }),
     );
     writeHtaccessSources(tmpDir);
+    // What the Angular build leaves: the served index.html (the build meta goes into it).
+    fs.mkdirSync(path.join(tmpDir, 'dist', 'apps', 'web'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'dist', 'apps', 'web', 'index.html'),
+      '<html><head></head><body></body></html>',
+    );
     runner = jest.fn();
   });
 
@@ -737,7 +743,7 @@ describe('buildExecutor aes-gcm', () => {
     expect(fs.existsSync(path.join(dist, 'assets'))).toBe(false);
   });
 
-  it('fails when no index.html can take the key share', async () => {
+  it('fails when no index.html can take the build meta and the key share', async () => {
     writeConfig({ mode: 'all', cipher: 'aes-gcm' });
     runner.mockImplementation(() => fs.mkdirSync(dist, { recursive: true }));
     await expect(
@@ -747,7 +753,7 @@ describe('buildExecutor aes-gcm', () => {
         runner,
       ),
     ).rejects.toThrow(
-      'aes-gcm build: index.html not found under dist/apps/web; the key share could not be written',
+      'build executor: index.html not found under dist/apps/web; the build meta could not be written',
     );
     expect(fs.readFileSync(path.join(envDir, 'environment.uat.ts'), 'utf8')).toBe(
       "export const environment = { password: 'p' };",
@@ -819,6 +825,7 @@ describe('buildExecutor release hardening', () => {
     );
     dist = path.join(tmpDir, 'dist', 'apps', 'web');
     fs.mkdirSync(dist, { recursive: true });
+    fs.writeFileSync(path.join(dist, 'index.html'), '<html><head></head><body></body></html>');
     runner = jest.fn();
     logs = [];
     for (const method of ['log', 'warn', 'error'] as const) {
@@ -982,6 +989,8 @@ describe('buildExecutor release hardening', () => {
   });
 
   it('refreshes integrity in browser/index.html (application builder layout)', async () => {
+    // No project config in the context: the output is used as the build left it.
+    fs.rmSync(path.join(dist, 'index.html'));
     write(
       'browser/index.html',
       `<link rel="stylesheet" href="styles-AB12.css" integrity="${sha384('x')}">`,

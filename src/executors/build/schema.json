@@ -12,7 +12,7 @@
     },
     "outputPath": {
       "type": "string",
-      "description": "Output directory relative to repo root (e.g. dist/apps/web)."
+      "description": "Output directory relative to repo root (e.g. dist/apps/web). The app is written to it directly, never to a browser/ subfolder; for an Angular application-builder build target it must equal that target's outputPath.base (with browser: \"\")."
     },
     "envProject": {
       "type": "string",

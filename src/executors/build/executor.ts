@@ -6,6 +6,12 @@ import { ExecutorContext } from '@nx/devkit';
 
 import { prepareEnvFile } from '../../lib/env-encryption/prepare';
 import { CheckResult, listFiles, servedRoot } from '../../lib/hardening/files';
+import {
+  isApplicationBuilder,
+  outputBase,
+  sameOutput,
+  ssrOption,
+} from '../../lib/release/flat-output';
 import { hasWebpackSriRuntime, recordHashes, swapHashes } from '../../lib/hardening/integrity';
 import { checkLeaks } from '../../lib/hardening/leak-check';
 import { refreshNgswHashes } from '../../lib/hardening/ngsw';
@@ -108,6 +114,13 @@ export default async function buildExecutor(
   // are swapped after strip/obfuscate, and aes-gcm builds require integrity at runtime.
   const chunkSri = sri && env !== 'DEV';
 
+  const angularConfig =
+    buildConfiguration ?? (env === 'PROD' ? 'production' : env === 'UAT' ? 'uat' : 'development');
+  // Where the Angular build writes: the release outputPath, or (application builder with an object
+  // outputPath) the build target's own base, never a browser/ subfolder. Checked before the env
+  // file is touched or anything is built.
+  const output = buildOutput(context, target, angularConfig, outputPath);
+
   const envFilePath = envFileFor(repoRoot, envProject, env);
   // One instant for the env stamp, the aes-gcm key (HKDF) and the meta timestamp_utc.
   const now = new Date();
@@ -131,9 +144,7 @@ export default async function buildExecutor(
     );
   }
   try {
-    const angularConfig =
-      buildConfiguration ?? (env === 'PROD' ? 'production' : env === 'UAT' ? 'uat' : 'development');
-    const outputArg = `--outputPath=${outputPath}`;
+    const outputArg = output.arg;
     const baseHrefArg = baseHref ? `--baseHref=${baseHref}` : '';
     // The env file changes per build (encryption, stamp), so the Angular build is never cached.
     const cacheArg = '--skip-nx-cache';
@@ -155,7 +166,14 @@ export default async function buildExecutor(
   }
   prepared.restore();
 
-  const distDir = path.resolve(repoRoot, outputPath);
+  const distDir = path.resolve(repoRoot, output.dir);
+  if (output.applicationBuilder && fs.existsSync(path.join(distDir, 'browser', 'index.html'))) {
+    throw new Error(
+      `build executor: the build wrote ${path.join(output.dir, 'browser')}/; release builds have ` +
+        `no browser/ folder. Set ${target}'s outputPath to { "base": "${output.dir}", "browser": "" } ` +
+        '(pstack update does it).',
+    );
+  }
 
   // Release checks see what the Angular build produced; stripping comes before the files are
   // hashed (SRI) and stamped.
@@ -189,9 +207,9 @@ export default async function buildExecutor(
     warnUncoveredLazyChunks(checkRoot);
   }
 
-  // aes-gcm: the meta key share (and the asset share) must reach the served index.html, else the
-  // app cannot decrypt. cryptojs builds keep the meta in <outputPath>/index.html when present.
-  const servedDir = prepared.keyParts ? gcmServedRoot(distDir, outputPath) : distDir;
+  // The build meta (and, aes-gcm, the key share and the asset share) go into the served
+  // index.html; a build without one fails here instead of shipping without the meta.
+  const servedDir = servedIndexRoot(distDir, output.dir);
   const metaHtml = path.join(servedDir, 'index.html');
   const asset = prepared.keyParts?.asset;
   if (asset) {
@@ -210,7 +228,7 @@ export default async function buildExecutor(
     console.log(`ℹ ${stripExifSummary(exif)}`);
   }
 
-  if (fs.existsSync(metaHtml)) {
+  {
     injectBuildMeta({
       indexHtmlPath: metaHtml,
       env,
@@ -274,7 +292,7 @@ export default async function buildExecutor(
   const ngswUpdated = refreshNgswHashes(checkRoot);
   if (ngswUpdated > 0) console.log(`ℹ ngsw.json: ${ngswUpdated} hash(es) updated`);
 
-  console.log(`✅ Build complete — type:${type}, env:${env}, output:${outputPath}`);
+  console.log(`✅ Build complete — type:${type}, env:${env}, output:${output.dir}`);
   return { success: true };
 }
 
@@ -338,12 +356,13 @@ function reportChecks(results: CheckResult[]): void {
   }
 }
 
-/** servedRoot for aes-gcm builds, which cannot run without an index.html for the meta key share. */
-function gcmServedRoot(distDir: string, outputPath: string): string {
+/** The served root, which must hold an index.html for the build meta (and the aes-gcm key share). */
+function servedIndexRoot(distDir: string, outputPath: string): string {
   const dir = servedRoot(distDir);
   if (!fs.existsSync(path.join(dir, 'index.html'))) {
     throw new Error(
-      `aes-gcm build: index.html not found under ${outputPath}; the key share could not be written`,
+      `build executor: index.html not found under ${outputPath}; the build meta could not be ` +
+        'written',
     );
   }
   return dir;
@@ -371,4 +390,79 @@ function readSriAllowlist(repoRoot: string): string[] {
     // ignore malformed config
   }
   return [];
+}
+
+interface BuildOutput {
+  /** `--outputPath=…` for the Angular build, or '' when the build target's own outputPath is used. */
+  arg: string;
+  /** Workspace-relative folder the build writes to (and the release steps work in). */
+  dir: string;
+  /** The build target runs Angular's application builder. */
+  applicationBuilder: boolean;
+}
+
+/**
+ * Where the Angular build writes. The release outputPath is passed on (as before), except for the
+ * application builder: it would put the app in <outputPath>/browser/, so its build target must
+ * set `outputPath: { base, browser: "" }`. That object is used as it is (no --outputPath: a CLI
+ * string would replace it) and its base must be the release outputPath. Server-rendered builds
+ * are refused. Without project config in the context the release outputPath is passed on.
+ */
+export function buildOutput(
+  context: ExecutorContext,
+  buildTarget: string,
+  configuration: string,
+  releaseOutputPath: string,
+): BuildOutput {
+  const passOn: BuildOutput = {
+    arg: `--outputPath=${releaseOutputPath}`,
+    dir: releaseOutputPath,
+    applicationBuilder: false,
+  };
+  const [project, name] = buildTarget.split(':');
+  const target = context.projectsConfigurations?.projects?.[project]?.targets?.[name] as
+    | {
+        executor?: string;
+        options?: Record<string, unknown>;
+        configurations?: Record<string, Record<string, unknown>>;
+      }
+    | undefined;
+  if (!target || !isApplicationBuilder(target)) return passOn;
+  const options = { ...(target.options ?? {}), ...(target.configurations?.[configuration] ?? {}) };
+  const where = `${buildTarget}${
+    target.configurations?.[configuration] ? `:${configuration}` : ''
+  }`;
+  const ssr = ssrOption(options);
+  if (ssr) {
+    throw new Error(
+      `build executor: ${where} sets "${ssr}" (server rendering); the release build is for ` +
+        'browser-only apps.',
+    );
+  }
+  const out = options['outputPath'];
+  const base = outputBase(out);
+  const flat = { base: base ?? releaseOutputPath, browser: '' };
+  if (
+    typeof out !== 'object' ||
+    out === null ||
+    (out as Record<string, unknown>)['browser'] !== ''
+  ) {
+    throw new Error(
+      `build executor: ${where} uses the application builder, which writes the app to ` +
+        `${base ?? releaseOutputPath}/browser/ unless outputPath.browser is "". Release builds ` +
+        `have no browser/ folder: set its outputPath to ${JSON.stringify(
+          flat,
+        )} (pstack update does it).`,
+    );
+  }
+  if (!base) {
+    throw new Error(`build executor: ${where} has an outputPath without "base".`);
+  }
+  if (!sameOutput(base, releaseOutputPath)) {
+    throw new Error(
+      `build executor: the release outputPath is "${releaseOutputPath}" but ${where} builds to ` +
+        `"${base}". Set the release target's outputPath to "${base}".`,
+    );
+  }
+  return { arg: '', dir: base, applicationBuilder: true };
 }

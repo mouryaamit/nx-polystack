@@ -5,6 +5,7 @@ import * as path from 'path';
 
 import { Check, compareBuilds, renderReport } from '../../lib/adopt/compare';
 import { flagString } from '../args';
+import { servedOutput } from '../../lib/release/flat-output';
 import { CliError, CommandContext } from '../types';
 
 import { requireWorkspace } from './app';
@@ -64,12 +65,15 @@ function projectJson(root: string, app: string): Json | null {
   return walk(root, 0);
 }
 
-function outputPath(pj: Json | null, target: string, app: string): string {
+/**
+ * The folder a target's build serves from: its outputPath, or for an object outputPath (Angular
+ * application builder) `base/<browser>` (browser "" is base itself, a missing browser is
+ * "browser"). Defaults to dist/apps/<app>.
+ */
+export function outputPath(pj: Json | null, target: string, app: string): string {
   const targets = (pj?.['targets'] ?? {}) as Record<string, Json>;
   const options = (targets[target]?.['options'] ?? {}) as Json;
-  return typeof options['outputPath'] === 'string'
-    ? (options['outputPath'] as string)
-    : `dist/apps/${app}`;
+  return servedOutput(options['outputPath']) ?? `dist/apps/${app}`;
 }
 
 function copyDir(from: string, to: string): void {
