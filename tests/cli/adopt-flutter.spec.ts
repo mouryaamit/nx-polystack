@@ -172,6 +172,29 @@ describe('pstack adopt: Angular application builder and Flutter apps (NX-108)', 
   });
   afterEach(() => jest.restoreAllMocks());
 
+  it('makes the application-builder output flat (no browser/ folder) (NX-113)', async () => {
+    const ws = workspace();
+    const pj = readJson(ws, 'apps/web/project.json');
+    pj.targets.build.options.outputPath = { base: 'dist/site' };
+    fs.writeFileSync(path.join(ws, 'apps/web/project.json'), JSON.stringify(pj, null, 2));
+    await runAdopt(makeCtx({ cwd: ws, flags: {} }));
+    const after = readJson(ws, 'apps/web/project.json');
+    expect(after.targets.build.options.outputPath).toEqual({ base: 'dist/site', browser: '' });
+    expect(after.targets.release.options.outputPath).toBe('dist/site');
+    expect(read(ws, 'docs/migrations/adopt.md')).toContain(
+      '`build` outputPath.browser set to "" (no `browser/` folder in the output)',
+    );
+  });
+
+  it('keeps an outputPath that is already flat', async () => {
+    const ws = workspace();
+    await runAdopt(makeCtx({ cwd: ws, flags: {} }));
+    expect(readJson(ws, 'apps/web/project.json').targets.build.options.outputPath).toEqual({
+      base: 'dist/site',
+      browser: '',
+    });
+  });
+
   it('gives the Angular app a release target that does what the script did', async () => {
     const ws = workspace();
     await runAdopt(makeCtx({ cwd: ws, flags: {} }));

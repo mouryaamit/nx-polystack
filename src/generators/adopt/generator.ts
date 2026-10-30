@@ -5,6 +5,7 @@ import {
   readEnvEncryptionBlock,
   writeEnvEncryptionBlock,
 } from '../../lib/env-encryption/workspace';
+import { flattenApplicationOutput } from '../../lib/release/flat-output';
 import { adoptHtaccess, copiesHtaccess, htaccessNote } from '../../lib/release/htaccess-adopt';
 import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
 import { devkitPinFor, installedVersion, withDevkitPin } from '../../lib/utils/devkit-pin';
@@ -729,6 +730,17 @@ export default async function adoptGenerator(
     }
     shapeReleaseTarget(targets, name, buildScripts, notes);
     applyPipeline(targets['release'] as Json, pipeline, notes);
+    // The application builder would put the app in <base>/browser/: release builds are flat.
+    const releaseOptions = ((targets['release'] as Json)['options'] ?? {}) as Json;
+    const buildName = String(releaseOptions['buildTarget'] ?? `${name}:build`).split(':')[1];
+    const flat = flattenApplicationOutput(targets[buildName]);
+    if (flat === 'set') {
+      notes.push(
+        `${code(buildName)} outputPath.browser set to "" (no \`browser/\` folder in the output)`,
+      );
+    } else if (flat === 'ssr') {
+      notes.push(`${code(buildName)} renders on a server; the release build refuses it`);
+    }
     const original = tree.read(pjPath, 'utf8') ?? '';
     writeJson(tree, pjPath, pj);
     htaccessNote(adoptHtaccess(tree, pjPath), name, notes);

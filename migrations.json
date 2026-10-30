@@ -107,6 +107,11 @@
       "version": "1.11.3",
       "description": "Set nx.json \"analytics\": false when the workspace has not answered Nx's usage-data prompt, so Nx 22 no longer stops to ask",
       "implementation": "./src/migrations/nx-analytics-off/nx-analytics-off"
+    },
+    "application-builder-flat-output": {
+      "version": "1.11.11",
+      "description": "Set outputPath.browser to \"\" on application-builder targets a release target builds, so release builds have no browser/ folder",
+      "implementation": "./src/migrations/application-builder-flat-output/application-builder-flat-output"
     }
   }
 }

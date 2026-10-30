@@ -3,6 +3,19 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.11.11
+
+- Release builds of Angular 17+ application-builder apps (`outputPath: { base, browser: "" }`)
+  write to `outputPath` again, not to `outputPath/browser/`: the release build no longer passes
+  `--outputPath`, which replaced the build target's object. Release builds have no `browser/`
+  folder; anything else is refused before building (an application-builder target whose
+  `browser` is not `""`, a release `outputPath` that is not the build `base`, server rendering).
+- The x-build meta is always written into the served `index.html`; a build without one fails
+  (cryptojs builds used to skip it, so it was missing from application-builder builds).
+- `pstack adopt` and `pstack update` (migration `application-builder-flat-output`) set
+  `outputPath.browser` to `""` on application-builder targets that a release target builds.
+- `pstack adopt --compare` reads an old build's object `outputPath`.
+
 ## 1.11.10
 
 - `pstack adopt --remove-old-scripts` also removes or rewrites what still names the scripts it

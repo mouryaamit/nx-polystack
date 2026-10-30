@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { CompareDeps, runAdoptCompare } from '../../src/cli/commands/adopt-compare';
+import { CompareDeps, outputPath, runAdoptCompare } from '../../src/cli/commands/adopt-compare';
 import { compareBuilds } from '../../src/lib/adopt/compare';
 
 import { makeCtx, tmpDir, writeJson } from './helpers';
@@ -213,5 +213,18 @@ describe('pstack adopt --compare', () => {
         fake(ws).deps,
       ),
     ).rejects.toThrow(/no qa configuration/);
+  });
+});
+
+describe('adopt --compare output folders (NX-113)', () => {
+  const pj = (outputPath: unknown) => ({ targets: { build: { options: { outputPath } } } });
+  it('reads string and object outputPaths (application builder)', () => {
+    expect(outputPath(pj('dist/apps/web'), 'build', 'web')).toBe('dist/apps/web');
+    expect(outputPath(pj({ base: 'dist/site', browser: '' }), 'build', 'web')).toBe('dist/site');
+    expect(outputPath(pj({ base: 'dist/site' }), 'build', 'web')).toBe('dist/site/browser');
+    expect(outputPath(pj({ base: 'dist/site', browser: 'app' }), 'build', 'web')).toBe(
+      'dist/site/app',
+    );
+    expect(outputPath(null, 'build', 'web')).toBe('dist/apps/web');
   });
 });
