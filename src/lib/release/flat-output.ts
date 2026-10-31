@@ -39,10 +39,15 @@ export type FlatOutputChange = 'set' | 'flat' | 'ssr' | 'none';
 /**
  * Makes an application-builder target's outputs flat: a string outputPath becomes
  * `{ base: <it>, browser: "" }`, an object gets `browser: ""` (other fields kept), in the options
- * and in every configuration that sets outputPath. 'ssr' (nothing changed) for server-rendered
- * builds, 'flat' when already flat, 'none' when the target is not an application builder.
+ * and in every configuration that sets outputPath. Options without an outputPath (Angular 20+
+ * `ng new` sets none: Angular then writes to dist/<project>/browser/) get
+ * `{ base: defaultBase, browser: "" }` when `defaultBase` (the release outputPath) is given.
+ * `{options.outputPath}` in the target's outputs becomes `{options.outputPath.base}`, and a
+ * target without outputs gets `["{options.outputPath.base}"]` (Nx 20+ fails on an object
+ * outputPath otherwise). 'ssr' (nothing changed) for server-rendered builds, 'flat' when already flat, 'none' when the
+ * target is not an application builder.
  */
-export function flattenApplicationOutput(target: unknown): FlatOutputChange {
+export function flattenApplicationOutput(target: unknown, defaultBase?: string): FlatOutputChange {
   if (!isApplicationBuilder(target)) return 'none';
   const t = target as Json;
   const sets = [
@@ -51,6 +56,14 @@ export function flattenApplicationOutput(target: unknown): FlatOutputChange {
   ].filter(isObject);
   if (sets.some((o) => ssrOption(o))) return 'ssr';
   let changed = false;
+  if (defaultBase) {
+    if (!isObject(t['options'])) t['options'] = {};
+    const options = t['options'] as Json;
+    if (options['outputPath'] === undefined) {
+      options['outputPath'] = { base: defaultBase, browser: '' };
+      changed = true;
+    }
+  }
   for (const o of sets) {
     const out = o['outputPath'];
     if (typeof out === 'string') {
@@ -58,6 +71,22 @@ export function flattenApplicationOutput(target: unknown): FlatOutputChange {
       changed = true;
     } else if (isObject(out) && out['browser'] !== '') {
       o['outputPath'] = { ...out, browser: '' };
+      changed = true;
+    }
+  }
+  // Nx reads `{options.outputPath}` in outputs as a string; with the object it is `.base`.
+  // Without outputs Nx falls back to options.outputPath itself, which fails the same way.
+  if (t['outputs'] === undefined && isObject((t['options'] as Json | undefined)?.['outputPath'])) {
+    t['outputs'] = ['{options.outputPath.base}'];
+    changed = true;
+  } else if (Array.isArray(t['outputs'])) {
+    const outputs = (t['outputs'] as unknown[]).map((o) =>
+      typeof o === 'string'
+        ? o.replace(/\{options\.outputPath\}/g, '{options.outputPath.base}')
+        : o,
+    );
+    if (outputs.some((o, i) => o !== (t['outputs'] as unknown[])[i])) {
+      t['outputs'] = outputs;
       changed = true;
     }
   }

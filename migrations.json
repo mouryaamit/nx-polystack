@@ -112,6 +112,11 @@
       "version": "1.11.11",
       "description": "Set outputPath.browser to \"\" on application-builder targets a release target builds, so release builds have no browser/ folder",
       "implementation": "./src/migrations/application-builder-flat-output/application-builder-flat-output"
+    },
+    "application-builder-flat-output-1.11.12": {
+      "version": "1.11.12",
+      "description": "Run application-builder-flat-output again for apps pstack migrate added with 1.11.11 (outputPath.browser \"\" on application-builder targets a release target builds)",
+      "implementation": "./src/migrations/application-builder-flat-output/application-builder-flat-output"
     }
   }
 }

@@ -47,6 +47,36 @@ describe('application-builder-flat-output migration (NX-113)', () => {
     );
   });
 
+  it('a build without outputPath (Angular 20+ ng new) gets the release outputPath as base', async () => {
+    app(
+      'std21',
+      {
+        executor: '@angular/build:application',
+        outputs: ['{options.outputPath}'],
+        options: { browser: 'apps/std21/src/main.ts' },
+      },
+      'dist/apps/std21',
+    );
+    await applicationBuilderFlatOutput(tree);
+    const build = readJson(tree, 'apps/std21/project.json').targets.build;
+    expect(build.options.outputPath).toEqual({ base: 'dist/apps/std21', browser: '' });
+    // Nx 20+ cannot read an object through {options.outputPath}.
+    expect(build.outputs).toEqual(['{options.outputPath.base}']);
+    app(
+      'std20',
+      { executor: '@angular/build:application', options: { browser: 'apps/std20/src/main.ts' } },
+      'dist/apps/std20',
+    );
+    await applicationBuilderFlatOutput(tree);
+    // No outputs: Nx would read options.outputPath (now an object) by default.
+    expect(readJson(tree, 'apps/std20/project.json').targets.build.outputs).toEqual([
+      '{options.outputPath.base}',
+    ]);
+    await applicationBuilderFlatOutput(tree);
+    expect(info.filter((m) => m.includes('std21'))).toHaveLength(1);
+    expect(info.filter((m) => m.includes('std20'))).toHaveLength(1);
+  });
+
   it('leaves browser-builder apps, flat apps, apps without release, and is idempotent', async () => {
     app('old', {
       executor: '@angular-devkit/build-angular:browser',
@@ -54,6 +84,7 @@ describe('application-builder-flat-output migration (NX-113)', () => {
     });
     app('flat', {
       executor: '@angular/build:application',
+      outputs: ['{options.outputPath.base}'],
       options: { outputPath: { base: 'dist/flat', browser: '' } },
     });
     tree.write(

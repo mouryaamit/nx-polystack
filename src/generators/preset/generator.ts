@@ -3,7 +3,7 @@ import * as path from 'path';
 import { Tree, formatFiles, generateFiles, updateJson } from '@nx/devkit';
 
 import { readPackageVersion, selfPackageRoot } from '../../cli/context';
-import { formatPluginSpec, PLUGIN_NAME } from '../../cli/versions';
+import { formatPluginSpec, PLUGIN_NAME, pluginSpecOverride } from '../../cli/versions';
 import { defaultEnvEncryptionConfig } from '../../lib/env-encryption/config';
 import { writeEnvEncryptionBlock } from '../../lib/env-encryption/workspace';
 import { ANGULAR_PINS } from '../../lib/upgrade/pins';
@@ -125,7 +125,7 @@ export default async function presetGenerator(
   updateJson(tree, 'package.json', (json) => {
     json.devDependencies = {
       ...json.devDependencies,
-      [PLUGIN_NAME]: formatPluginSpec(pluginVersion),
+      [PLUGIN_NAME]: pluginSpecOverride() ?? formatPluginSpec(pluginVersion),
     };
     // The husky pre-commit hook runs `npx lint-staged`, which fails without a config.
     // ESLint on commit reports without blocking (pstack infra --lint-staged=block to block).

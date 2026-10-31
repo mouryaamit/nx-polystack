@@ -1,4 +1,5 @@
 import {
+  pluginSpecOverride,
   compareVersions,
   globalInstallCommand,
   formatPluginSpec,
@@ -80,5 +81,11 @@ describe('versions', () => {
       'gh release download v0.3.2 -R example-org/private-plugin -p mouryaamit-nx-polystack-v0.3.2.tgz -D /tmp --clobber' +
         ' && npm i -g /tmp/mouryaamit-nx-polystack-v0.3.2.tgz',
     );
+  });
+
+  it('pluginSpecOverride reads PSTACK_PLUGIN_SPEC; empty or unset is none', () => {
+    expect(pluginSpecOverride({ PSTACK_PLUGIN_SPEC: ' file:/x/p.tgz ' })).toBe('file:/x/p.tgz');
+    expect(pluginSpecOverride({ PSTACK_PLUGIN_SPEC: '  ' })).toBeNull();
+    expect(pluginSpecOverride({})).toBeNull();
   });
 });

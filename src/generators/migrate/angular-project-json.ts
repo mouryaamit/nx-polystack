@@ -1,5 +1,6 @@
 import * as path from 'path';
 
+import { flattenApplicationOutput } from '../../lib/release/flat-output';
 import { angularReleaseTarget, withReleaseHardening } from '../../lib/utils/angular-project';
 
 import type { AngularProject, AngularTarget } from './adapters/angular-cli';
@@ -254,6 +255,10 @@ export function addReleaseTarget(
   release['configurations'] = configs;
   release['defaultConfiguration'] = names.includes('dev') ? 'dev' : names[0];
   targets['release'] = release;
+  // The application builder would put the app in <base>/browser/; release builds are flat.
+  if (flattenApplicationOutput(build, release.options['outputPath'] as string) === 'set') {
+    warnFn('`build` outputPath.browser set to "" (no `browser/` folder in the output)');
+  }
   return names;
 }
 
