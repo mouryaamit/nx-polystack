@@ -733,7 +733,11 @@ export default async function adoptGenerator(
     // The application builder would put the app in <base>/browser/: release builds are flat.
     const releaseOptions = ((targets['release'] as Json)['options'] ?? {}) as Json;
     const buildName = String(releaseOptions['buildTarget'] ?? `${name}:build`).split(':')[1];
-    const flat = flattenApplicationOutput(targets[buildName]);
+    const releaseOut = releaseOptions['outputPath'];
+    const flat = flattenApplicationOutput(
+      targets[buildName],
+      typeof releaseOut === 'string' ? releaseOut : undefined,
+    );
     if (flat === 'set') {
       notes.push(
         `${code(buildName)} outputPath.browser set to "" (no \`browser/\` folder in the output)`,

@@ -201,6 +201,19 @@ describe('preset generator', () => {
     );
   });
 
+  it('pins PSTACK_PLUGIN_SPEC instead when it is set (dev-only, for untagged builds)', async () => {
+    process.env['PSTACK_PLUGIN_SPEC'] = 'file:/tmp/mouryaamit-nx-polystack-v9.9.9.tgz';
+    try {
+      await presetGenerator(tree, { pluginVersion: '9.9.9' });
+    } finally {
+      delete process.env['PSTACK_PLUGIN_SPEC'];
+    }
+    const pkg = JSON.parse(tree.read('package.json')?.toString() ?? '{}');
+    expect(pkg.devDependencies['@mouryaamit/nx-polystack']).toBe(
+      'file:/tmp/mouryaamit-nx-polystack-v9.9.9.tgz',
+    );
+  });
+
   it('pins to its own package version by default', async () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const own = require('../../package.json').version;

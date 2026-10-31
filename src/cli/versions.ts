@@ -47,6 +47,16 @@ export function formatPluginSpec(version: string): string {
   return source.kind === 'npm' ? v : `github:${source.repo}#v${v}`;
 }
 
+/**
+ * Dev-only: the plugin spec a new workspace pins instead of formatPluginSpec, from
+ * PSTACK_PLUGIN_SPEC (e.g. `file:/path/to/mouryaamit-nx-polystack-vX.tgz`), so a build that has no
+ * tag yet can be tested end to end (the Angular release gate). Unset: null.
+ */
+export function pluginSpecOverride(env: NodeJS.ProcessEnv = process.env): string | null {
+  const spec = env['PSTACK_PLUGIN_SPEC']?.trim();
+  return spec ? spec : null;
+}
+
 /** Extra `npm install` flags for a pin, so npm saves it as formatPluginSpec wrote it. */
 export function pinInstallFlags(): string[] {
   return installSource().kind === 'npm' ? ['--save-exact'] : [];

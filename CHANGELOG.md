@@ -3,6 +3,18 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.11.12
+
+- `pstack migrate` (and `pstack app --from`, which uses it) sets `outputPath.browser` to `""` on
+  the build target of the Angular 17+ application-builder apps it gives a release target. With
+  1.11.11 their release builds were refused ("Release builds have no browser/ folder"). A build
+  target without an `outputPath` (Angular 20+ `ng new` writes none) gets
+  `{ base: <release outputPath>, browser: "" }`, and `{options.outputPath}` in its outputs becomes
+  `{options.outputPath.base}`, and a target without outputs gets that entry (Nx 20+ fails on the
+  object otherwise); `pstack adopt` does the same.
+- `pstack update` runs `application-builder-flat-output` again (as
+  `application-builder-flat-output-1.11.12`), so apps migrated with 1.11.11 are fixed too.
+
 ## 1.11.11
 
 - Release builds of Angular 17+ application-builder apps (`outputPath: { base, browser: "" }`)

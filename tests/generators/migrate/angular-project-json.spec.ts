@@ -515,6 +515,52 @@ describe('addReleaseTarget', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('an application-builder build gets a flat outputPath (no browser/ folder, NX-113)', () => {
+    const targets: Record<string, unknown> = {
+      build: {
+        executor: '@angular/build:application',
+        options: { outputPath: 'dist/apps/std17', browser: 'apps/std17/src/main.ts' },
+        configurations: {
+          production: { outputHashing: 'all' },
+          development: { outputPath: { base: 'dist/dev/std17' } },
+        },
+      },
+    };
+    const warnings: string[] = [];
+    addReleaseTarget(targets, 'std17', (w) => warnings.push(w));
+    const build = targets['build'] as Record<string, Record<string, unknown>>;
+    expect(build['options']['outputPath']).toEqual({ base: 'dist/apps/std17', browser: '' });
+    expect(
+      (build['configurations']['development'] as Record<string, unknown>)['outputPath'],
+    ).toEqual({
+      base: 'dist/dev/std17',
+      browser: '',
+    });
+    expect((targets['release'] as { options: Record<string, unknown> }).options['outputPath']).toBe(
+      'dist/apps/std17',
+    );
+    expect(warnings).toEqual([
+      '`build` outputPath.browser set to "" (no `browser/` folder in the output)',
+    ]);
+  });
+
+  it('an application-builder build without outputPath gets the release outputPath (Angular 20+)', () => {
+    const targets: Record<string, unknown> = {
+      build: {
+        executor: '@angular/build:application',
+        outputs: ['{options.outputPath}', '{workspaceRoot}/coverage'],
+        options: { browser: 'apps/std21/src/main.ts' },
+        configurations: { production: {}, development: {} },
+      },
+    };
+    const warnings: string[] = [];
+    addReleaseTarget(targets, 'std21', (w) => warnings.push(w));
+    const build = targets['build'] as Record<string, Record<string, unknown>>;
+    expect(build['options']['outputPath']).toEqual({ base: 'dist/apps/std21', browser: '' });
+    expect(build['outputs']).toEqual(['{options.outputPath.base}', '{workspaceRoot}/coverage']);
+    expect(warnings).toHaveLength(1);
+  });
+
   it('warns and adds nothing without build configurations or with a release target', () => {
     const warnings: string[] = [];
     expect(addReleaseTarget({ build: {} }, 'a', (w) => warnings.push(w))).toEqual([]);

@@ -12,7 +12,8 @@ const isObject = (v: unknown): v is Json =>
 /**
  * v1.11.11 (NX-113): release builds have no browser/ folder. Angular's application builder writes
  * the app to <base>/browser/ unless outputPath.browser is "", so the build target a release target
- * builds gets `outputPath: { base, browser: "" }` (a string outputPath becomes that object). The
+ * builds gets `outputPath: { base, browser: "" }` (a string outputPath becomes that object; none
+ * at all, as Angular 20+ `ng new` writes, becomes the release outputPath as base). The
  * release build now refuses anything else. Layouts are kept; project.json files with comments,
  * server-rendered builds and release outputPaths that are not the build base are listed.
  */
@@ -41,7 +42,11 @@ export default async function applicationBuilderFlatOutput(tree: Tree): Promise<
       const [project, buildName] = ref.split(':');
       if (project !== name || !buildName) continue;
       const build = targets[buildName];
-      const result = flattenApplicationOutput(build);
+      const releaseOut = options['outputPath'];
+      const result = flattenApplicationOutput(
+        build,
+        typeof releaseOut === 'string' ? releaseOut : undefined,
+      );
       if (result === 'ssr') {
         say(`${file} ${buildName}: server rendering; the release build refuses it.`);
         continue;
