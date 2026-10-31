@@ -46,6 +46,8 @@ COMMANDS
               into existing Angular/Ionic apps; new apps get them automatically
   hardening   Show or change an app's release hardening (leak check, source maps, comment and
               console stripping, obfuscation, SRI for every chunk)
+  assets      assets strip-exif: remove EXIF, XMP and IPTC from the source images apps ship
+              (their asset folders, assets libraries), without re-encoding; --check lists them
   inspect     Tell whether a build was made by pstack: reads the build meta of a dist folder,
               an index.html or a URL (tool and versions, env, time, branch, commit)
   infra       Add repo docs, CI gates (affected lint/test/build, dependency cycles), quality
@@ -71,6 +73,18 @@ OPTIONS — new / preset
   --skip-install               new only — do not run npm install
   --skip-git                   new only — do not initialise git
   --force                      new only — allow creating inside another Nx workspace
+
+OPTIONS — assets strip-exif
+  pstack assets strip-exif [--app=a,b | --all] [--dir=p1,p2] [--check | --dry-run] [files…]
+  --app=<names>                These apps' asset folders (Angular/Ionic build assets, Flutter
+                               assets/, pubspec asset entries and web/)
+  --all                        Every app and assets library (the default without --app/--dir)
+  --dir=<folders>              Extra folders (workspace-relative); alone, only these
+  files…                       Only these images (for lint-staged)
+  --check                      Change nothing; list images with EXIF/XMP/IPTC, exit code 1 if any
+  --dry-run                    The same list, exit code 0
+  Only images that carry those blocks are written; an EXIF orientation other than 1 is applied
+  to the pixels (that image is re-encoded).
 
 OPTIONS — inspect
   pstack inspect <dist folder | index.html | URL>
@@ -266,6 +280,9 @@ OPTIONS — infra
                                current Nx major); default polystack
   --lint-staged=warn|block     ESLint on commit: report without blocking (warn, the default of new
                                workspaces) or block on errors
+  --exif=fix|check|off         Source-image EXIF/XMP/IPTC: fix (staged images cleaned on commit,
+                               the default of new workspaces) or check (commit refused); both add
+                               assets:strip-exif / assets:check-exif and a CI check. off removes them
   --force                      Overwrite files that already exist (.husky/pre-push is always
                                appended to, never replaced)
   The quality part also adds typecheck targets (tsc --noEmit) and the import/no-unresolved and

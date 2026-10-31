@@ -21,5 +21,6 @@ export const COMMANDS: Record<string, CommandHandler> = {
   migrate: async (c) => (await import('./migrate')).runMigrate(c),
   adopt: async (c) => (await import('./adopt')).runAdopt(c),
   inspect: async (c) => (await import('./inspect')).runInspect(c),
+  assets: async (c) => (await import('./assets')).runAssets(c),
   upgrade: async (c) => (await import('./upgrade')).runUpgrade(c),
 };

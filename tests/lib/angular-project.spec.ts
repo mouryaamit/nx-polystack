@@ -89,5 +89,11 @@ describe('angular-project helpers', () => {
     expect(Object.keys(angularProjectTargets('portal')).sort()).toEqual(
       ['build', 'clean', 'extract-i18n', 'lint', 'release', 'serve', 'typecheck'].sort(),
     );
+    // NX-111: templates checked by ngc in the templates configuration.
+    expect(angularProjectTargets('portal')['typecheck']).toEqual({
+      executor: 'nx:run-commands',
+      options: { command: 'tsc --noEmit -p apps/portal/tsconfig.app.json' },
+      configurations: { templates: { command: 'ngc --noEmit -p apps/portal/tsconfig.app.json' } },
+    });
   });
 });

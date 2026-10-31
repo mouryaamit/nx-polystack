@@ -34,6 +34,8 @@ export interface MigrateGeneratorSchema {
   newAdapter?: string;
   /** Rewrite imports in the copied code after the move (default true; --no-rewrite-imports). */
   rewriteImports?: boolean;
+  /** Copy scripts pstack replaces (EXIF stripping, type checking) instead of replacing them. */
+  keepOldScripts?: boolean;
   /** Internal (--config): dir came from defaults or the command line, not the entry. */
   dirInherited?: boolean;
   /** Internal (--config): the source as written in the batch file, for the report and manifest. */

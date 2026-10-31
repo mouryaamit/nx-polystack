@@ -179,7 +179,7 @@ export function angularProjectTargets(
     serve: angularServeTarget(name, opts.port, opts.angularMajor),
     release: angularReleaseTarget(name, root),
     clean: cleanTarget(root),
-    typecheck: typecheckTarget(`${root}/tsconfig.app.json`),
+    typecheck: typecheckTarget(`${root}/tsconfig.app.json`, { templates: true }),
     lint: {
       executor: '@nx/eslint:lint',
       outputs: ['{options.outputFile}'],

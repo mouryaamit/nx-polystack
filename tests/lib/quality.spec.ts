@@ -284,11 +284,15 @@ describe('quality (NX-45)', () => {
       ]);
     });
 
-    it('reads project.json and nx.json with comments', () => {
-      tree.write('apps/portal/project.json', '// app\n{ "name": "portal", "targets": {} }\n');
+    it('reads project.json and nx.json with comments; a project.json with comments is listed, not rewritten', () => {
+      const pj = '// app\n{ "name": "portal", "targets": {} }\n';
+      tree.write('apps/portal/project.json', pj);
       tree.write('apps/portal/tsconfig.app.json', '{}');
       tree.write('nx.json', '// nx\n{ "namedInputs": { "production": ["default"] } }\n');
-      expect(addTypecheckTargets(tree)).toEqual(['portal']);
+      const comments: string[] = [];
+      expect(addTypecheckTargets(tree, comments)).toEqual([]);
+      expect(comments).toEqual(['portal']);
+      expect(tree.read('apps/portal/project.json', 'utf8')).toBe(pj);
       expect(addTypecheckNxDefaults(tree)).toBe(true);
     });
 

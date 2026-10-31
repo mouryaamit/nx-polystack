@@ -167,6 +167,8 @@ export default async function presetGenerator(
       flutter: options.flutter,
       upgradeSchedule: options.upgradeSchedule,
       upgradeScope: options.upgradeScope,
+      // Staged images lose EXIF/XMP/IPTC on commit; CI checks every app's images.
+      exif: 'fix',
       skipFormat: true,
     });
   }

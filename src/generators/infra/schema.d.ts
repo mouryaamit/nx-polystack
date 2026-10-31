@@ -13,6 +13,7 @@ export interface InfraGeneratorSchema {
   upgradeScope?: string;
   /** lint-staged ESLint step: warn (report, never block the commit) | block. Unset: unchanged. */
   lintStaged?: string;
+  exif?: string;
   /** Overwrite files that already exist (never .husky/pre-push, which is appended to). */
   force?: boolean;
   skipFormat?: boolean;

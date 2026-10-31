@@ -124,9 +124,9 @@ describe('pstack upgrade standalone', () => {
     expect(calls[tidy + 1]).toBe('npx --no-install prettier --write apps/web/src/main.ts');
     expect(calls[tidy + 2]).toBe('npx nx run-many -t build lint');
     expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
-      'git commit -m chore: standalone convert-to-standalone (pstack upgrade standalone)',
-      'git commit -m chore: standalone prune-ng-modules (pstack upgrade standalone)',
-      'git commit -m chore: standalone standalone-bootstrap (pstack upgrade standalone)',
+      'git commit -m chore: convert-to-standalone (pstack upgrade standalone)',
+      'git commit -m chore: prune-ng-modules (pstack upgrade standalone)',
+      'git commit -m chore: standalone-bootstrap (pstack upgrade standalone)',
     ]);
     expect(fs.readFileSync(main, 'utf8')).toMatch(
       /^\/\/ Gives .*\nimport '@mouryaamit\/nx-polystack\/runtime\/csp-nonce';\n/,
@@ -221,8 +221,8 @@ describe('pstack upgrade standalone', () => {
       ),
     ).toBe(0);
     expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
-      'git commit -m chore: standalone convert-to-standalone (pstack upgrade standalone)',
-      'git commit -m chore: standalone standalone-bootstrap (pstack upgrade standalone)',
+      'git commit -m chore: convert-to-standalone (pstack upgrade standalone)',
+      'git commit -m chore: standalone-bootstrap (pstack upgrade standalone)',
     ]);
     expect(calls.filter((c) => c === 'npx nx run-many -t build lint')).toHaveLength(2);
     expect(out.join('\n')).toContain('▶ prune-ng-modules: no changes');

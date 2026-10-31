@@ -244,7 +244,7 @@ describe('standalone providers tidy-up', () => {
       'npx --no-install prettier --write apps/web/src/app/app.routes.ts apps/web/src/main.ts',
       'npx nx run-many -t build lint',
       'git add -A',
-      'git commit -m chore: standalone standalone-providers (pstack upgrade standalone)',
+      'git commit -m chore: standalone-providers (pstack upgrade standalone)',
     ]);
     expect(fs.existsSync(path.join(ws, 'apps/web/src/app/app-routing.module.ts'))).toBe(false);
     expect(fs.readFileSync(path.join(ws, 'apps/web/src/app/app.routes.ts'), 'utf8')).toContain(

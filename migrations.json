@@ -117,6 +117,16 @@
       "version": "1.11.12",
       "description": "Run application-builder-flat-output again for apps pstack migrate added with 1.11.11 (outputPath.browser \"\" on application-builder targets a release target builds)",
       "implementation": "./src/migrations/application-builder-flat-output/application-builder-flat-output"
+    },
+    "typecheck-everywhere": {
+      "version": "1.12.0",
+      "description": "Add typecheck (tsc --noEmit, ngc for Angular templates) to every TypeScript project without one, analyze to Flutter projects, and the root typecheck npm script",
+      "implementation": "./src/migrations/typecheck-everywhere/typecheck-everywhere"
+    },
+    "assets-exif-scripts": {
+      "version": "1.12.0",
+      "description": "Add the root npm scripts assets:strip-exif and assets:check-exif (pstack assets strip-exif) for the source images apps ship",
+      "implementation": "./src/migrations/assets-exif-scripts/assets-exif-scripts"
     }
   }
 }

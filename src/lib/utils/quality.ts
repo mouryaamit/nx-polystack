@@ -1,17 +1,27 @@
 import { parseJson, readJson, Tree } from '@nx/devkit';
 
 import { declaredVersion, Deps } from './dependencies';
+import { keepJsonLayout, loadJsonc } from './json-layout';
 import { hasLintStagedConfig } from './lint-staged';
 import { scanProjects } from './project-json-files';
 
 // ── typecheck ────────────────────────────────────────────────────────────────
 
-/** `typecheck` target: tsc without output over the project's app or lib tsconfig. */
-export function typecheckTarget(tsconfig: string) {
+/**
+ * `typecheck` target: tsc without output over the project's app or lib tsconfig. Angular
+ * projects also get a `templates` configuration (`nx run <p>:typecheck:templates`) that runs ngc
+ * without output, which checks the templates as the tsconfig's angularCompilerOptions ask.
+ */
+export function typecheckTarget(tsconfig: string, opts: { templates?: boolean } = {}) {
   return {
     executor: 'nx:run-commands',
     options: { command: `tsc --noEmit -p ${tsconfig}` },
+    ...(opts.templates ? { configurations: templatesConfiguration(tsconfig) } : {}),
   };
+}
+
+function templatesConfiguration(tsconfig: string) {
+  return { templates: { command: `ngc --noEmit -p ${tsconfig}` } };
 }
 
 /** The tsconfig a project's typecheck uses (tsconfig.app.json, else tsconfig.lib.json), if any. */
@@ -20,29 +30,184 @@ export function typecheckTsconfig(tree: Tree, root: string): string | undefined 
   return [`${base}tsconfig.app.json`, `${base}tsconfig.lib.json`].find((f) => tree.exists(f));
 }
 
-/** Adds a typecheck target to the project at `root` when it has none; returns whether it did. */
-export function addTypecheckTarget(tree: Tree, root: string): boolean {
+const ANGULAR_EXECUTOR =
+  /^(?:@angular-devkit\/build-angular|@angular\/build|@nx\/angular|@nrwl\/angular|@mouryaamit\/nx-polystack:build$)/;
+
+/**
+ * An Angular (or Ionic) project: one of its tsconfig files sets angularCompilerOptions, or a target
+ * runs an Angular builder or the polystack release build.
+ */
+export function isAngularProject(tree: Tree, root: string, json: Record<string, unknown>): boolean {
+  const base = root === '.' ? '' : `${root}/`;
+  for (const f of ['tsconfig.json', 'tsconfig.app.json', 'tsconfig.lib.json']) {
+    if (/"angularCompilerOptions"/.test(tree.read(`${base}${f}`, 'utf8') ?? '')) return true;
+  }
+  const targets = (json['targets'] ?? {}) as Record<string, { executor?: unknown }>;
+  return Object.values(targets).some(
+    (t) => typeof t?.executor === 'string' && ANGULAR_EXECUTOR.test(t.executor),
+  );
+}
+
+/** What adding a target did: added, already there, nothing to add, or left (comments). */
+export type TargetChange = 'added' | 'exists' | 'none' | 'comments';
+
+/**
+ * Writes a project.json change: plain JSON is rewritten keeping its layout; JSON with comments is
+ * left as it is ('comments'), since a rewrite would drop them.
+ */
+function updateProjectJson(
+  tree: Tree,
+  root: string,
+  change: (json: Record<string, unknown>) => TargetChange,
+): TargetChange {
   const file = root === '.' ? 'project.json' : `${root}/project.json`;
-  const tsconfig = typecheckTsconfig(tree, root);
-  if (!tsconfig || !tree.exists(file)) return false;
+  const before = tree.read(file, 'utf8');
+  if (before === null) return 'none';
   let json: Record<string, unknown>;
   try {
-    json = readJson(tree, file); // project.json may hold comments
+    json = JSON.parse(before);
+  } catch {
+    try {
+      json = readJson(tree, file);
+    } catch {
+      return 'none';
+    }
+    // Readable but with comments: say whether a change was needed, write nothing.
+    const result = change(json);
+    return result === 'added' ? 'comments' : result;
+  }
+  const result = change(json);
+  if (result !== 'added') return result;
+  const after = JSON.stringify(json, null, 2) + '\n';
+  const jsonc = loadJsonc(tree.root);
+  tree.write(file, (jsonc && keepJsonLayout(jsonc, before, after)) || after);
+  return 'added';
+}
+
+/** Adds a typecheck target to the project at `root` when it has none. */
+export function typecheckTargetChange(tree: Tree, root: string): TargetChange {
+  const tsconfig = typecheckTsconfig(tree, root);
+  if (!tsconfig) return 'none';
+  return updateProjectJson(tree, root, (json) => {
+    const targets = (json['targets'] ?? {}) as Record<string, unknown>;
+    if (targets['typecheck'] !== undefined) return 'exists';
+    const templates = isAngularProject(tree, root, json);
+    json['targets'] = { ...targets, typecheck: typecheckTarget(tsconfig, { templates }) };
+    return 'added';
+  });
+}
+
+/** Adds a typecheck target to the project at `root` when it has none; returns whether it did. */
+export function addTypecheckTarget(tree: Tree, root: string): boolean {
+  return typecheckTargetChange(tree, root) === 'added';
+}
+
+/**
+ * Adds typecheck targets to every project that has a tsconfig.app/lib.json and no target; returns
+ * their names. Projects whose project.json holds comments are left and listed in `comments`.
+ */
+export function addTypecheckTargets(tree: Tree, comments: string[] = []): string[] {
+  const added: string[] = [];
+  for (const p of scanProjects(tree)) {
+    const change = typecheckTargetChange(tree, p.root);
+    if (change === 'added') added.push(p.name);
+    if (change === 'comments') comments.push(p.name);
+  }
+  return added;
+}
+
+/** Whether any project has a typecheck target (the root typecheck script then has work). */
+export function hasTypecheckTargets(tree: Tree): boolean {
+  return scanProjects(tree).some(
+    (p) => ((p.json['targets'] ?? {}) as Record<string, unknown>)['typecheck'] !== undefined,
+  );
+}
+
+/**
+ * The `templates` configuration on an Angular project's typecheck target as pstack writes it
+ * (`tsc --noEmit -p <tsconfig>`, no configurations of that name). Other typecheck targets are
+ * the workspace's own and are left alone.
+ */
+export function templatesConfigChange(tree: Tree, root: string): TargetChange {
+  return updateProjectJson(tree, root, (json) => {
+    const targets = (json['targets'] ?? {}) as Record<string, Record<string, unknown>>;
+    const t = targets['typecheck'];
+    const command = (t?.['options'] as Record<string, unknown> | undefined)?.['command'];
+    const m = typeof command === 'string' ? /^tsc --noEmit -p (\S+)$/.exec(command) : null;
+    if (!t || t['executor'] !== 'nx:run-commands' || !m) return 'none';
+    if (!isAngularProject(tree, root, json)) return 'none';
+    const configs = (t['configurations'] ?? {}) as Record<string, unknown>;
+    if (configs['templates'] !== undefined) return 'exists';
+    t['configurations'] = { ...configs, ...templatesConfiguration(m[1]) };
+    return 'added';
+  });
+}
+
+/** `analyze` target of a Flutter project (flutter analyze in the project folder). */
+export function analyzeTarget(root: string) {
+  return { executor: 'nx:run-commands', options: { command: 'flutter analyze', cwd: root } };
+}
+
+/** Adds `analyze` to a Flutter project (a pubspec.yaml next to its project.json) without one. */
+export function analyzeTargetChange(tree: Tree, root: string): TargetChange {
+  const base = root === '.' ? '' : `${root}/`;
+  if (!tree.exists(`${base}pubspec.yaml`)) return 'none';
+  return updateProjectJson(tree, root, (json) => {
+    const targets = (json['targets'] ?? {}) as Record<string, unknown>;
+    if (targets['analyze'] !== undefined) return 'exists';
+    json['targets'] = { ...targets, analyze: analyzeTarget(root) };
+    return 'added';
+  });
+}
+
+/** The root npm script that type-checks every project. */
+export const TYPECHECK_SCRIPT = 'nx run-many -t typecheck';
+
+/**
+ * Adds the root `typecheck` npm script when there is none. 'exists' when it already runs the
+ * typecheck targets, 'other' when the workspace's own `typecheck` script does something else.
+ */
+export function addTypecheckScript(tree: Tree): 'added' | 'exists' | 'other' | 'none' {
+  const before = tree.read('package.json', 'utf8');
+  if (before === null) return 'none';
+  let pkg: { scripts?: Record<string, string> };
+  try {
+    pkg = JSON.parse(before);
+  } catch {
+    return 'none';
+  }
+  const current = pkg.scripts?.['typecheck'];
+  if (current !== undefined) {
+    return /\bnx\s+run-many\b.*(?:-t|--targets?)[ =]typecheck\b/.test(current) ? 'exists' : 'other';
+  }
+  pkg.scripts = { ...(pkg.scripts ?? {}), typecheck: TYPECHECK_SCRIPT };
+  const after = JSON.stringify(pkg, null, 2) + '\n';
+  const jsonc = loadJsonc(tree.root);
+  tree.write('package.json', (jsonc && keepJsonLayout(jsonc, before, after)) || after);
+  return 'added';
+}
+
+/**
+ * Nx 20+ TypeScript-solution workspaces infer their own typecheck targets through the
+ * `@nx/js/typescript` plugin; pstack then adds none.
+ */
+export function infersTypecheck(tree: Tree): boolean {
+  if (!tree.exists('nx.json')) return false;
+  let nx: Record<string, unknown>;
+  try {
+    nx = readJson(tree, 'nx.json');
   } catch {
     return false;
   }
-  const targets = (json['targets'] ?? {}) as Record<string, unknown>;
-  if (targets['typecheck'] !== undefined) return false;
-  json['targets'] = { ...targets, typecheck: typecheckTarget(tsconfig) };
-  tree.write(file, JSON.stringify(json, null, 2) + '\n');
-  return true;
-}
-
-/** Adds typecheck targets to every project that has a tsconfig.app/lib.json and no target. */
-export function addTypecheckTargets(tree: Tree): string[] {
-  return scanProjects(tree)
-    .filter((p) => addTypecheckTarget(tree, p.root))
-    .map((p) => p.name);
+  const plugins = Array.isArray(nx['plugins']) ? (nx['plugins'] as unknown[]) : [];
+  return plugins.some((p) => {
+    const name = typeof p === 'string' ? p : (p as { plugin?: unknown })?.plugin;
+    if (name !== '@nx/js/typescript') return false;
+    const opts = typeof p === 'object' ? (p as { options?: Record<string, unknown> }).options : {};
+    const tc = opts?.['typecheck'];
+    // The plugin infers typecheck unless typecheck is false.
+    return tc !== false;
+  });
 }
 
 export const TYPECHECK_TARGET_DEFAULTS = {
@@ -84,7 +249,12 @@ export function addTypecheckNxDefaults(tree: Tree): boolean {
       changed = true;
     }
   }
-  if (changed) tree.write('nx.json', JSON.stringify(nx, null, 2) + '\n');
+  if (changed) {
+    const before = tree.read('nx.json', 'utf8') ?? '';
+    const after = JSON.stringify(nx, null, 2) + '\n';
+    const jsonc = loadJsonc(tree.root);
+    tree.write('nx.json', (jsonc && keepJsonLayout(jsonc, before, after)) || after);
+  }
   return changed;
 }
 

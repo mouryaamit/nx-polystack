@@ -18,6 +18,8 @@ export interface ScriptRefEdits {
   edited: string[];
   /** `file:line` mentions left as they were (in code, or a JSON value that is not a list item). */
   review: string[];
+  /** Files in note folders (NOTE_DIRS) that name a script: history, left as they are. */
+  notes: string[];
 }
 
 /** The release target that replaced the old scripts, as docs should name it. */
@@ -34,6 +36,12 @@ const SKIP_DIRS = new Set([
   'release-packages',
 ]);
 
+/**
+ * Folders of working notes (ticket notes, AI-assistant context). They record what was true when
+ * they were written, so mentions there are listed, not edited.
+ */
+const NOTE_DIRS = new Set(['.ai-context']);
+
 const LINE_LISTS =
   /^(\.gitignore|\.prettierignore|\.eslintignore|\.npmignore|\.dockerignore|\.secretlintignore|\.stylelintignore|CODEOWNERS)$/;
 const JSON_FILE = /\.json$|^\.(eslintrc|lintstagedrc|prettierrc)$/;
@@ -45,22 +53,23 @@ const SLASH_COMMENTS =
 const HASH_COMMENTS =
   /\.(?:sh|bash|zsh|ya?ml|toml|properties|rb|py|ps1)$|^Dockerfile|^Makefile$|^\.env/;
 
-function textFiles(tree: Tree, skip: Set<string>): string[] {
-  const out: string[] = [];
-  const walk = (dir: string, depth: number) => {
+/** The workspace's files (sorted), each with whether it sits in a note folder. */
+function textFiles(tree: Tree, skip: Set<string>): { file: string; note: boolean }[] {
+  const out: { file: string; note: boolean }[] = [];
+  const walk = (dir: string, depth: number, note: boolean) => {
     if (depth > 10) return;
     for (const name of tree.children(dir)) {
       if (SKIP_DIRS.has(name)) continue;
       const rel = dir === '.' || dir === '' ? name : `${dir}/${name}`;
       if (tree.isFile(rel)) {
-        if (!skip.has(rel)) out.push(rel);
+        if (!skip.has(rel)) out.push({ file: rel, note });
       } else {
-        walk(rel, depth + 1);
+        walk(rel, depth + 1, note || NOTE_DIRS.has(name));
       }
     }
   };
-  walk('.', 0);
-  return out.sort();
+  walk('.', 0, false);
+  return out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
 }
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
@@ -174,29 +183,46 @@ function editComments(
   return out.join('');
 }
 
-/** Docs: a code span or command naming a script becomes the release target; prose likewise. */
-function editDoc(file: string, text: string, scripts: string[], res: ScriptRefEdits): string {
+/**
+ * Docs: a code span or command naming a script becomes what replaced it: its command from
+ * `replacements` (EXIF and type-check scripts), else the release target; prose likewise.
+ */
+function editDoc(
+  file: string,
+  text: string,
+  scripts: string[],
+  replacements: Record<string, string>,
+  res: ScriptRefEdits,
+): string {
   let fenced = false;
   const out = lines(text).map((line, i) => {
     if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
     let next = line;
+    const named: string[] = [];
     for (const s of scripts) {
       const p = scriptPattern(s);
       if (!p.test(next)) continue;
+      const command = replacements[s];
+      const label = command ? `\`${command}\`` : 'the release target';
       if (fenced) {
-        // A command line in a code block: the release target command.
+        // A command line in a code block: the command that replaced the script.
+        const run = command ?? 'npx nx run <app>:release:<env>';
         next = next.replace(
           /^(\s*(?:\$\s*)?)(?:npx\s+)?node\s+\S+.*?(\r?\n)?$/,
-          (_m, lead: string, nl?: string) => `${lead}npx nx run <app>:release:<env>${nl ?? ''}`,
+          (_m, lead: string, nl?: string) => `${lead}${run}${nl ?? ''}`,
         );
-        if (p.test(next)) next = next.replace(new RegExp(p.source, 'g'), 'the release target');
+        if (p.test(next)) {
+          next = next.replace(new RegExp(p.source, 'g'), command ?? 'the release target');
+        }
       } else {
+        const span = command ? `\`${command}\`` : RELEASE;
         next = next
-          .replace(new RegExp('`[^`\\n]*' + p.source + '[^`\\n]*`', 'g'), RELEASE)
-          .replace(new RegExp(p.source, 'g'), `the release target (${RELEASE})`);
+          .replace(new RegExp('`[^`\\n]*' + p.source + '[^`\\n]*`', 'g'), span)
+          .replace(new RegExp(p.source, 'g'), command ? span : `the release target (${RELEASE})`);
       }
+      if (!named.includes(label)) named.push(label);
     }
-    if (next !== line) res.edited.push(`${file}:${i + 1}: now names the release target`);
+    if (next !== line) res.edited.push(`${file}:${i + 1}: now names ${named.join(' and ')}`);
     return next;
   });
   return out.join('');
@@ -204,23 +230,30 @@ function editDoc(file: string, text: string, scripts: string[], res: ScriptRefEd
 
 /**
  * Removes or rewrites what still names the removed scripts. `keep` lists files left as they are
- * (the adopt report, which records what was removed). Changelogs are history and are kept too.
+ * (the adopt report, which records what was removed). Changelogs and note folders are history and
+ * are kept too (note files that name a script are listed in `notes`). `replacements` maps a
+ * script to the command that does its job now, which docs name instead of the release target.
  */
 export function removeScriptReferences(
   tree: Tree,
   scripts: string[],
   keep: string[] = [],
+  replacements: Record<string, string> = {},
 ): ScriptRefEdits {
-  const res: ScriptRefEdits = { edited: [], review: [] };
+  const res: ScriptRefEdits = { edited: [], review: [], notes: [] };
   if (scripts.length === 0) return res;
   const names = new RegExp(scripts.map((s) => scriptPattern(s).source).join('|'));
-  for (const file of textFiles(tree, new Set(keep))) {
+  for (const { file, note } of textFiles(tree, new Set(keep))) {
     const base = posix.basename(file);
     if (/^CHANGELOG/i.test(base) || base === 'package-lock.json') continue;
     const buf = tree.read(file);
     if (!buf || buf.includes(0)) continue;
     const text = buf.toString('utf8');
     if (!names.test(text)) continue;
+    if (note) {
+      res.notes.push(file);
+      continue;
+    }
     let out = text;
     if (LINE_LISTS.test(base)) {
       out = lines(text)
@@ -233,7 +266,7 @@ export function removeScriptReferences(
     } else if (JSON_FILE.test(base)) {
       out = editJson(tree.root, file, text, names, res);
     } else if (DOC.test(base)) {
-      out = editDoc(file, text, scripts, res);
+      out = editDoc(file, text, scripts, replacements, res);
     } else if (SLASH_COMMENTS.test(base) || /\.html$/.test(base)) {
       out = /\.html$/.test(base)
         ? text // HTML: comments are <!-- -->; report only.

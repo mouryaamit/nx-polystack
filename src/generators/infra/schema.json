@@ -53,6 +53,11 @@
       "type": "string",
       "enum": ["warn", "block"],
       "description": "lint-staged ESLint step: warn (report problems, never block the commit) or block. Unset: unchanged."
+    },
+    "exif": {
+      "type": "string",
+      "enum": ["fix", "check", "off"],
+      "description": "Source-image EXIF/XMP/IPTC: fix (lint-staged strips staged images), check (lint-staged refuses them); both add the root assets:* scripts and a CI check step. off removes pstack's lint-staged and CI steps. Unset: unchanged."
     }
   },
   "required": []

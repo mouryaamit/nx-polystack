@@ -20,6 +20,7 @@ export async function infraFlags(flags: Flags) {
     upgradeSchedule: valueFlag(flags, 'upgradeSchedule', '--upgrade-schedule'),
     upgradeScope: valueFlag(flags, 'upgradeScope', '--upgrade-scope'),
     lintStaged: valueFlag(flags, 'lintStaged', '--lint-staged'),
+    exif: valueFlag(flags, 'exif', '--exif'),
   };
   const { normalizeInfraOptions } = await import('../../generators/infra/generator');
   try {

@@ -5,6 +5,7 @@ import {
   readEnvEncryptionBlock,
   writeEnvEncryptionBlock,
 } from '../../lib/env-encryption/workspace';
+import { replaceToolScripts, ToolScriptOutcome } from '../../lib/old-scripts/tool-scripts';
 import { flattenApplicationOutput } from '../../lib/release/flat-output';
 import { adoptHtaccess, copiesHtaccess, htaccessNote } from '../../lib/release/htaccess-adopt';
 import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
@@ -121,10 +122,14 @@ export interface AdoptResult {
   referencesEdited?: string[];
   /** Mentions of removed scripts left for a person to look at (`file:line`). */
   referencesReview?: string[];
+  /** Note-folder files that name a removed script (history; not edited). */
+  referencesNotes?: string[];
   /** Flutter apps (also in adopted) whose web build moved to the flutter-build executor. */
   flutter?: string[];
   /** Apps already on the plugin whose build still copied a .htaccess, moved to the env files. */
   htaccessMoved?: string[];
+  /** Workspace scripts whose job pstack does (EXIF in source images, type checking). */
+  toolScripts?: ToolScriptOutcome[];
 }
 
 /** Angular apps of the workspace that build without the plugin: build target, no release target. */
@@ -456,6 +461,84 @@ function switchBuildAll(tree: Tree, options: AdoptGeneratorSchema, result: Adopt
   return [...new Set(replaced)].sort();
 }
 
+/**
+ * Scripts that strip EXIF from source images or type-check without a build: their npm scripts,
+ * run-commands targets, hooks, lint-staged and CI steps run pstack instead. Returns the scripts
+ * nothing runs any more (for --remove-old-scripts and the report).
+ */
+function adoptToolScripts(
+  tree: Tree,
+  options: AdoptGeneratorSchema,
+  result: AdoptResult,
+): string[] {
+  if (options.scripts === false) return [];
+  const outcomes = replaceToolScripts(tree);
+  result.toolScripts = outcomes;
+  for (const o of outcomes) {
+    const what = o.job === 'typecheck' ? 'type checking' : 'EXIF in source images';
+    if (o.rewritten.length > 0) {
+      logger.info(`adopt: ${o.script} (${what}) → pstack:\n  ${o.rewritten.join('\n  ')}`);
+    }
+    if (o.left.length > 0) {
+      logger.info(`adopt: ${o.script} (${what}) left as it is: ${o.left.join('; ')}`);
+    }
+  }
+  return outcomes.filter((o) => o.replaced).map((o) => o.script);
+}
+
+function toolScriptLines(result: AdoptResult): string[] {
+  const outcomes = result.toolScripts ?? [];
+  if (outcomes.length === 0) return [];
+  const what = (o: ToolScriptOutcome) =>
+    o.job === 'typecheck' ? 'type checking' : 'EXIF in source images';
+  const lines = ['## Workspace scripts pstack does now', ''];
+  for (const o of outcomes.filter((x) => x.replaced)) {
+    lines.push(`- Replaced ${code(o.script)} (${what(o)}):`);
+    for (const r of o.rewritten) {
+      const [where, change] = r.split(': ');
+      const [from, to] = (change ?? '').split(' → ');
+      lines.push(`  - ${where}: ${code(from)} → ${code(to)}`);
+    }
+  }
+  // Not backticked: later runs read backticked paths of this report as scripts to remove.
+  for (const o of outcomes.filter((x) => !x.replaced)) {
+    lines.push(`- Left as they are: ${o.script} (${what(o)}): ${o.left.join('; ')}`);
+  }
+  lines.push('');
+  return lines;
+}
+
+/**
+ * The command docs should name for each replaced EXIF / type-check script: the one its calls now
+ * run when they all run the same, else the job's general command.
+ */
+export function toolScriptCommands(outcomes: ToolScriptOutcome[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const o of outcomes.filter((x) => x.replaced)) {
+    const commands = [
+      ...new Set(o.rewritten.map((r) => r.split(' → ').pop()?.trim() ?? '').filter(Boolean)),
+    ];
+    out[o.script] =
+      commands.length === 1
+        ? commands[0]
+        : o.job === 'typecheck'
+        ? 'nx run-many -t typecheck'
+        : 'pstack assets strip-exif';
+  }
+  return out;
+}
+
+/** Tool scripts an earlier adopt report records as replaced, with their job's command. */
+function recordedToolScripts(report: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const m of report.matchAll(
+    /^- Replaced `([^`]+)` \((EXIF in source images|type checking)\):/gm,
+  )) {
+    out[m[1]] = m[2] === 'type checking' ? 'nx run-many -t typecheck' : 'pstack assets strip-exif';
+  }
+  return out;
+}
+
 /** Deletes the old pipeline scripts nothing uses any more (see old-scripts.ts). */
 function removeOldScripts(
   tree: Tree,
@@ -478,9 +561,11 @@ function removeOldScripts(
     tree,
     gone.sort(),
     [file, ADOPT_REPORT].filter((f): f is string => !!f),
+    { ...recordedToolScripts(previous), ...toolScriptCommands(result.toolScripts ?? []) },
   );
   result.referencesEdited = refs.edited;
   result.referencesReview = refs.review;
+  result.referencesNotes = refs.notes;
   logger.info(
     found.removable.length > 0
       ? `adopt: removed the old build scripts nothing uses any more: ${found.removable.join(', ')}`
@@ -501,11 +586,15 @@ function removeOldScripts(
       `adopt: still named in code (not edited; look at these): ${refs.review.join(', ')}`,
     );
   }
+  if (refs.notes.length > 0) {
+    logger.info(`adopt: not changed (historical notes): ${refs.notes.join(', ')}`);
+  }
 }
 
 function referenceLines(result: AdoptResult): string[] {
   const edited = result.referencesEdited ?? [];
   const review = result.referencesReview ?? [];
+  const notes = result.referencesNotes ?? [];
   const lines: string[] = [];
   if (edited.length > 0) {
     lines.push('References to them that were removed or rewritten:', '');
@@ -513,6 +602,9 @@ function referenceLines(result: AdoptResult): string[] {
   }
   if (review.length > 0) {
     lines.push(`Still named here (not edited): ${review.map(code).join(', ')}.`, '');
+  }
+  if (notes.length > 0) {
+    lines.push(`Not changed (historical notes): ${notes.map(code).join(', ')}.`, '');
   }
   return lines;
 }
@@ -551,11 +643,15 @@ function appendRemovalReport(tree: Tree, result: AdoptResult, file: string | nul
     ...(scripts.length > 0
       ? ['## build:all scripts', '', ...scripts.map(([k, v]) => `- ${code(k)}: ${code(v)}`), '']
       : []),
+    ...toolScriptLines(result),
     ...removalLines(result),
   ];
   if (lines.length === 0) return;
   const previous = tree.exists(file) ? tree.read(file, 'utf8') ?? '' : '# pstack adopt\n';
   let kept = previous.replace(/\n## Old scripts\n[\s\S]*?(?=\n## |$)/, '\n');
+  if ((result.toolScripts ?? []).length > 0) {
+    kept = kept.replace(/\n## Workspace scripts pstack does now\n[\s\S]*?(?=\n## |$)/, '\n');
+  }
   if (scripts.length > 0) kept = kept.replace(/\n## build:all scripts\n[\s\S]*?(?=\n## |$)/, '\n');
   tree.write(file, `${kept.replace(/\n*$/, '\n\n')}${lines.join('\n')}`);
 }
@@ -626,6 +722,7 @@ function report(result: AdoptResult, pipeline: SourcePipeline, customScripts: st
     );
   }
   if (result.notes.length > 0) lines.push('## Notes', '', ...result.notes.map((n) => `- ${n}`), '');
+  lines.push(...toolScriptLines(result));
   lines.push(...removalLines(result));
   const scripts = Object.entries(result.scripts);
   if (scripts.length > 0) {
@@ -695,8 +792,11 @@ export default async function adoptGenerator(
   if (candidates.length === 0 && flutterApps.length === 0) {
     // Adopted earlier (before adopt moved build:all, or app by app): move it now.
     const replaced = result.skipped.length === 0 ? switchBuildAll(tree, options, result) : [];
-    if (options.removeOldScripts) removeOldScripts(tree, replaced, result, reportFile);
-    if (replaced.length > 0 || options.removeOldScripts) {
+    const tools = adoptToolScripts(tree, options, result);
+    if (options.removeOldScripts)
+      removeOldScripts(tree, [...replaced, ...tools], result, reportFile);
+    const toolChanges = (result.toolScripts ?? []).length > 0;
+    if (replaced.length > 0 || options.removeOldScripts || toolChanges) {
       appendRemovalReport(tree, result, reportFile);
       return result;
     }
@@ -789,7 +889,10 @@ export default async function adoptGenerator(
   pinDevkit(tree, result.notes);
 
   const oldScripts = [...new Set([...buildScripts.customScripts, ...replacedAll])].sort();
-  if (options.removeOldScripts) removeOldScripts(tree, oldScripts, result, reportFile);
+  const tools = adoptToolScripts(tree, options, result);
+  if (options.removeOldScripts) {
+    removeOldScripts(tree, [...new Set([...oldScripts, ...tools])].sort(), result, reportFile);
+  }
   if (reportFile) tree.write(reportFile, report(result, pipeline, oldScripts));
   const flutterNames = result.flutter ?? [];
   const angularNames = result.adopted.filter((a) => !flutterNames.includes(a));

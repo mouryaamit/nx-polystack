@@ -242,6 +242,8 @@ describe('preset generator', () => {
     expect(readJson(tree, 'package.json')['lint-staged']).toEqual({
       '*.{ts,html,scss,json,md}': ['prettier --write'],
       '*.ts': ['node tools/scripts/lint-staged-eslint.js --fix'],
+      // NX-110: staged images lose EXIF/XMP/IPTC on commit.
+      '*.{jpg,jpeg,png,webp}': ['pstack assets strip-exif'],
     });
     // NX-45: non-blocking ESLint on commit, import rules as warnings, cached typecheck.
     expect(tree.read('tools/scripts/lint-staged-eslint.js', 'utf8')).toContain('not blocked');
@@ -266,6 +268,12 @@ describe('preset generator', () => {
     const scripts = readJson(tree, 'package.json').scripts;
     expect(scripts.lint).toBe('nx run-many -t lint');
     expect(scripts['lint:fix']).toBe('nx run-many -t lint --fix');
+    expect(scripts.typecheck).toBe('nx run-many -t typecheck');
+    expect(scripts['assets:strip-exif']).toBe('pstack assets strip-exif --all');
+    expect(scripts['assets:check-exif']).toBe('pstack assets strip-exif --all --check');
+    expect(tree.read('.github/workflows/ci.yml', 'utf8')).toContain(
+      '      - run: npx nx affected -t lint typecheck test build --parallel=3\n      - run: npm run assets:check-exif\n',
+    );
     expect(tree.read('.github/workflows/ci.yml', 'utf8')).toContain(
       'nx affected -t lint typecheck test build',
     );

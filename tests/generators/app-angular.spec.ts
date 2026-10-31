@@ -85,6 +85,8 @@ describe('app generator --type=angular', () => {
   it('adds 6 npm scripts to root package.json', async () => {
     await appGenerator(tree, { name: 'my-app', type: 'angular' });
     const pkg = JSON.parse(tree.read('package.json')!.toString());
+    // NX-110: source-image scripts when the workspace has none.
+    expect(pkg.scripts['assets:check-exif']).toBe('pstack assets strip-exif --all --check');
     expect(pkg.scripts).toHaveProperty('serve:my-app');
     expect(pkg.scripts).toHaveProperty('build:my-app:dev');
     expect(pkg.scripts).toHaveProperty('build:my-app:uat');
