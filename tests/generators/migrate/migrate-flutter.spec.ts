@@ -93,8 +93,13 @@ describe('migrate generator: standalone Flutter app', () => {
         'build-web',
         'build-android',
         'build-ios',
+        'analyze',
         'clean',
       ]);
+      expect(pj.targets.analyze).toEqual({
+        executor: 'nx:run-commands',
+        options: { command: 'flutter analyze', cwd: 'apps/notes' },
+      });
     });
 
     it('keeps the existing env file and creates the missing ones empty', () => {

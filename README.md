@@ -119,6 +119,7 @@ Ionic apps keep `IonicModule`; Ionic's own codemod moves them to Ionic's standal
 | `pstack build`                           | Build every app (or some) for one environment                                              |
 | `pstack csp`                             | Edit an app's CSP allowlist and write its server config                                    |
 | `pstack hardening` / `pstack encryption` | Show or change release hardening and env encryption                                        |
+| `pstack assets strip-exif`               | Remove EXIF, XMP and IPTC from the source images apps ship (`--check` lists them)          |
 | `pstack infra`                           | Add repo docs, CI gates, quality checks and the upgrade workflow                           |
 | `pstack llm`                             | Refresh the AI assistant context files                                                     |
 

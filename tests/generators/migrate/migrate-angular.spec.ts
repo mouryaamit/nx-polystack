@@ -572,7 +572,16 @@ describe('migrate generator: standalone Angular CLI app', () => {
         'test',
         'release',
         'lint',
+        'typecheck',
       ]);
+      // tsc --noEmit over the app's tsconfig, ngc for templates (NX-111).
+      expect(pj.targets.typecheck).toEqual({
+        executor: 'nx:run-commands',
+        options: { command: 'tsc --noEmit -p apps/portal/tsconfig.app.json' },
+        configurations: {
+          templates: { command: 'ngc --noEmit -p apps/portal/tsconfig.app.json' },
+        },
+      });
       expect(pj.tags).toEqual(['scope:app', 'type:app', 'platform:web']);
       expect(pj.targets.build.options.outputPath).toBe('dist/apps/portal');
       expect(pj.targets.build.configurations.production.fileReplacements).toEqual([
@@ -662,6 +671,7 @@ describe('migrate generator: standalone Angular CLI app', () => {
         'build:portal:dev': 'nx run portal:release:dev',
         'build:portal:prod:secure': 'nx run portal:release:prod --secure',
         'build:portal:prod:secure:sri': 'nx run portal:release:prod --secure --sri',
+        typecheck: 'nx run-many -t typecheck',
       });
     });
 

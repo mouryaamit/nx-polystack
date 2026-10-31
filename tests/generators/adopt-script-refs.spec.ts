@@ -52,4 +52,21 @@ describe('removeScriptReferences', () => {
     );
     expect(r.edited).toEqual(['.gitignore:3: entry removed']);
   });
+
+  it('a replacement command for a script; notes listed, not edited', () => {
+    const t = createTreeWithEmptyWorkspace();
+    t.write('docs/a.md', 'Use `node tools/scripts/tc.js` or tools/scripts/build.js.\n');
+    t.write('.ai-context/notes.md', 'tools/scripts/tc.js\n');
+    const r = removeScriptReferences(t, ['tools/scripts/build.js', 'tools/scripts/tc.js'], [], {
+      'tools/scripts/tc.js': 'nx run-many -t typecheck',
+    });
+    expect(t.read('docs/a.md', 'utf8')).toBe(
+      'Use `nx run-many -t typecheck` or the release target (`nx run <app>:release:<env>`).\n',
+    );
+    expect(r.edited).toEqual([
+      'docs/a.md:1: now names the release target and `nx run-many -t typecheck`',
+    ]);
+    expect(r.notes).toEqual(['.ai-context/notes.md']);
+    expect(t.read('.ai-context/notes.md', 'utf8')).toBe('tools/scripts/tc.js\n');
+  });
 });

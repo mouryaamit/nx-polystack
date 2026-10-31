@@ -6,6 +6,9 @@
   "scripts": {
     "lint": "<%= lintScript %>",
     "lint:fix": "<%= lintScript %> --fix",
+    "typecheck": "nx run-many -t typecheck",
+    "assets:strip-exif": "pstack assets strip-exif --all",
+    "assets:check-exif": "pstack assets strip-exif --all --check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"

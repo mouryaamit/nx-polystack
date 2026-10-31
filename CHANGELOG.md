@@ -3,6 +3,43 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.12.1
+
+- The reference cleanup of `pstack adopt --remove-old-scripts` leaves `.ai-context/` folders (at
+  any depth) as they are; that is the only note folder it skips. 1.12.0 was not published to npm;
+  its changes below ship in 1.12.1.
+
+## 1.12.0
+
+- `pstack assets strip-exif [--app | --all] [--dir] [--check | --dry-run] [files…]` removes EXIF,
+  XMP and IPTC from the source images apps ship (Angular/Ionic build assets, Flutter `assets/`,
+  pubspec asset entries and `web/`, assets libraries). `--check` lists them with exit code 1.
+- Image metadata is removed without re-encoding, in the release build too: only the metadata
+  blocks go, the image data and ICC profiles stay byte for byte. Only an image with an EXIF
+  orientation other than 1 is re-encoded (rotated). XMP and IPTC are removed as well as EXIF.
+- Root scripts `assets:strip-exif` / `assets:check-exif` and `typecheck`; `pstack infra
+--exif=fix|check|off` adds a lint-staged step for staged images and a CI check (new workspaces:
+  `fix`).
+- `typecheck` on the projects `pstack migrate` creates; Angular/Ionic typecheck targets get a
+  `templates` configuration (`ngc --noEmit`); Flutter apps get `analyze`. The `typecheck-everywhere`
+  migration adds what is missing to existing workspaces.
+- `pstack adopt` points npm scripts, run-commands targets, git hooks, lint-staged and CI steps that
+  run a workspace script which only strips EXIF from source images or only type-checks at
+  `pstack assets strip-exif …` / `nx run-many -t typecheck …` (told apart by what the script does,
+  not its name); `--remove-old-scripts` then deletes those scripts. Scripts that do more are left
+  and reported.
+- `pstack migrate` does the same for the source's scripts and does not copy them
+  (`--keep-old-scripts` to copy them as before).
+- Docs that named a replaced EXIF or type-check script now name its new command
+  (`pstack assets strip-exif …` / `nx run-many -t typecheck …`) instead of the release target.
+  Note folders (`.ai-context/`) are left as they are and listed in the adopt
+  report.
+- Image metadata removal reads the format from the file's bytes, so images whose extension does
+  not match their content (PNG data in a `.webp` file and the like) are cleaned instead of skipped.
+  A text file saved under an image name (an error page from a failed download) is skipped as
+  "not an image (the file holds text)".
+- `pstack upgrade standalone` commits are titled `chore: <mode> (pstack upgrade standalone)`.
+
 ## 1.11.12
 
 - `pstack migrate` (and `pstack app --from`, which uses it) sets `outputPath.browser` to `""` on

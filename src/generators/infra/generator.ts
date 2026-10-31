@@ -7,18 +7,28 @@ import { installSource } from '../../cli/install-source';
 import { PLUGIN_GITHUB_REPO, PLUGIN_NAME } from '../../cli/versions';
 import { addMissingDependencies, declaredVersion } from '../../lib/utils/dependencies';
 import { hasFlutterProject, refreshLlmBlocks } from '../../lib/utils/llm-block';
+import {
+  EXIF_LINT_STAGED_GLOB,
+  ExifMode,
+  ExifModeResult,
+  parseExifMode,
+  setExifMode,
+} from '../../lib/utils/exif-checks';
 import { addNpmScripts } from '../../lib/utils/npm-scripts';
 import { fsTree } from '../../lib/utils/nx-tree';
 import {
   addQualityEslintRules,
   addTypecheckNxDefaults,
+  addTypecheckScript,
   addTypecheckTargets,
   addTypecheckToCi,
   EslintResult,
+  hasTypecheckTargets,
   LINT_STAGED_MODES,
   LintStagedMode,
   qualityEslintDependencies,
   setLintStagedMode,
+  TYPECHECK_SCRIPT,
 } from '../../lib/utils/quality';
 
 import {
@@ -91,6 +101,8 @@ export interface InfraOptions {
   upgradeScope: UpgradeScope;
   /** Switch the lint-staged ESLint step (unset: leave it). */
   lintStaged?: LintStagedMode;
+  /** Source-image EXIF: lint-staged and CI steps (unset: leave them). */
+  exif?: ExifMode;
   force: boolean;
 }
 
@@ -123,6 +135,7 @@ export function normalizeInfraOptions(schema: InfraGeneratorSchema): InfraOption
     upgradeSchedule: parseUpgradeSchedule(schema.upgradeSchedule),
     upgradeScope: parseUpgradeScope(schema.upgradeScope),
     lintStaged: parseLintStaged(schema.lintStaged),
+    exif: parseExifMode(schema.exif),
     force: !!schema.force,
   };
 }
@@ -318,6 +331,7 @@ export function applyInfra(tree: Tree, schema: InfraGeneratorSchema): InfraRepor
         Object.assign(devDeps, qualityEslintDependencies(tree));
       }
     }
+    if (o.exif) exifNotes(setExifMode(tree, o.exif), o.exif, report);
     if (o.lintStaged) {
       const r = setLintStagedMode(tree, o.lintStaged);
       if (r === 'set')
@@ -358,10 +372,58 @@ export function applyInfra(tree: Tree, schema: InfraGeneratorSchema): InfraRepor
   return report;
 }
 
+function exifNotes(r: ExifModeResult, mode: ExifMode, report: InfraReport): void {
+  if (r.scripts.length > 0) {
+    report.notes.push(`npm scripts ${r.scripts.join(', ')} (pstack assets strip-exif) added.`);
+  }
+  if (r.lintStaged === 'set') {
+    report.notes.push(
+      mode === 'fix'
+        ? 'lint-staged: staged images lose EXIF/XMP/IPTC on commit (pstack assets strip-exif).'
+        : 'lint-staged: commits with images that carry EXIF/XMP/IPTC are refused.',
+    );
+  }
+  if (r.lintStaged === 'removed') report.notes.push("lint-staged: pstack's image step removed.");
+  if (r.lintStaged === 'other-config') {
+    report.notes.push(
+      `lint-staged is configured outside package.json (or ${EXIF_LINT_STAGED_GLOB} runs something ` +
+        'else); add `pstack assets strip-exif` for staged images by hand.',
+    );
+  }
+  if (r.ci.changed.length > 0) {
+    report.notes.push(
+      mode === 'off'
+        ? `CI image check removed from ${r.ci.changed.join(', ')}.`
+        : `CI checks source images (npm run assets:check-exif) in ${r.ci.changed.join(', ')}.`,
+    );
+  }
+  if (r.ci.unknown.length > 0) {
+    report.notes.push(
+      `Add \`npm run assets:check-exif\` to ${r.ci.unknown.join(
+        ', ',
+      )} by hand (no nx affected step found).`,
+    );
+  }
+}
+
 /** typecheck targets and nx.json defaults, the import/unused-imports ESLint rules (warn). */
 export function applyQualityChecks(tree: Tree, report: { notes: string[] }): EslintResult {
-  const typed = addTypecheckTargets(tree);
+  const commented: string[] = [];
+  const typed = addTypecheckTargets(tree, commented);
   addTypecheckNxDefaults(tree);
+  if (commented.length > 0) {
+    report.notes.push(
+      `The project.json of ${commented.join(', ')} holds comments, so no typecheck target was ` +
+        'written there; add it by hand.',
+    );
+  }
+  const script = hasTypecheckTargets(tree) ? addTypecheckScript(tree) : 'none';
+  if (script === 'other') {
+    report.notes.push(
+      `The root "typecheck" npm script does something else; ${TYPECHECK_SCRIPT} type-checks ` +
+        'every project.',
+    );
+  }
   if (typed.length > 0) {
     report.notes.push(
       `typecheck target added to ${typed.join(', ')}. Run npx nx run-many -t typecheck once ` +

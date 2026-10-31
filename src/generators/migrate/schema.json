@@ -76,6 +76,11 @@
       "description": "Rewrite imports in the copied code: relative imports into another moved project, imports through the source baseUrl, @nrwl/* packages and SCSS paths (v0.21.0+). The source is never changed.",
       "default": true
     },
+    "keepOldScripts": {
+      "type": "boolean",
+      "description": "Copy the source scripts that only strip EXIF from images or only type-check, as before. Default: their npm scripts (and hooks, lint-staged, CI) run pstack assets strip-exif / nx run-many -t typecheck and the scripts are not copied (v1.12.0+).",
+      "default": false
+    },
     "newAdapter": {
       "type": "string",
       "description": "Write a starter adapter tools/migrate/<name>.adapter.ts (with a spec), and list it in nx.json pstack.migrateAdapters (v0.22.0+). Takes no other option.",

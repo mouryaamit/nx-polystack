@@ -133,6 +133,7 @@ export async function runMigrate(ctx: CommandContext): Promise<number> {
         minConfidence,
         dir,
         rewriteImports,
+        keepOldScripts: flagBoolean(ctx.flags, 'keepOldScripts'),
       }),
     );
     return 0;
@@ -251,6 +252,7 @@ export async function runMigrate(ctx: CommandContext): Promise<number> {
       minConfidence,
       dir,
       rewriteImports,
+      keepOldScripts: flagBoolean(ctx.flags, 'keepOldScripts'),
       force: flagBoolean(ctx.flags, 'force'),
     }),
   );

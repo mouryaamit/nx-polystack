@@ -57,6 +57,9 @@ describe('app generator --type=flutter', () => {
     await appGenerator(tree, { name: 'consumer-app', type: 'flutter' });
     const pj = JSON.parse(tree.read('apps/consumer-app/project.json')!.toString());
     expect(pj.targets['build-web'].executor).toBe('@mouryaamit/nx-polystack:flutter-build');
+    // NX-111: flutter analyze, not typecheck (typecheck stays TypeScript-only).
+    expect(pj.targets.analyze.options.command).toBe('flutter analyze');
+    expect(pj.targets.typecheck).toBeUndefined();
     expect(pj.targets['export'].executor).toBe('@mouryaamit/nx-polystack:flutter-export');
   });
 

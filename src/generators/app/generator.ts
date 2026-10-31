@@ -51,6 +51,8 @@ import { refreshLlmBlocks, workspaceProjectNames } from '../../lib/utils/llm-blo
 import { addNpmScripts } from '../../lib/utils/npm-scripts';
 import { flutterWebFiles } from '../../lib/utils/flutter-web';
 import { setProjectTags } from '../../lib/utils/nx-targets';
+import { analyzeTarget } from '../../lib/utils/quality';
+import { addExifScripts } from '../../lib/utils/exif-checks';
 import { nextFreePort, portProblem, usedServePorts } from '../../lib/utils/serve-port';
 import { ensureSharedLibs, wireSharedLibs } from '../../lib/utils/shared-libs';
 import { addTsPath } from '../../lib/utils/ts-paths';
@@ -359,6 +361,9 @@ export default async function appGenerator(
     }
   }
 
+  // assets:strip-exif / assets:check-exif (pstack assets strip-exif) when the workspace has none.
+  addExifScripts(tree);
+
   await formatFiles(tree);
   // After formatting: Prettier must not touch the text around the block.
   refreshLlmBlocks(tree);
@@ -435,6 +440,7 @@ export function buildProjectJson(name: string, opts: FlutterProjectOptions = {})
               options: { dest: root },
             },
           }),
+      analyze: analyzeTarget(root),
       clean: cleanTarget(root, { flutter: true, name }),
     },
   };

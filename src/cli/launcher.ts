@@ -44,6 +44,7 @@ export const MIN_LOCAL_VERSION: Readonly<Record<string, string>> = {
   shared: '0.35.0',
   upgrade: '1.2.12',
   adopt: '1.7.1',
+  assets: '1.12.0',
 };
 
 /** First plugin version that understands a flag of a command (checked when the flag is given). */
@@ -60,7 +61,7 @@ export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<str
   env: { app: '0.34.0', all: '0.34.0', from: '0.34.0', baseHref: '0.34.0', domains: '0.34.0' },
   lib: { dir: '0.19.0', standalone: '1.10.2', module: '1.10.2' },
   csp: { import: '0.38.0', nonceSource: '1.2.5', env: '1.5.5' },
-  infra: { lintStaged: '0.36.0' },
+  infra: { lintStaged: '0.36.0', exif: '1.12.0' },
   adopt: {
     compare: '1.8.0',
     removeOldScripts: '1.8.0',
@@ -76,6 +77,7 @@ export const MIN_LOCAL_FLAG_VERSION: Readonly<Record<string, Readonly<Record<str
     noRewriteImports: '0.21.0',
     rewriteImports: '0.21.0',
     newAdapter: '0.22.0',
+    keepOldScripts: '1.12.0',
   },
 };
 

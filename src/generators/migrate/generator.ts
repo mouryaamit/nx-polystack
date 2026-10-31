@@ -30,6 +30,7 @@ import { DEFAULT_MAX_FILES } from './copy';
 import { ImportMove, LATER_RESOLVABLE, rewriteImports } from './imports/rewrite';
 import { appRoot, assertDirOutsideProjects, kebabName, parseDir } from './names';
 import { BatchDefaults, mergeEntryOptions, readBatchFile } from './batch';
+import { applyToolScripts, applyTypecheck } from './quality';
 import { renderReport } from './report';
 import { buildManifest, manifestPath, writeManifest } from './rollback/manifest';
 import { Originals, recordingTree } from './rollback/recording-tree';
@@ -238,7 +239,9 @@ async function migrateBatch(
       earlier: i === entries.length - 1 ? done : undefined,
     };
     try {
-      const outcome = await migrateOne(tree, mergeEntryOptions(entry, defaults, cli), batchHooks);
+      const merged = mergeEntryOptions(entry, defaults, cli);
+      if (schema.keepOldScripts) merged.keepOldScripts = true;
+      const outcome = await migrateOne(tree, merged, batchHooks);
       if (outcome) done.push(outcome);
     } catch (err) {
       const message = (err instanceof Error ? err.message : String(err))
@@ -459,6 +462,8 @@ async function migrateOne(
   }
   applyEnvMoves(rec.tree, data, ctx.rewriteImports);
   applyBatchHooks(rec.tree, data, batch);
+  applyTypecheck(rec.tree, rec.originals, data);
+  applyToolScripts(rec.tree, rec.originals, data, sourceDir, !!schema.keepOldScripts);
   if (dir && knipMissesNestedApps(tree)) {
     data.notes.push(
       `knip.json lists \`apps/*/src/main.ts\` as an entry, which does not reach ${projectRoot}; ` +
@@ -550,6 +555,8 @@ async function migrateWorkspace(
   }
   applyEnvMoves(rec.tree, data, ctx.rewriteImports);
   applyBatchHooks(rec.tree, data, batch);
+  applyTypecheck(rec.tree, rec.originals, data);
+  applyToolScripts(rec.tree, rec.originals, data, sourceDir, !!schema.keepOldScripts);
   const reportArgs = {
     name,
     adapterId: adapter.id,

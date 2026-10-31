@@ -44,7 +44,8 @@ const MODE_TITLE: Record<Step, string> = {
   'convert-to-standalone': 'components, directives and pipes to standalone',
   'prune-ng-modules': 'remove the NgModules nothing needs any more',
   'standalone-bootstrap': 'bootstrapApplication instead of bootstrapModule',
-  'standalone-providers': 'provideRouter instead of the root routing module, no BrowserModule',
+  'standalone-providers':
+    'BrowserModule out of importProvidersFrom; a root routing module, if any, becomes provideRouter',
 };
 
 const CSP_NONCE_IMPORT = /^import ['"]@mouryaamit\/nx-polystack\/runtime\/csp-nonce['"];?[ \t]*\n/m;
@@ -530,11 +531,7 @@ export async function runUpgradeStandalone(
     if (commit) {
       say('commit');
       deps.exec('git', ['add', '-A'], root);
-      deps.exec(
-        'git',
-        ['commit', '-m', `chore: standalone ${mode} (pstack upgrade standalone)`],
-        root,
-      );
+      deps.exec('git', ['commit', '-m', `chore: ${mode} (pstack upgrade standalone)`], root);
     }
   }
   if (targets.some((p) => fs.existsSync(path.join(root, p.root, 'capacitor.config.ts')))) {
