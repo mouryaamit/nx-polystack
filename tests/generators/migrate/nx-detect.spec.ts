@@ -6,7 +6,7 @@ import { detectNxWorkspace } from '../../../src/generators/migrate/nx/detect';
 import { FIXTURES, fixtureCopy, putJson } from './helpers';
 
 describe('detectNxWorkspace', () => {
-  it('is confident for Nx 15–17 with supported projects', () => {
+  it('is confident for Nx 16 with supported projects', () => {
     expect(detectNxWorkspace(fixtureCopy('nx16-workspace'))).toEqual({
       confidence: 0.95,
       reasons: [
@@ -22,6 +22,13 @@ describe('detectNxWorkspace', () => {
     expect(detectNxWorkspace(src)).toMatchObject({ confidence: 0.95 });
     putJson(src, 'package.json', { devDependencies: { nx: '22.7.12' } });
     expect(detectNxWorkspace(src)).toMatchObject({ confidence: 0.95 });
+  });
+
+  it('is confident for Nx 14 workspaces on workspace.json', () => {
+    expect(detectNxWorkspace(fixtureCopy('nx14-workspace'))).toEqual({
+      confidence: 0.95,
+      reasons: ['nx.json, Nx 14.8.6', 'projects: 1 angular-app, 1 lib'],
+    });
   });
 
   it('lists the nx.json plugins that infer targets', () => {
@@ -40,9 +47,11 @@ describe('detectNxWorkspace', () => {
 
   it('drops to 0.5 for another Nx major and to 0.3 without supported projects', () => {
     const src = fixtureCopy('nx16-workspace');
-    putJson(src, 'package.json', { devDependencies: { nx: '14.8.0' } });
+    putJson(src, 'package.json', { devDependencies: { nx: '13.10.6' } });
     expect(detectNxWorkspace(src)).toMatchObject({ confidence: 0.5 });
-    expect(detectNxWorkspace(src).reasons).toContain('Nx 14 is outside the supported 15–22');
+    expect(detectNxWorkspace(src).reasons).toContain('Nx 13 is outside the supported 14–22');
+    putJson(src, 'package.json', { devDependencies: { nx: '23.0.0' } });
+    expect(detectNxWorkspace(src).reasons).toContain('Nx 23 is outside the supported 14–22');
 
     const empty = fixtureCopy('angular15-app');
     putJson(empty, 'nx.json', {});

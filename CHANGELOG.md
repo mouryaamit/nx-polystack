@@ -3,6 +3,34 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.14.0
+
+- `pstack migrate --source=<nx workspace>` takes Nx 14 workspaces (it took Nx 15–22). Their
+  `workspace.json` and `@nrwl/*` executors are handled as for Nx 15 sources: projects listed inline
+  or by path are read, and executors and ESLint configs become `@nx/*`. Nx 14 nx.json keys
+  (`npmScope`, `implicitDependencies`) are not carried over. An Nx 14 workspace on Angular 14 goes
+  into an Angular 14 workspace or one with no Angular yet.
+- `pstack migrate` (Angular CLI sources) keeps `node_modules/@types` in `typeRoots`, pointing at the
+  workspace's; it dropped the entry, and the remaining list hid every `@types` package (build errors
+  such as "Cannot find namespace 'NodeJS'" or "Cannot find name 'require'"). Fix in a workspace
+  migrated earlier: in `apps/<app>/tsconfig.json`, set `typeRoots` back to
+  `["../../node_modules/@types"]` (plus the app's own entries).
+- `pstack migrate` moves a Karma config from Angular CLI 1.x (`@angular/cli/plugins/karma`) to
+  `@angular-devkit/build-angular`, as Angular's own update does; no Angular since 6 loads the old one.
+- Type checking: a project without `tsconfig.app.json` / `tsconfig.lib.json` gets its `typecheck`
+  target from the tsconfig its build target names (apps migrated with their own tsconfig layout had
+  none). `pstack update` adds it to those projects.
+- `pstack migrate` (Angular CLI sources) reads `--base-href` from the source's npm build scripts
+  (`ng build <app> --configuration=uat --base-href /customer/`) and sets it on that release
+  configuration, as it already did for Nx sources; the app was released at `/`.
+- Release check `sourceMaps`: a `sourceMappingURL` comment whose `.map` file is not in the output
+  (a vendored script copied as an asset, its map left out) is a warning, not a failure, since it
+  exposes nothing. Inline and remote maps, shipped `.map` files and comments that reach them still
+  fail.
+- `pstack upgrade angular` runs lint before each step too. When lint already fails then (an app
+  migrated from TSLint, say), only the build decides whether the step is committed, and the lint
+  result is reported; before, those errors stopped every step.
+
 ## 1.13.1
 
 - `pstack upgrade angular` 14 → 15 takes the `require.context` spec loader out of Karma `main`

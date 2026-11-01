@@ -146,7 +146,10 @@ describe('pstack upgrade angular (NX-76)', () => {
     const { deps, calls } = fakeDeps(ws);
     expect(await runUpgrade(makeCtx({ cwd: ws, positionals: ['angular'] }), deps)).toBe(0);
     const run = calls.map(line);
-    expect(run[0]).toBe('npx nx migrate @angular/core@16.2.12 --interactive=false');
+    expect(run.slice(0, 2)).toEqual([
+      'npx nx run-many -t lint',
+      'npx nx migrate @angular/core@16.2.12 --interactive=false',
+    ]);
     expect(run).toContain('npm install');
     expect(run).toContain(
       'npm install --save-dev @angular-devkit/build-angular@~16.2.12 @angular/cli@~16.2.12 ' +
@@ -218,7 +221,10 @@ describe('pstack upgrade angular (NX-76)', () => {
     const { deps, calls, out } = fakeDeps(ws);
     expect(await runUpgrade(makeCtx({ cwd: ws, positionals: ['angular'] }), deps)).toBe(0);
     const run = calls.map(line);
-    expect(run[0]).toBe('npx nx migrate @angular/core@15.2.10 --interactive=false');
+    expect(run.slice(0, 2)).toEqual([
+      'npx nx run-many -t lint',
+      'npx nx migrate @angular/core@15.2.10 --interactive=false',
+    ]);
     expect(run).toContain(
       'npm install --save-dev @angular-devkit/build-angular@~15.2.10 @angular/cli@~15.2.10 ' +
         '@angular/compiler-cli@~15.2.10 @angular-eslint/eslint-plugin@~15.2.1 ng-packagr@^15.0.0 ' +
@@ -319,6 +325,41 @@ describe('pstack upgrade angular (NX-76)', () => {
       other.deps,
     );
     expect(other.calls.some((c) => c.args[1] === 'g')).toBe(false);
+  });
+
+  it('lint that already failed before the step does not stop it; the build still does (NX-117)', async () => {
+    const lintFails = (ws: string, buildFails = false) => {
+      const f = fakeDeps(ws);
+      const exec = f.deps.exec;
+      f.deps.exec = (cmd, args, cwd, env) => {
+        const t = args.slice(1).join(' ');
+        if (t === 'run-many -t lint' || (buildFails && t === 'run-many -t build')) {
+          f.calls.push({ cmd, args, cwd, env });
+          throw new Error('exit 1');
+        }
+        exec(cmd, args, cwd, env);
+      };
+      return f;
+    };
+    const ws = workspace('15.2.10');
+    const { deps, calls, out } = lintFails(ws);
+    expect(await runUpgrade(makeCtx({ cwd: ws, positionals: ['angular'] }), deps)).toBe(0);
+    const run = calls.map(line);
+    expect(run[0]).toBe('npx nx run-many -t lint');
+    expect(run).toContain('npx nx run-many -t build');
+    expect(run).not.toContain('npx nx run-many -t build lint');
+    expect(out.join('\n')).toContain('lint still fails, as it did before the step');
+    expect(run.slice(-1)).toEqual([
+      'git commit -m chore: upgrade to Angular 16 (pstack upgrade angular)',
+    ]);
+
+    // A failing build still stops the step before the commit.
+    const ws2 = workspace('15.2.10');
+    const broken = lintFails(ws2, true);
+    await expect(
+      runUpgrade(makeCtx({ cwd: ws2, positionals: ['angular'] }), broken.deps),
+    ).rejects.toThrow('exit 1');
+    expect(broken.calls.map(line).some((l) => l.startsWith('git commit'))).toBe(false);
   });
 
   it('--dry-run prints the plan and runs nothing', async () => {

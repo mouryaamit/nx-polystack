@@ -25,6 +25,17 @@ describe('Nx source discovery', () => {
     ]);
   });
 
+  it('finds the projects of an Nx 14 workspace.json, inline and by path', () => {
+    const src = fixtureCopy('nx14-workspace');
+    expect(sourceNxVersion(src)).toBe('14.8.6');
+    const found = discoverProjects(src);
+    expect(found.map((p) => [p.name, p.root, p.kind, p.origin])).toEqual([
+      ['shop', 'apps/shop', 'angular-app', 'workspace.json'],
+      ['ui', 'libs/ui', 'lib', 'project.json'],
+    ]);
+    expect(found[0].config['implicitDependencies']).toEqual(['ui']);
+  });
+
   it('converts architect/builder to targets/executor', () => {
     expect(
       normalizeConfig({ root: 'x', architect: { lint: { builder: 'b:l', options: { a: 1 } } } }),

@@ -30,6 +30,16 @@ export function typecheckTsconfig(tree: Tree, root: string): string | undefined 
   return [`${base}tsconfig.app.json`, `${base}tsconfig.lib.json`].find((f) => tree.exists(f));
 }
 
+/**
+ * The tsconfig the build target compiles with, when it exists (apps migrated from the Angular CLI
+ * keep theirs: src/tsconfig.app.json, src/<app>/tsconfig.<app>.json …).
+ */
+function buildTsconfig(tree: Tree, targets: Record<string, unknown>): string | undefined {
+  const build = targets['build'] as { options?: { tsConfig?: unknown } } | undefined;
+  const ts = build?.options?.tsConfig;
+  return typeof ts === 'string' && tree.exists(ts) ? ts : undefined;
+}
+
 const ANGULAR_EXECUTOR =
   /^(?:@angular-devkit\/build-angular|@angular\/build|@nx\/angular|@nrwl\/angular|@mouryaamit\/nx-polystack:build$)/;
 
@@ -86,10 +96,10 @@ export function updateProjectJson(
 
 /** Adds a typecheck target to the project at `root` when it has none. */
 export function typecheckTargetChange(tree: Tree, root: string): TargetChange {
-  const tsconfig = typecheckTsconfig(tree, root);
-  if (!tsconfig) return 'none';
   return updateProjectJson(tree, root, (json) => {
     const targets = (json['targets'] ?? {}) as Record<string, unknown>;
+    const tsconfig = typecheckTsconfig(tree, root) ?? buildTsconfig(tree, targets);
+    if (!tsconfig) return 'none';
     if (targets['typecheck'] !== undefined) return 'exists';
     const templates = isAngularProject(tree, root, json);
     json['targets'] = { ...targets, typecheck: typecheckTarget(tsconfig, { templates }) };

@@ -10,6 +10,7 @@ import {
   workspaceGeneratorMajor,
 } from '../../../lib/utils/angular-deps';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
+import { karmaNote, modernizeKarmaConfigs } from '../../../lib/utils/karma-ci';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { setProjectTags } from '../../../lib/utils/nx-targets';
 import { angularCodeNotes } from '../angular-code-scan';
@@ -32,6 +33,7 @@ import {
 } from '../dependencies';
 import { upTo } from '../names';
 import { browserslistFile, classifyDependencySpec, SpecContext } from '../npm-deps';
+import { applyBaseHrefs, readBuildScripts } from '../nx/build-scripts';
 import { catalogMissMessage, sourceRootPackage } from '../pnpm';
 import {
   PackageJson,
@@ -375,6 +377,17 @@ export function migrateAngularApp(
     exists: mapper.exists,
     angularMajor,
   });
+  // Base hrefs the source's npm build scripts pass (`ng build <app> -c uat --base-href /x/`).
+  const release = (pj.projectJson['targets'] as Record<string, unknown> | undefined)?.['release'];
+  if (release && typeof release === 'object') {
+    const hrefNotes: string[] = [];
+    applyBaseHrefs(
+      release as Record<string, unknown>,
+      readBuildScripts(sourceDir, sourcePkg?.scripts, [sourceProject]).baseHrefs.get(sourceProject),
+      hrefNotes,
+    );
+    data.notes.push(...hrefNotes.map((n) => n[0].toUpperCase() + n.slice(1) + '.'));
+  }
   writeJson(tree, `${projectRoot}/project.json`, pj.projectJson);
   if (pj.releaseConfigurations.length > 0) {
     const notes: string[] = [];
@@ -393,6 +406,8 @@ export function migrateAngularApp(
   ]?.options?.main;
   const nonceNote = typeof main === 'string' ? noncePatchMains(tree, [main]) : undefined;
   if (nonceNote) data.notes.push(nonceNote);
+  const karma = modernizeKarmaConfigs(tree, pj.projectJson);
+  if (karma.length > 0) data.notes.push(karmaNote(karma));
 
   // 3. tsconfig
   migrateTsconfigs(tree, ctx, sourceRoot, copy.copied, mapper, data, angularMajor);

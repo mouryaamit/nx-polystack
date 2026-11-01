@@ -28,7 +28,7 @@ COMMANDS
   migrate     Copy an existing project into the workspace, source never modified: a standalone
               Angular CLI, Ionic/Capacitor or Flutter app (apps/<name>), the apps and libraries
               of a multi-project Angular CLI repo (apps/, libs/), the Angular, Ionic and
-              Flutter projects of an Nx 15-22 workspace (same paths, names and aliases), or the
+              Flutter projects of an Nx 14-22 workspace (same paths, names and aliases), or the
               app and TypeScript library packages of an npm, Yarn or pnpm workspaces repo
               (apps/, libs/)
   adopt       Move the Angular apps that still build with the workspace's own scripts to the

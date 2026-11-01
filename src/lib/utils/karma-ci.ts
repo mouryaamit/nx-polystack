@@ -54,3 +54,45 @@ export function affectedWithCiConfiguration(line: string): string {
   if (!/npx nx affected -t /.test(line) || /\s(-c|--configuration)[ =]/.test(line)) return line;
   return line.replace(/(npx nx affected -t(?: [a-z][\w:-]*)+)/, '$1 -c ci');
 }
+
+/**
+ * A Karma config from Angular CLI 1.x (`'@angular/cli'` framework and plugin, `angularCli` block),
+ * which no Angular since 6 can load ("Cannot find module '@angular/cli/plugins/karma'"), as
+ * Angular's own v6 migration rewrites it. Other configs are returned unchanged.
+ */
+export function modernKarmaConfig(text: string): string {
+  if (!/@angular\/cli\/plugins\/karma|['"]@angular\/cli['"]\s*[,\]]/.test(text)) return text;
+  return text
+    .replace(
+      /(['"])@angular\/cli\/plugins\/karma\1/g,
+      '$1@angular-devkit/build-angular/plugins/karma$1',
+    )
+    .replace(/(['"])@angular\/cli\1(?=\s*[,\]])/g, '$1@angular-devkit/build-angular$1')
+    .replace(/^[ \t]*angularCli\s*:\s*\{[^{}]*\},?[ \t]*\r?\n/m, '');
+}
+
+/** Rewrites the Angular CLI 1.x Karma configs of a project's Karma targets; returns the files. */
+export function modernizeKarmaConfigs(tree: Tree, projectJson: Json): string[] {
+  const changed: string[] = [];
+  for (const target of Object.values((projectJson['targets'] ?? {}) as Json)) {
+    if (!isKarmaTarget(target)) continue;
+    const file = (target['options'] as Json | undefined)?.['karmaConfig'];
+    if (typeof file !== 'string') continue;
+    const text = tree.read(file, 'utf8');
+    if (text === null) continue;
+    const out = modernKarmaConfig(text);
+    if (out !== text) {
+      tree.write(file, out);
+      changed.push(file);
+    }
+  }
+  return [...new Set(changed)];
+}
+
+/** The migration report note for modernizeKarmaConfigs. */
+export function karmaNote(files: string[]): string {
+  return (
+    'Karma config from Angular CLI 1.x (`@angular/cli/plugins/karma`, which no Angular since 6 ' +
+    `loads) now uses \`@angular-devkit/build-angular\`: ${files.map((f) => `\`${f}\``).join(', ')}.`
+  );
+}

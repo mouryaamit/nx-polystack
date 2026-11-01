@@ -40,9 +40,19 @@ export function appRootTsconfig(source: Json, m: PathMapper): Json {
       const co: Json = {};
       for (const [o, ov] of Object.entries(v)) {
         if (DROPPED_COMPILER_OPTIONS.includes(o)) continue;
+        // node_modules/@types stays the workspace's: a typeRoots list without it hides every
+        // @types package (@types/node: NodeJS, require, 'dns' …).
         co[o] =
           o === 'typeRoots' && Array.isArray(ov)
-            ? ov.filter((t) => !isNodeModulesTypes(t)).map(rebase)
+            ? [
+                ...new Set(
+                  ov.map((t) =>
+                    isNodeModulesTypes(t)
+                      ? relativeFrom(m.projectRoot, 'node_modules/@types')
+                      : rebase(t),
+                  ),
+                ),
+              ]
             : ov;
       }
       // A root tsconfig without moduleResolution got TypeScript's default for its module
@@ -67,7 +77,7 @@ export function appRootTsconfig(source: Json, m: PathMapper): Json {
   return out;
 }
 
-/** "node_modules/@types" (any spelling): it does not move with the app. */
+/** "node_modules/@types" (any spelling): the workspace root's, not one that moves with the app. */
 function isNodeModulesTypes(p: unknown): boolean {
   return (
     typeof p === 'string' &&
@@ -120,6 +130,16 @@ export function fixProjectTsconfig(
   const co = config['compilerOptions'];
   if (isObject(co) && typeof co['outDir'] === 'string') {
     out['compilerOptions'] = { ...co, outDir: relativeFrom(newDir, 'dist/out-tsc') };
+  }
+  // typeRoots that reach the source repo's node_modules/@types point at the workspace's.
+  if (isObject(co) && Array.isArray(co['typeRoots'])) {
+    const sourceDir = path.posix.dirname(input.sourceFile);
+    const typeRoots = (co['typeRoots'] as unknown[]).map((t) =>
+      typeof t === 'string' && isNodeModulesTypes(path.posix.join(sourceDir, t))
+        ? relativeFrom(newDir, 'node_modules/@types')
+        : t,
+    );
+    out['compilerOptions'] = { ...(out['compilerOptions'] as Json), typeRoots };
   }
   return { config: out, warnings };
 }

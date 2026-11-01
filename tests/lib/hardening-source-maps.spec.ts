@@ -70,15 +70,33 @@ describe('hardening output files', () => {
       expect(r.errors[1]).toContain(HINT);
     });
 
-    it('reports a sourceMappingURL comment in js and css', () => {
-      write('js/main.js', 'x();\n//# sourceMappingURL=main.js.map\n');
+    it('reports a sourceMappingURL comment that exposes a map: inline, remote or shipped', () => {
+      write('js/main.js', 'x();\n//# sourceMappingURL=data:application/json;base64,e30=\n');
+      write('remote.js', 'x();\n//# sourceMappingURL=https://cdn.example.com/remote.js.map\n');
       write('styles.css', 'a{}\n/*# sourceMappingURL=styles.css.map */\n');
+      write('styles.css.map', '{}');
       const r = checkSourceMaps(root, 'fail');
-      expect(r.errors.slice(0, 2)).toEqual([
+      expect(r.errors.slice(0, 4)).toEqual([
+        expect.stringContaining('styles.css.map'),
         expect.stringContaining(path.join('js', 'main.js')),
+        expect.stringContaining('remote.js'),
         expect.stringContaining('styles.css'),
       ]);
-      expect(r.errors[0]).not.toContain(root);
+      expect(r.errors[1]).not.toContain(root);
+      expect(r.warnings).toEqual([]);
+    });
+
+    it('only warns about a comment whose map is not in the output (a vendored asset)', () => {
+      write('assets/pdfjs/pdf.worker.js', 'x();\n//# sourceMappingURL=pdf.worker.js.map\n');
+      const r = checkSourceMaps(root, 'fail');
+      expect(r.errors).toEqual([]);
+      expect(r.warnings).toEqual([
+        `sourceMappingURL comment without its map (not shipped, nothing exposed): ${path.join(
+          'assets',
+          'pdfjs',
+          'pdf.worker.js',
+        )} → pdf.worker.js.map`,
+      ]);
     });
 
     it('does not flag sourceMappingURL= inside a string literal', () => {

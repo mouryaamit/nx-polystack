@@ -96,7 +96,7 @@ Ionic apps keep `IonicModule`; Ionic's own codemod moves them to Ionic's standal
   - build-provenance meta, EXIF stripping, leak checks, source-map control, comment and console
     stripping, and optional obfuscation.
 - **Migration** of existing projects into the workspace: standalone Angular CLI, Ionic/Capacitor and
-  Flutter apps, multi-project Angular CLI repos, Nx 15–22 workspaces and npm/Yarn/pnpm workspaces —
+  Flutter apps, multi-project Angular CLI repos, Nx 14–22 workspaces and npm/Yarn/pnpm workspaces —
   with rollback.
 - **Repo infrastructure**: docs, CI gates (affected lint/test/build, dependency cycles, type checks),
   quality checks and a scheduled dependency-upgrade workflow.

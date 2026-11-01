@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/nx/schemas/workspace-schema.json",
+  "version": 2,
+  "projects": {
+    "shop": {
+      "projectType": "application",
+      "root": "apps/shop",
+      "sourceRoot": "apps/shop/src",
+      "prefix": "acme",
+      "tags": [],
+      "implicitDependencies": ["ui"],
+      "targets": {
+        "build": {
+          "executor": "@nrwl/angular:webpack-browser",
+          "outputs": ["{options.outputPath}"],
+          "options": {
+            "outputPath": "dist/apps/shop",
+            "index": "apps/shop/src/index.html",
+            "main": "apps/shop/src/main.ts",
+            "polyfills": "apps/shop/src/polyfills.ts",
+            "tsConfig": "apps/shop/tsconfig.app.json",
+            "assets": ["apps/shop/src/favicon.ico"],
+            "styles": ["apps/shop/src/styles.scss"],
+            "scripts": []
+          },
+          "configurations": {
+            "production": {
+              "fileReplacements": [
+                {
+                  "replace": "apps/shop/src/environments/environment.ts",
+                  "with": "apps/shop/src/environments/environment.prod.ts"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "buildOptimizer": false,
+              "optimization": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "executor": "@nrwl/angular:webpack-dev-server",
+          "configurations": {
+            "production": {
+              "browserTarget": "shop:build:production"
+            },
+            "development": {
+              "browserTarget": "shop:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "lint": {
+          "executor": "@nrwl/linter:eslint",
+          "outputs": ["{options.outputFile}"],
+          "options": {
+            "lintFilePatterns": ["apps/shop/**/*.ts", "apps/shop/**/*.html"]
+          }
+        }
+      }
+    },
+    "ui": "libs/ui"
+  }
+}

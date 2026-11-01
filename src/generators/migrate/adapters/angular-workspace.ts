@@ -6,6 +6,7 @@ import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt
 import { ngPackagrDependencies } from '../../../lib/utils/angular-deps';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import { addMissingDependencies, declaredVersion } from '../../../lib/utils/dependencies';
+import { karmaNote, modernizeKarmaConfigs } from '../../../lib/utils/karma-ci';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { setProjectTags } from '../../../lib/utils/nx-targets';
 import { angularCodeNotes } from '../angular-code-scan';
@@ -339,6 +340,8 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
       const note = typeof main === 'string' ? noncePatchMains(tree, [main]) : undefined;
       if (note) data.notes.push(`${code(p.name)}: ${note}`);
     }
+    const karma = modernizeKarmaConfigs(tree, pj.projectJson);
+    if (karma.length > 0) data.notes.push(`${code(p.name)}: ${karmaNote(karma)}`);
 
     const mapper: PathMapper = {
       sourceRoot: root,
