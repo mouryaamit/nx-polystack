@@ -5,6 +5,7 @@ import * as path from 'path';
 import {
   angular15RuntimeSpecs,
   es2022Targets,
+  karmaMainFiles,
   polyfillsToArray,
 } from '../../lib/upgrade/angular15';
 import {
@@ -556,6 +557,8 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
     if (targets.length > 0) say(`tsconfig target es2022: ${targets.join(', ')}`);
     const polyfills = polyfillsToArray(root);
     if (polyfills.length > 0) say(`polyfills: ["zone.js"]: ${polyfills.join(', ')}`);
+    const karma = karmaMainFiles(root);
+    if (karma.length > 0) say(`Karma main without require.context: ${karma.join(', ')}`);
     const runtime = angular15RuntimeSpecs(readJsonFile(path.join(root, 'package.json')));
     if (runtime.length > 0) {
       say(`zone.js and NgRx for Angular 15: ${runtime.join(' ')}`);

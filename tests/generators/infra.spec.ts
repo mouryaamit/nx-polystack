@@ -13,6 +13,7 @@ import {
   parseUpgradeScope,
   PREPUSH_MARKER,
 } from '../../src/generators/infra/options';
+import { affectedWithCiConfiguration } from '../../src/lib/utils/karma-ci';
 import { hasFlutterProject, LLM_END, LLM_START } from '../../src/lib/utils/llm-block';
 import { hardenJenkinsfile } from '../../src/migrations/ci-nx-hardening/ci-nx-hardening';
 
@@ -221,7 +222,7 @@ describe('infra generator', () => {
       expect(shas?.['with']).toEqual({ 'main-branch-name': 'develop' });
       const runs = s.map((x) => x['run']).filter(Boolean);
       expect(runs).toContain('npm ci');
-      expect(runs).toContain('npx nx affected -t lint typecheck test build --parallel=3');
+      expect(runs).toContain('npx nx affected -t lint typecheck test build -c ci --parallel=3');
       expect(runs).toContain('npm run check:cycles');
       expect(text).not.toContain('actions/cache');
     });
@@ -406,10 +407,13 @@ describe('infra generator', () => {
       // NX-114: no Nx daemon, and Nx gets commit SHAs, not ref names.
       expect(j).toContain("NX_DAEMON = 'false'");
       expect(j).toContain(
-        `sh 'BASE_SHA=$(git rev-parse --verify "\${NX_BASE}^{commit}") && npx nx affected -t lint typecheck test build --parallel=3 --base="$BASE_SHA" --head="$(git rev-parse --verify HEAD)"'`,
+        `sh 'BASE_SHA=$(git rev-parse --verify "\${NX_BASE}^{commit}") && npx nx affected -t lint typecheck test build -c ci --parallel=3 --base="$BASE_SHA" --head="$(git rev-parse --verify HEAD)"'`,
       );
-      // What the ci-nx-hardening migration writes into an older generated Jenkinsfile is the same.
+      // NX-115: Karma test targets run with their ci configuration.
+      expect(j).toContain('// -c ci: Karma test targets run once, in headless Chrome');
+      // The 1.13.0 and 1.13.1 migrations leave the current Jenkinsfile as it is.
       expect(ciNxHardeningResult(j)).toBe(j);
+      expect(j.split('\n').map(affectedWithCiConfiguration).join('\n')).toBe(j);
       expect(tree.exists('.github/workflows/ci.yml')).toBe(false);
       expect(tree.exists('tools/scripts/check-cycles.js')).toBe(true);
     });

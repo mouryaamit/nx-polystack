@@ -86,6 +86,18 @@ describe('Nx config rewrites', () => {
     expect(dropped).toEqual(['!unrelated', 'api', 'api']);
   });
 
+  it('gives Karma test targets a ci configuration (NX-115)', () => {
+    const out = rewriteProjectConfig(
+      { name: 'shop', targets: { test: { executor: '@angular-devkit/build-angular:karma' } } },
+      'shop',
+      new Map(),
+    );
+    expect((out['targets'] as Record<string, Record<string, unknown>>)['test']).toEqual({
+      executor: '@angular-devkit/build-angular:karma',
+      configurations: { ci: { watch: false, browsers: 'ChromeHeadless' } },
+    });
+  });
+
   it('renames @nrwl/nx in ESLint configs, overrides included', () => {
     expect(
       rewriteEslintConfig({

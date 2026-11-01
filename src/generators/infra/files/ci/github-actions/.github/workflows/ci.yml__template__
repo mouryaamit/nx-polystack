@@ -67,5 +67,6 @@ jobs:
       - uses: nrwl/nx-set-shas@v5
         with:
           main-branch-name: <%= baseBranch %>
-      - run: npx nx affected -t lint typecheck test build --parallel=3
+      # -c ci: Karma test targets run once, in headless Chrome (other targets use their default).
+      - run: npx nx affected -t lint typecheck test build -c ci --parallel=3
       - run: npm run check:cycles
