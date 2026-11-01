@@ -3,6 +3,19 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.13.1
+
+- `pstack upgrade angular` 14 → 15 takes the `require.context` spec loader out of Karma `main`
+  files (`src/test.ts`), as Angular's own v15 migration does; Karma tests of apps migrated from the
+  Angular CLI failed on Angular 15 with "`__webpack_require__(...).context is not a function`". A
+  workspace already upgraded with an earlier version: delete the `declare const require` block and
+  the `require.context` / `context.keys()` lines from each Karma `src/test.ts`.
+- Karma test targets get a `ci` configuration (`watch: false`, `ChromeHeadless`), and the CI files
+  from `pstack infra` run `nx affected` with `-c ci`. Karma watches by default, so
+  `nx run-many -t test` and CI never finished on apps `pstack migrate` brought from the Angular
+  CLI. `nx test <app>` still watches. `pstack update` (migration `karma-ci`) adds both to existing
+  workspaces; CI files you wrote are named in the log.
+
 ## 1.13.0
 
 - CI files from `pstack infra` run Nx without its daemon (`NX_DAEMON=false`), and the `Jenkinsfile`

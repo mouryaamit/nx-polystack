@@ -55,7 +55,7 @@ export type TargetChange = 'added' | 'exists' | 'none' | 'comments';
  * Writes a project.json change: plain JSON is rewritten keeping its layout; JSON with comments is
  * left as it is ('comments'), since a rewrite would drop them.
  */
-function updateProjectJson(
+export function updateProjectJson(
   tree: Tree,
   root: string,
   change: (json: Record<string, unknown>) => TargetChange,

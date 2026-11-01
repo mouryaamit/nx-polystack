@@ -132,6 +132,11 @@
       "version": "1.13.0",
       "description": "Generated CI files: NX_DAEMON=false, and the Jenkinsfile passes commit SHAs to nx affected (Nx advisories before 22.7.10)",
       "implementation": "./src/migrations/ci-nx-hardening/ci-nx-hardening"
+    },
+    "karma-ci": {
+      "version": "1.13.1",
+      "description": "Karma test targets get a ci configuration (one run, ChromeHeadless) and the generated CI runs nx affected with -c ci, so Karma no longer watches forever",
+      "implementation": "./src/migrations/karma-ci/karma-ci"
     }
   }
 }

@@ -272,7 +272,7 @@ describe('preset generator', () => {
     expect(scripts['assets:strip-exif']).toBe('pstack assets strip-exif --all');
     expect(scripts['assets:check-exif']).toBe('pstack assets strip-exif --all --check');
     expect(tree.read('.github/workflows/ci.yml', 'utf8')).toContain(
-      '      - run: npx nx affected -t lint typecheck test build --parallel=3\n      - run: npm run assets:check-exif\n',
+      '      - run: npx nx affected -t lint typecheck test build -c ci --parallel=3\n      - run: npm run assets:check-exif\n',
     );
     expect(tree.read('.github/workflows/ci.yml', 'utf8')).toContain(
       'nx affected -t lint typecheck test build',

@@ -27,6 +27,40 @@ const NX_ANGULAR: Record<string, string> = {
   '22.7.12': '20.3.9',
 };
 
+/** `src/test.ts` as `ng new` 14 writes it, and what Angular's v15 migration leaves. */
+const ANGULAR_15_TEST_TS = `// This file is required by karma.conf.js and loads recursively all the .spec and framework files
+
+import 'zone.js/testing';
+import { getTestBed } from '@angular/core/testing';
+import {
+  BrowserDynamicTestingModule,
+  platformBrowserDynamicTesting
+} from '@angular/platform-browser-dynamic/testing';
+
+// First, initialize the Angular testing environment.
+getTestBed().initTestEnvironment(
+  BrowserDynamicTestingModule,
+  platformBrowserDynamicTesting(),
+);
+`;
+const ANGULAR_14_TEST_TS = ANGULAR_15_TEST_TS.replace(
+  '\n// First,',
+  `
+declare const require: {
+  context(path: string, deep?: boolean, filter?: RegExp): {
+    <T>(id: string): T;
+    keys(): string[];
+  };
+};
+
+// First,`,
+).concat(`
+// Then we find all the tests.
+const context = require.context('./', true, /\\.spec\\.ts$/);
+// And load the modules.
+context.keys().forEach(context);
+`);
+
 const readPkg = (ws: string): Pkg =>
   JSON.parse(fs.readFileSync(path.join(ws, 'package.json'), 'utf8'));
 const writePkg = (ws: string, pkg: Pkg) => writeJson(path.join(ws, 'package.json'), pkg);
@@ -168,6 +202,19 @@ describe('pstack upgrade angular (NX-76)', () => {
       '{\n  "compilerOptions": {\n    "target": "es2020",\n    "useDefineForClassFields": false\n  }\n}\n',
     );
 
+    // A migrated Angular CLI 14 app: Karma with Angular 14's src/test.ts.
+    file(
+      'apps/std/project.json',
+      JSON.stringify({
+        targets: {
+          test: {
+            executor: '@angular-devkit/build-angular:karma',
+            options: { main: 'apps/std/src/test.ts', karmaConfig: 'apps/std/karma.conf.js' },
+          },
+        },
+      }),
+    );
+    file('apps/std/src/test.ts', ANGULAR_14_TEST_TS);
     const { deps, calls, out } = fakeDeps(ws);
     expect(await runUpgrade(makeCtx({ cwd: ws, positionals: ['angular'] }), deps)).toBe(0);
     const run = calls.map(line);
@@ -195,6 +242,8 @@ describe('pstack upgrade angular (NX-76)', () => {
     );
     expect(read('apps/admin/project.json')).toContain('"polyfills": "apps/admin/src/polyfills.ts"');
     expect(fs.existsSync(path.join(ws, 'apps/admin/src/polyfills.ts'))).toBe(true);
+    expect(read('apps/std/src/test.ts')).toBe(ANGULAR_15_TEST_TS);
+    expect(out.join('\n')).toContain('Karma main without require.context: apps/std/src/test.ts');
     expect(out.join('\n')).toContain('Angular 14 → 15:');
     expect(run.slice(-1)).toEqual([
       'git commit -m chore: upgrade to Angular 15 (pstack upgrade angular)',

@@ -35,7 +35,8 @@ pipeline {
       steps {
         sh 'git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"'
         // Nx gets commit SHAs, never ref names (git-ref command injection in Nx before 22.7.10).
-        sh 'BASE_SHA=$(git rev-parse --verify "${NX_BASE}^{commit}") && npx nx affected -t lint typecheck test build --parallel=3 --base="$BASE_SHA" --head="$(git rev-parse --verify HEAD)"'
+        // -c ci: Karma test targets run once, in headless Chrome (other targets use their default).
+        sh 'BASE_SHA=$(git rev-parse --verify "${NX_BASE}^{commit}") && npx nx affected -t lint typecheck test build -c ci --parallel=3 --base="$BASE_SHA" --head="$(git rev-parse --verify HEAD)"'
       }
     }
 

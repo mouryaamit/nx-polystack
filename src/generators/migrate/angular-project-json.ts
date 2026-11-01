@@ -2,6 +2,7 @@ import * as path from 'path';
 
 import { flattenApplicationOutput } from '../../lib/release/flat-output';
 import { angularReleaseTarget, withReleaseHardening } from '../../lib/utils/angular-project';
+import { withKarmaCi } from '../../lib/utils/karma-ci';
 
 import type { AngularProject, AngularTarget } from './adapters/angular-cli';
 import { convertAngular17Project } from './angular17';
@@ -312,7 +313,7 @@ function convertTarget(target: AngularTarget, oldProject: string, m: PathMapper)
     );
   }
   if (defaultConfiguration !== undefined) out['defaultConfiguration'] = defaultConfiguration;
-  return out;
+  return withKarmaCi(out);
 }
 
 export interface ProjectJsonInput {

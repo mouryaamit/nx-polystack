@@ -382,6 +382,8 @@ describe('angular.json → project.json', () => {
               styles: ['apps/portal/src/styles.scss'],
               scripts: [],
             },
+            // NX-115: one run in headless Chrome for CI (`-c ci`); `nx test` still watches.
+            configurations: { ci: { watch: false, browsers: 'ChromeHeadless' } },
           },
           release: {
             executor: '@mouryaamit/nx-polystack:build',

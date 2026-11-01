@@ -1,3 +1,5 @@
+import { withKarmaCi } from '../../../lib/utils/karma-ci';
+
 import { isObject, Json } from './workspace-source';
 
 /** Nx 15/16 executor names → the Nx 17 ones the workspace has. */
@@ -95,7 +97,7 @@ function rewriteTarget(
       return to === undefined ? [] : [{ ...d, projects: to }];
     });
   }
-  return out;
+  return withKarmaCi(out);
 }
 
 /**

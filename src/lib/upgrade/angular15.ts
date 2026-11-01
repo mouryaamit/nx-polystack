@@ -142,3 +142,53 @@ export function angular15RuntimeSpecs(pkg: Json): string[] {
   }
   return out.sort();
 }
+
+const KARMA = '@angular-devkit/build-angular:karma';
+
+/** Angular's v15 `update-karma-main-file`: the `require.context` loader goes from a Karma main. */
+export function withoutRequireContext(text: string): string {
+  if (!/require\.context\(/.test(text)) return text;
+  return text
+    .replace(/^declare const require:\s*\{[\s\S]*?^\};[ \t]*\r?\n/m, '')
+    .replace(/^[ \t]*\/\/ (Then we find all the tests|And load the modules)\.?[ \t]*\r?\n/gm, '')
+    .replace(/^.*\brequire\.context\(.*\);?[ \t]*\r?\n/gm, '')
+    .replace(/^.*\bcontext\.keys\(\)\.(forEach|map)\(context\);?[ \t]*\r?\n/gm, '')
+    .replace(/(\r?\n){3,}/g, '\n\n')
+    .replace(/(\r?\n)+$/, '\n');
+}
+
+/**
+ * Karma test targets whose `main` loads the specs with webpack's `require.context` (Angular 14's
+ * `src/test.ts`): Angular 15's Karma builder finds the specs itself and `require.context` throws
+ * ("__webpack_require__(...).context is not a function"), so the loader goes, as Angular's own
+ * migration does. Returns the files changed (workspace-relative).
+ */
+export function karmaMainFiles(root: string): string[] {
+  const changed: string[] = [];
+  const pjs = [
+    ...walk(path.join(root, 'apps'), (n) => n === 'project.json'),
+    ...walk(path.join(root, 'libs'), (n) => n === 'project.json'),
+  ];
+  for (const pjFile of pjs) {
+    let pj: Json;
+    try {
+      pj = JSON.parse(fs.readFileSync(pjFile, 'utf8')) as Json;
+    } catch {
+      continue;
+    }
+    const targets = (pj['targets'] ?? {}) as Record<string, Json>;
+    for (const target of Object.values(targets)) {
+      if ((target['executor'] ?? target['builder']) !== KARMA) continue;
+      const main = (target['options'] as Json | undefined)?.['main'];
+      if (typeof main !== 'string') continue;
+      const file = path.join(root, main);
+      if (!fs.existsSync(file)) continue;
+      const text = fs.readFileSync(file, 'utf8');
+      const out = withoutRequireContext(text);
+      if (out === text) continue;
+      fs.writeFileSync(file, out);
+      changed.push(main);
+    }
+  }
+  return [...new Set(changed)];
+}
