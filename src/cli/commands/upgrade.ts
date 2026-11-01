@@ -496,6 +496,19 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
       say(`@nx/devkit pinned to ${nx}`);
   };
 
+  // Lint before the step: when it already fails (an app migrated from TSLint, say), those errors
+  // are the workspace's, not the step's, and only the build decides whether the step is kept.
+  let lintBefore = true;
+  if (o.check) {
+    say('lint before the step: nx run-many -t lint');
+    try {
+      npx(['nx', 'run-many', '-t', 'lint']);
+    } catch {
+      lintBefore = false;
+      say('lint already fails before the step; the check after it will not stop on lint errors');
+    }
+  }
+
   if (pinNode(root, pins.node)) say(`engines.node and .nvmrc set to Node ${pins.node}`);
 
   if (pins.nx === ANGULAR_PINS[o.from].nx) {
@@ -606,9 +619,20 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
 
   tidyAfterMigrate(root, snapshot, deps, say);
 
-  if (o.check) {
+  if (o.check && lintBefore) {
     say('check: nx run-many -t build lint');
     npx(['nx', 'run-many', '-t', 'build', 'lint']);
+  } else if (o.check) {
+    say('check: nx run-many -t build (lint failed before the step)');
+    npx(['nx', 'run-many', '-t', 'build']);
+    try {
+      npx(['nx', 'run-many', '-t', 'lint']);
+    } catch {
+      deps.log(
+        '  lint still fails, as it did before the step: fix those errors separately ' +
+          '(npx nx run-many -t lint); they did not stop the upgrade.',
+      );
+    }
   }
   if (o.commit) {
     say('commit');
@@ -691,7 +715,12 @@ export async function runUpgrade(
     const to = from + 1;
     deps.log(`\nAngular ${from} → ${to}:`);
     for (const line of stepPlan(from, to, root)) deps.log(`  - ${line}`);
-    if (check) deps.log('  - check: nx run-many -t build lint');
+    if (check) {
+      deps.log(
+        '  - check: nx run-many -t build lint (lint runs before the step too; when it already ' +
+          'failed then, only the build decides)',
+      );
+    }
     if (commit) deps.log('  - one commit for the step');
   }
   if (ctx.dryRun) {

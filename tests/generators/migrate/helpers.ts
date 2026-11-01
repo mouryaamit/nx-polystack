@@ -18,7 +18,8 @@ export function fixtureCopy(
     | 'nx16-workspace'
     | 'ionic7-app'
     | 'npm-workspace'
-    | 'nx15-multi-app',
+    | 'nx15-multi-app'
+    | 'nx14-workspace',
 ): string {
   const dir = tmpSource(`pstack-${fixture}-`);
   fs.cpSync(path.join(FIXTURES, fixture), dir, { recursive: true });

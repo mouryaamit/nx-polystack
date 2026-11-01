@@ -137,6 +137,11 @@
       "version": "1.13.1",
       "description": "Karma test targets get a ci configuration (one run, ChromeHeadless) and the generated CI runs nx affected with -c ci, so Karma no longer watches forever",
       "implementation": "./src/migrations/karma-ci/karma-ci"
+    },
+    "typecheck-everywhere-1.14.0": {
+      "version": "1.14.0",
+      "description": "Run typecheck-everywhere again: projects without tsconfig.app.json/tsconfig.lib.json get typecheck from the tsconfig their build target names",
+      "implementation": "./src/migrations/typecheck-everywhere/typecheck-everywhere"
     }
   }
 }

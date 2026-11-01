@@ -61,6 +61,31 @@ describe('quality (NX-45)', () => {
       expect(addTypecheckTargets(tree)).toEqual([]);
     });
 
+    it("uses the build target's tsConfig when there is no tsconfig.app.json (NX-117)", () => {
+      project('apps/shop', {
+        name: 'shop',
+        targets: {
+          build: {
+            executor: '@angular-devkit/build-angular:browser',
+            options: { tsConfig: 'apps/shop/src/shop/tsconfig.shop.json' },
+          },
+        },
+      });
+      tree.write('apps/shop/src/shop/tsconfig.shop.json', '{}');
+      project('apps/gone', {
+        name: 'gone',
+        targets: { build: { options: { tsConfig: 'apps/gone/tsconfig.missing.json' } } },
+      });
+      expect(addTypecheckTargets(tree)).toEqual(['shop']);
+      expect(readJson(tree, 'apps/shop/project.json').targets.typecheck).toEqual({
+        executor: 'nx:run-commands',
+        options: { command: 'tsc --noEmit -p apps/shop/src/shop/tsconfig.shop.json' },
+        configurations: {
+          templates: { command: 'ngc --noEmit -p apps/shop/src/shop/tsconfig.shop.json' },
+        },
+      });
+    });
+
     it('caches typecheck in nx.json, also in cacheableOperations', () => {
       tree.write(
         'nx.json',

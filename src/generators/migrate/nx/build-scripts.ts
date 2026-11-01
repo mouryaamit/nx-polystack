@@ -203,7 +203,18 @@ export function shapeReleaseTarget(
   const options = release['options'] as Json;
   const envProject = envFolderOf(objectField(targets, 'build'));
   if (envProject && envProject !== options['envProject']) options['envProject'] = envProject;
-  const hrefs = scripts.baseHrefs.get(sourceName);
+  applyBaseHrefs(release, scripts.baseHrefs.get(sourceName), notes);
+}
+
+/**
+ * Base hrefs read from the source's build scripts (release configuration → href, `*` for all) on
+ * the release target's configurations; "/" is the default and is not written.
+ */
+export function applyBaseHrefs(
+  release: Json,
+  hrefs: Record<string, string> | undefined,
+  notes: string[],
+): void {
   if (!hrefs) return;
   const configurations = isObject(release['configurations'])
     ? (release['configurations'] as Record<string, Json>)

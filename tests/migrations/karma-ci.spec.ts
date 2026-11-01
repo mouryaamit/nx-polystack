@@ -4,6 +4,8 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import {
   affectedWithCiConfiguration,
   isKarmaTarget,
+  modernizeKarmaConfigs,
+  modernKarmaConfig,
   withKarmaCi,
 } from '../../src/lib/utils/karma-ci';
 import karmaCi from '../../src/migrations/karma-ci/karma-ci';
@@ -47,6 +49,54 @@ describe('karma ci configuration (NX-115)', () => {
     expect(affectedWithCiConfiguration('      - run: npm run check:cycles')).toBe(
       '      - run: npm run check:cycles',
     );
+  });
+});
+
+describe('Angular CLI 1.x Karma configs (NX-117)', () => {
+  const OLD = `module.exports = function (config) {
+  config.set({
+    frameworks: ['jasmine', '@angular/cli'],
+    plugins: [
+      require('karma-jasmine'),
+      require('@angular/cli/plugins/karma')
+    ],
+    angularCli: {
+      environment: 'dev'
+    },
+    browsers: ['Chrome'],
+  });
+};
+`;
+
+  it('moves the framework and plugin to @angular-devkit/build-angular and drops angularCli', () => {
+    expect(modernKarmaConfig(OLD)).toBe(`module.exports = function (config) {
+  config.set({
+    frameworks: ['jasmine', '@angular-devkit/build-angular'],
+    plugins: [
+      require('karma-jasmine'),
+      require('@angular-devkit/build-angular/plugins/karma')
+    ],
+    browsers: ['Chrome'],
+  });
+};
+`);
+    const current = modernKarmaConfig(OLD);
+    expect(modernKarmaConfig(current)).toBe(current);
+  });
+
+  it("rewrites the karmaConfig files of a project's Karma targets only", () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('apps/shop/karma.conf.js', OLD);
+    tree.write('apps/shop/other.karma.js', OLD);
+    const changed = modernizeKarmaConfigs(tree, {
+      targets: {
+        test: { executor: KARMA, options: { karmaConfig: 'apps/shop/karma.conf.js' } },
+        build: { executor: '@angular-devkit/build-angular:browser' },
+      },
+    });
+    expect(changed).toEqual(['apps/shop/karma.conf.js']);
+    expect(tree.read('apps/shop/karma.conf.js', 'utf8')).not.toContain('@angular/cli');
+    expect(tree.read('apps/shop/other.karma.js', 'utf8')).toBe(OLD);
   });
 });
 

@@ -386,6 +386,26 @@ describe('migrate generator: standalone Angular CLI app', () => {
       expect(tree.exists('apps/legacy-portal/project.json')).toBe(true);
     });
 
+    it("puts the base hrefs of the source's ng build scripts on the release target (NX-117)", async () => {
+      const src = fixtureCopy('angular15-app');
+      const pkgFile = path.join(src, 'package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+      pkg.scripts = {
+        ...pkg.scripts,
+        'build:customer':
+          'ng build legacy-portal --configuration=production --base-href /customer/ --aot',
+        'build:dev': 'ng build legacy-portal --configuration=development --base-href /',
+      };
+      fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2));
+      await migrateGenerator(tree, { source: src, name: 'portal' });
+      const release = readJson(tree, 'apps/portal/project.json').targets.release;
+      expect(release.configurations.prod.baseHref).toBe('/customer/');
+      expect(release.configurations.dev.baseHref).toBeUndefined();
+      expect(tree.read('docs/migrations/portal.md', 'utf8')).toContain(
+        'Release target base hrefs from the source build scripts: prod: /customer/.',
+      );
+    });
+
     it('validates --name', async () => {
       await expect(migrateGenerator(tree, { source: FIXTURE, name: 'Portal_App' })).rejects.toThrow(
         '--name="Portal_App" must be kebab-case',

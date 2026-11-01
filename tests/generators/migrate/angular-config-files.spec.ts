@@ -80,14 +80,24 @@ describe('migrate: tsconfig and ESLint rewrites', () => {
       ),
     ).toEqual({
       extends: '../../tsconfig.base.json',
-      compilerOptions: { typeRoots: ['./typings'] },
+      compilerOptions: { typeRoots: ['../../node_modules/@types', './typings'] },
       files: ['./src/main.ts'],
       include: ['./src/**/*.d.ts'],
       references: [{ path: './tsconfig.app.json' }, { path: '../../tsconfig.node.json' }],
     });
   });
 
-  it('root tsconfig at the repo root: paths stay relative, node_modules/@types typeRoots are dropped', () => {
+  it('project tsconfig: typeRoots that reach the source node_modules/@types reach the workspace one', () => {
+    const { config } = fixProjectTsconfig(
+      { compilerOptions: { typeRoots: ['../node_modules/@types', './typings'] } },
+      { sourceFile: 'src/tsconfig.app.json', sourceRoot: '', projectRoot: 'apps/web' },
+    );
+    expect(config['compilerOptions']).toEqual({
+      typeRoots: ['../../../node_modules/@types', './typings'],
+    });
+  });
+
+  it('root tsconfig at the repo root: paths stay relative, node_modules/@types is the workspace one', () => {
     expect(
       appRootTsconfig(
         {
@@ -98,7 +108,7 @@ describe('migrate: tsconfig and ESLint rewrites', () => {
       ),
     ).toEqual({
       extends: '../../tsconfig.base.json',
-      compilerOptions: { typeRoots: ['./src/typings'] },
+      compilerOptions: { typeRoots: ['../../node_modules/@types', './src/typings'] },
       include: ['./src/**/*.ts'],
     });
   });
