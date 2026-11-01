@@ -14,6 +14,9 @@ import {
   PREPUSH_MARKER,
 } from '../../src/generators/infra/options';
 import { hasFlutterProject, LLM_END, LLM_START } from '../../src/lib/utils/llm-block';
+import { hardenJenkinsfile } from '../../src/migrations/ci-nx-hardening/ci-nx-hardening';
+
+const ciNxHardeningResult = (text: string) => hardenJenkinsfile(text).text;
 
 const DEV = { kind: 'github', repo: DEV_GITHUB_REPO } as const;
 
@@ -223,6 +226,15 @@ describe('infra generator', () => {
       expect(text).not.toContain('actions/cache');
     });
 
+    it('ci.yml: the job runs without the Nx daemon (NX-114)', () => {
+      const tree = workspace();
+      applyInfra(tree, { with: 'ci' });
+      const doc = yaml.load(read(tree, '.github/workflows/ci.yml')) as {
+        jobs: { main: { env: Record<string, string> } };
+      };
+      expect(doc.jobs.main.env).toEqual({ NX_DAEMON: 'false' });
+    });
+
     it('falls back to master when nx.json has no affected.defaultBase', () => {
       const tree = createTreeWithEmptyWorkspace();
       updateJson(tree, 'nx.json', (j) => {
@@ -391,6 +403,13 @@ describe('infra generator', () => {
       expect(j).toContain('npx nx affected -t lint typecheck test build');
       expect(j).toContain('npm run check:cycles');
       expect(j).not.toContain('TARGET_ENV');
+      // NX-114: no Nx daemon, and Nx gets commit SHAs, not ref names.
+      expect(j).toContain("NX_DAEMON = 'false'");
+      expect(j).toContain(
+        `sh 'BASE_SHA=$(git rev-parse --verify "\${NX_BASE}^{commit}") && npx nx affected -t lint typecheck test build --parallel=3 --base="$BASE_SHA" --head="$(git rev-parse --verify HEAD)"'`,
+      );
+      // What the ci-nx-hardening migration writes into an older generated Jenkinsfile is the same.
+      expect(ciNxHardeningResult(j)).toBe(j);
       expect(tree.exists('.github/workflows/ci.yml')).toBe(false);
       expect(tree.exists('tools/scripts/check-cycles.js')).toBe(true);
     });

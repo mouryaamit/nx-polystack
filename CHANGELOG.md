@@ -3,6 +3,17 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.13.0
+
+- CI files from `pstack infra` run Nx without its daemon (`NX_DAEMON=false`), and the `Jenkinsfile`
+  resolves the `nx affected` base and head to commit SHAs first; a base that is not a commit fails
+  the stage. Nx before 22.7.10 has advisories about daemon sockets on shared agents and about
+  command injection through git refs, and the Nx versions pstack pins for Angular 14–20 have no fix.
+- `pstack update` (migration `ci-nx-hardening`) applies both to CI files pstack generated earlier.
+  CI files you wrote are left as they are and named in the log; `SECURITY.md` lists what to change.
+- `SECURITY.md`: the known advisories brought up to date (Nx fixed in 22.7.10, the Nx version of
+  each Angular pin, the development-only advisories of this repository).
+
 ## 1.12.1
 
 - The reference cleanup of `pstack adopt --remove-old-scripts` leaves `.ai-context/` folders (at
