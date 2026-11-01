@@ -24,6 +24,9 @@ concurrency:
 jobs:
   main:
     runs-on: ubuntu-latest
+    env:
+      # No Nx daemon in CI (its sockets are readable by other local users before Nx 22.7.10).
+      NX_DAEMON: 'false'
     steps:
       - uses: actions/checkout@v5
         with:

@@ -17,6 +17,8 @@ pipeline {
   environment {
     BASE_BRANCH = "${env.CHANGE_TARGET ?: '<%= baseBranch %>'}"
     NX_BASE = "${env.CHANGE_TARGET ? 'origin/' + env.CHANGE_TARGET : (env.BRANCH_NAME == '<%= baseBranch %>' ? 'HEAD~1' : 'origin/<%= baseBranch %>')}"
+    // No Nx daemon: its sockets are readable by other users of a shared agent (Nx before 22.7.10).
+    NX_DAEMON = 'false'
   }
 
   stages {
@@ -32,7 +34,8 @@ pipeline {
     stage('Lint, test, build (affected)') {
       steps {
         sh 'git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"'
-        sh 'npx nx affected -t lint typecheck test build --parallel=3 --base="${NX_BASE}" --head=HEAD'
+        // Nx gets commit SHAs, never ref names (git-ref command injection in Nx before 22.7.10).
+        sh 'BASE_SHA=$(git rev-parse --verify "${NX_BASE}^{commit}") && npx nx affected -t lint typecheck test build --parallel=3 --base="$BASE_SHA" --head="$(git rev-parse --verify HEAD)"'
       }
     }
 

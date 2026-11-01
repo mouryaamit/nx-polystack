@@ -127,6 +127,11 @@
       "version": "1.12.0",
       "description": "Add the root npm scripts assets:strip-exif and assets:check-exif (pstack assets strip-exif) for the source images apps ship",
       "implementation": "./src/migrations/assets-exif-scripts/assets-exif-scripts"
+    },
+    "ci-nx-hardening": {
+      "version": "1.13.0",
+      "description": "Generated CI files: NX_DAEMON=false, and the Jenkinsfile passes commit SHAs to nx affected (Nx advisories before 22.7.10)",
+      "implementation": "./src/migrations/ci-nx-hardening/ci-nx-hardening"
     }
   }
 }
