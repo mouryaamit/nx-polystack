@@ -114,11 +114,16 @@ OPTIONS — upgrade standalone (Angular 15.2+)
   --all                        Every Angular app and library with NgModules (schematic over the
                                whole workspace; nx.json pstack.angular.style becomes standalone)
   --project=<a,b>              Only these projects
+  --ionic                      Also move Ionic apps from IonicModule to Ionic's standalone
+                               components (step ionic-standalone: provideIonicAngular, Ion*
+                               imports per component, addIcons); an app it cannot convert safely
+                               is left whole and the run says why
   --skip-check                 Skip "nx run-many -t build lint" after each mode
   --no-commit                  Leave the first mode uncommitted (one mode only)
   --dry-run                    Print the modes; change nothing
   Modes: convert-to-standalone, prune-ng-modules, standalone-bootstrap (apps that bootstrap a
-  module). The CSP nonce import stays first in main.ts; Angular 21 apps keep zone.js.
+  module), then standalone-providers and, with --ionic, ionic-standalone. The CSP nonce import
+  stays first in main.ts; Angular 21 apps keep zone.js.
 
 OPTIONS — upgrade nx
   --to=<major>                 16 or 17 (default 17); one nx migrate per major
@@ -398,6 +403,7 @@ EXAMPLES
   pstack upgrade angular --dry-run
   pstack upgrade angular --to=18
   pstack upgrade standalone --all --dry-run
+  pstack upgrade standalone --all --ionic
   pstack upgrade nx --dry-run
   pstack adopt --compare --app=portal --base=HEAD~1
   pstack adopt --remove-old-scripts --dry-run
