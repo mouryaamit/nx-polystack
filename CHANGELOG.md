@@ -3,6 +3,20 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.15.0
+
+- `pstack upgrade standalone --ionic` moves Ionic apps from `IonicModule` to Ionic's standalone
+  components, in a new step `ionic-standalone` after `standalone-providers` (own check and commit):
+  `IonicModule.forRoot(config)` becomes `provideIonicAngular(config)`, each standalone component
+  imports the `Ion*` classes of the `ion-*` tags in its template (plus `IonRouterLink` /
+  `IonRouterLinkWithHref` next to `routerLink`) instead of `IonicModule`, other Ionic imports move
+  to the standalone entry (`@ionic/angular/standalone`, or `@ionic/angular` on Angular 21), and
+  literal `<ion-icon>` names are registered with `addIcons`. The ionicons svg asset is removed
+  only when no bound or code icon name is left. An app with any file it cannot convert safely is
+  left whole and the reasons are listed; a rerun changes nothing. Without `--ionic` nothing
+  changes, except that the run now points at `--ionic` instead of Ionic's codemod. A workspace
+  that delegates to its local plugin needs 1.15.0 there for `--ionic`.
+
 ## 1.14.0
 
 - `pstack migrate --source=<nx workspace>` takes Nx 14 workspaces (it took Nx 15–22). Their

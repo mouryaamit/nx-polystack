@@ -14,7 +14,7 @@ import { assertLocalSupports } from '../../src/cli/launcher';
 import { scriptedPrompter } from '../../src/cli/prompt';
 import { LLM_PROVIDERS, upsertBlock } from '../../src/lib/utils/llm-block';
 
-import { makeCtx, tmpDir, writeJson } from './helpers';
+import { makeCtx, REPO_ROOT, tmpDir, writeJson } from './helpers';
 
 const MODULE_MAIN = `// Gives <script>/<style> elements added at runtime the page's CSP nonce (keep it first).
 import '@mouryaamit/nx-polystack/runtime/csp-nonce';
@@ -345,5 +345,194 @@ describe('pstack upgrade standalone', () => {
     expect(said[0]).toContain('eslint could not tidy');
     tidyMains('/ws', [], { exec: () => ran.push('x') }, () => undefined);
     expect(ran).toHaveLength(2);
+  });
+
+  describe('--ionic', () => {
+    const IONIC_MAIN = `import { importProvidersFrom } from '@angular/core';
+import { BrowserModule, bootstrapApplication } from '@angular/platform-browser';
+import { IonicModule } from '@ionic/angular';
+
+import { AppComponent } from './app/app.component';
+
+bootstrapApplication(AppComponent, {
+  providers: [importProvidersFrom(BrowserModule, IonicModule.forRoot())],
+});
+`;
+    const IONIC_ROOT = `import { Component } from '@angular/core';
+import { IonicModule } from '@ionic/angular';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [IonicModule],
+  template: '<ion-app><ion-router-outlet></ion-router-outlet></ion-app>',
+})
+export class AppComponent {}
+`;
+
+    /** A workspace with an Ionic app (already on bootstrapApplication unless moduleMain). */
+    function ionicWorkspace(moduleMain = false): string {
+      const ws = workspace('17.3.12');
+      fs.rmSync(path.join(ws, 'apps/web'), { recursive: true });
+      fs.rmSync(path.join(ws, 'libs/shared/ui'), { recursive: true });
+      fs.symlinkSync(
+        path.join(REPO_ROOT, 'node_modules/typescript'),
+        path.join(ws, 'node_modules/typescript'),
+      );
+      writeJson(path.join(ws, 'apps/mobile/project.json'), {
+        name: 'mobile',
+        projectType: 'application',
+      });
+      const file = (f: string, text: string) => {
+        fs.mkdirSync(path.dirname(path.join(ws, f)), { recursive: true });
+        fs.writeFileSync(path.join(ws, f), text);
+      };
+      file('apps/mobile/src/main.ts', moduleMain ? MODULE_MAIN : IONIC_MAIN);
+      file('apps/mobile/src/app/app.component.ts', IONIC_ROOT);
+      if (moduleMain) {
+        file(
+          'apps/mobile/src/app/app.module.ts',
+          "import { IonicModule } from '@ionic/angular';\n@NgModule({ imports: [IonicModule.forRoot()] })\nexport class AppModule {}\n",
+        );
+      }
+      return ws;
+    }
+
+    /** Fake git: the tree is dirty when a file under apps/ differs from the last commit. */
+    function gitDeps(ws: string) {
+      const snap = () => {
+        const out: string[] = [];
+        const walk = (d: string) => {
+          for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+            const p = path.join(d, e.name);
+            if (e.isDirectory()) walk(p);
+            else out.push(`${p}\n${fs.readFileSync(p, 'utf8')}`);
+          }
+        };
+        walk(path.join(ws, 'apps'));
+        return out.join('\n');
+      };
+      let committed = snap();
+      return fakeDeps(ws, undefined, {
+        exec(cmd, args) {
+          calls.push(`${cmd} ${args.join(' ')}`);
+          if (cmd === 'git' && args[0] === 'commit') committed = snap();
+        },
+        gitStatus: () => (snap() === committed ? '' : ' M x'),
+      });
+    }
+    let calls: string[] = [];
+    beforeEach(() => {
+      calls = [];
+    });
+
+    it('runs ionic-standalone after standalone-providers, with its own check and commit', async () => {
+      const ws = ionicWorkspace();
+      const { deps, out } = gitDeps(ws);
+      expect(
+        await runUpgrade(
+          makeCtx({ cwd: ws, positionals: ['standalone'], flags: { all: true, ionic: true } }),
+          deps,
+        ),
+      ).toBe(0);
+      const log = out.join('\n');
+      expect(log).toContain('  1. standalone-providers:');
+      expect(log).toContain("  2. ionic-standalone: Ionic's standalone components");
+      expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
+        'git commit -m chore: standalone-providers (pstack upgrade standalone)',
+        'git commit -m chore: ionic-standalone (pstack upgrade standalone)',
+      ]);
+      expect(calls.filter((c) => c === 'npx nx run-many -t build lint')).toHaveLength(2);
+      const ionicCommit = calls.indexOf(
+        'git commit -m chore: ionic-standalone (pstack upgrade standalone)',
+      );
+      expect(calls.slice(ionicCommit - 4, ionicCommit)).toEqual([
+        'npx --no-install eslint --fix apps/mobile/src/app/app.component.ts apps/mobile/src/main.ts',
+        'npx --no-install prettier --write apps/mobile/src/app/app.component.ts apps/mobile/src/main.ts',
+        'npx nx run-many -t build lint',
+        'git add -A',
+      ]);
+      const main = fs.readFileSync(path.join(ws, 'apps/mobile/src/main.ts'), 'utf8');
+      expect(main).toContain('providers: [provideIonicAngular()]');
+      expect(main).not.toContain('IonicModule');
+      expect(log).not.toContain('Run again with --ionic');
+
+      // A rerun finds nothing to do.
+      calls.length = 0;
+      out.length = 0;
+      await runUpgrade(
+        makeCtx({ cwd: ws, positionals: ['standalone'], flags: { all: true, ionic: true } }),
+        deps,
+      );
+      expect(calls).toEqual([]);
+      expect(out.join('\n')).toContain('nothing to do');
+    });
+
+    it('comes last after the schematic modes on an app that bootstraps a module', async () => {
+      const ws = ionicWorkspace(true);
+      const { deps, out } = gitDeps(ws);
+      await runUpgrade(
+        makeCtx({
+          cwd: ws,
+          positionals: ['standalone'],
+          flags: { all: true, ionic: true },
+          dryRun: true,
+        }),
+        deps,
+      );
+      const steps = out.filter((l) => /^ {2}\d\. /.test(l)).map((l) => l.split(':')[0].trim());
+      expect(steps).toEqual([
+        '1. convert-to-standalone',
+        '2. prune-ng-modules',
+        '3. standalone-bootstrap',
+        '4. standalone-providers',
+        '5. ionic-standalone',
+      ]);
+    });
+
+    it('no Ionic app: no ionic-standalone step, and it says so', async () => {
+      const ws = workspace();
+      const { deps, out } = fakeDeps(ws);
+      await runUpgrade(
+        makeCtx({
+          cwd: ws,
+          positionals: ['standalone'],
+          flags: { all: true, ionic: true },
+          dryRun: true,
+        }),
+        deps,
+      );
+      const log = out.join('\n');
+      expect(log).toContain('--ionic: no Ionic app on IonicModule');
+      expect(log).not.toContain('ionic-standalone:');
+    });
+
+    it('without --ionic: no ionic step, Ionic apps keep IonicModule and the run points at --ionic', async () => {
+      const ws = ionicWorkspace();
+      const { deps, out } = gitDeps(ws);
+      await runUpgrade(
+        makeCtx({ cwd: ws, positionals: ['standalone'], flags: { all: true } }),
+        deps,
+      );
+      expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
+        'git commit -m chore: standalone-providers (pstack upgrade standalone)',
+      ]);
+      expect(fs.readFileSync(path.join(ws, 'apps/mobile/src/main.ts'), 'utf8')).toContain(
+        'IonicModule.forRoot()',
+      );
+      const log = out.join('\n');
+      expect(log).not.toContain('ionic-standalone');
+      expect(log).toContain('Run again with --ionic');
+      expect(log).not.toContain('codemod');
+    });
+
+    it('--ionic needs nx-polystack 1.15.0 in the workspace when delegated', () => {
+      expect(() => assertLocalSupports('upgrade', '1.14.0', { ionic: true }, 'standalone')).toThrow(
+        'pstack upgrade --ionic needs nx-polystack >= 1.15.0',
+      );
+      expect(() =>
+        assertLocalSupports('upgrade', '1.15.0', { ionic: true }, 'standalone'),
+      ).not.toThrow();
+    });
   });
 });
