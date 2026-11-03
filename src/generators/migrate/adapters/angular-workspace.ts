@@ -6,7 +6,12 @@ import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt
 import { ngPackagrDependencies } from '../../../lib/utils/angular-deps';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import { addMissingDependencies, declaredVersion } from '../../../lib/utils/dependencies';
-import { karmaNote, modernizeKarmaConfigs } from '../../../lib/utils/karma-ci';
+import {
+  dropKarmaTargetsWithoutKarma,
+  karmaDroppedNote,
+  karmaNote,
+  modernizeKarmaConfigs,
+} from '../../../lib/utils/karma-ci';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { setProjectTags } from '../../../lib/utils/nx-targets';
 import { angularCodeNotes } from '../angular-code-scan';
@@ -30,7 +35,13 @@ import { kebabName } from '../names';
 import { readSourceAliases, selectProjects } from '../nx/selection';
 import { isObject, isSupportedKind, Json, SourceProject } from '../nx/workspace-source';
 import { catalogMissMessage, sourceRootPackage } from '../pnpm';
-import { parseJsonStrict, readSourceJson, readSourcePackageJson, sourceExists } from '../source';
+import {
+  parseJsonStrict,
+  readSourceJson,
+  readSourcePackageJson,
+  sourceDependency,
+  sourceExists,
+} from '../source';
 
 import {
   ANGULAR_SKIP,
@@ -318,6 +329,11 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
       angularMajor,
     });
     if (kind === 'lib') useNxPackageBuild(pj.projectJson, p.newRoot);
+    const noKarma = dropKarmaTargetsWithoutKarma(
+      pj.projectJson,
+      sourceDependency(sourceRootPackage(ctx.sourceDir).pkg, 'karma') !== undefined,
+    );
+    if (noKarma.length > 0) data.notes.push(`${code(p.name)}: ${karmaDroppedNote(noKarma)}`);
     writeJson(tree, `${p.newRoot}/project.json`, pj.projectJson);
     if (pj.releaseConfigurations.length > 0) {
       const notes: string[] = [];

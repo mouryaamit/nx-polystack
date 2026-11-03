@@ -30,6 +30,30 @@ export function withKarmaCi<T>(target: T): T {
   return { ...target, configurations: { ...configs, ci: { ...KARMA_CI_CONFIGURATION } } };
 }
 
+/**
+ * Removes the Karma targets of a project.json (in place) when the source does not install karma:
+ * such a target could not run before the migration either. Returns the removed target names.
+ */
+export function dropKarmaTargetsWithoutKarma(projectJson: Json, karmaInstalled: boolean): string[] {
+  if (karmaInstalled) return [];
+  const targets = projectJson['targets'];
+  if (typeof targets !== 'object' || targets === null) return [];
+  const t = targets as Json;
+  const dropped = Object.keys(t).filter((name) => isKarmaTarget(t[name]));
+  for (const name of dropped) delete t[name];
+  return dropped;
+}
+
+/** The migrate report line for targets dropped by dropKarmaTargetsWithoutKarma. */
+export function karmaDroppedNote(dropped: string[]): string {
+  return (
+    `${dropped.map((n) => `\`${n}\``).join(', ')} target dropped: it runs Karma, and karma is ` +
+    "not in the source's package.json, so it could not run there either. The Karma files " +
+    '(karma.conf.js, src/test.ts) are copied; add karma, karma-jasmine, karma-chrome-launcher and ' +
+    'jasmine-core plus a test target to run the unit tests.'
+  );
+}
+
 /** Adds the `ci` configuration to the Karma test targets of the project at `root`. */
 export function karmaCiChange(tree: Tree, root: string): TargetChange {
   return updateProjectJson(tree, root, (json) => {

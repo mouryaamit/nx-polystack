@@ -61,6 +61,41 @@ describe('quality (NX-45)', () => {
       expect(addTypecheckTargets(tree)).toEqual([]);
     });
 
+    it("uses the build target's tsConfig when tsconfig.app.json names missing files", () => {
+      project(
+        'apps/shop',
+        {
+          name: 'shop',
+          targets: {
+            build: {
+              executor: '@angular-builders/custom-webpack:browser',
+              options: { tsConfig: 'apps/shop/src/shop/tsconfig.shop.json' },
+            },
+          },
+        },
+        'tsconfig.app.json',
+      );
+      tree.write(
+        'apps/shop/tsconfig.app.json',
+        '{ "files": ["src/main.ts", "./src/polyfills.ts"] }',
+      );
+      tree.write('apps/shop/src/shop/tsconfig.shop.json', '{}');
+      tree.write('apps/shop/src/polyfills.ts', '');
+      addTypecheckTargets(tree);
+      expect(readJson(tree, 'apps/shop/project.json').targets.typecheck.options.command).toBe(
+        'tsc --noEmit -p apps/shop/src/shop/tsconfig.shop.json',
+      );
+      // Once src/main.ts is there, tsconfig.app.json is used again.
+      tree.write('apps/shop/src/main.ts', '');
+      const json = readJson(tree, 'apps/shop/project.json');
+      delete json.targets.typecheck;
+      tree.write('apps/shop/project.json', JSON.stringify(json));
+      addTypecheckTargets(tree);
+      expect(readJson(tree, 'apps/shop/project.json').targets.typecheck.options.command).toBe(
+        'tsc --noEmit -p apps/shop/tsconfig.app.json',
+      );
+    });
+
     it("uses the build target's tsConfig when there is no tsconfig.app.json (NX-117)", () => {
       project('apps/shop', {
         name: 'shop',

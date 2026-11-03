@@ -5,6 +5,7 @@ import {
   convertIonicApp,
   ionicContext,
   isIonicApp,
+  isIonicLib,
   runIonicStep,
   scanTags,
 } from '../../src/cli/commands/ionic-standalone';
@@ -451,6 +452,135 @@ export class TabPage {
     ).toEqual([]);
     expect(logged).toContain('  mobile: left on IonicModule (no file changed):');
     expect(fs.readFileSync(path.join(src, 'main.ts'), 'utf8')).toBe(MAIN());
+  });
+
+  describe('libraries (NX-105 part B)', () => {
+    const UI: AngularProject = { name: 'ui', root: 'libs/ui', app: false };
+    const ADMIN: AngularProject = { name: 'admin', root: 'apps/admin', app: true };
+    const CARD = (icon = 'name="star"') => `import { Component } from '@angular/core';
+import { IonicModule, ToastController } from '@ionic/angular';
+
+@Component({
+  selector: 'ui-card',
+  standalone: true,
+  imports: [IonicModule],
+  template: '<ion-card><ion-icon ${icon}></ion-icon></ion-card>',
+})
+export class CardComponent {
+  constructor(private toast: ToastController) {}
+}
+`;
+    const HOME = `import { Component } from '@angular/core';
+import { CardComponent } from '@acme/ui';
+
+@Component({ selector: 'h', standalone: true, imports: [CardComponent], template: '<ui-card></ui-card>' })
+export class HomePage {}
+`;
+    /** The mobile app (home page uses @acme/ui) and libs/ui with one card component. */
+    function libWs(card = CARD()): { ws: string; src: string; lib: string } {
+      const { ws, src } = ionicWs({ 'app/home.page.ts': HOME });
+      writeJson(path.join(ws, 'tsconfig.base.json'), {
+        compilerOptions: { paths: { '@acme/ui': ['libs/ui/src/index.ts'] } },
+      });
+      const lib = path.join(ws, 'libs/ui/src');
+      fs.mkdirSync(path.join(lib, 'lib'), { recursive: true });
+      fs.writeFileSync(path.join(lib, 'index.ts'), "export * from './lib/card.component';\n");
+      fs.writeFileSync(path.join(lib, 'lib/card.component.ts'), card);
+      return { ws, src, lib };
+    }
+    const step = (ws: string, apps: AngularProject[], o = {}) => {
+      const said: string[] = [];
+      const logged: string[] = [];
+      const changed = runIonicStep(
+        ws,
+        apps,
+        [UI],
+        17,
+        (l) => void said.push(l),
+        (l) => void logged.push(l),
+        { ionicLibs: [UI], ...o },
+      );
+      return { changed, said, logged: logged.join('\n') };
+    };
+
+    it('a library converts with the app: Ion* imports, standalone entry, addIcons', () => {
+      const { ws, lib } = libWs();
+      expect(isIonicLib(ws, UI)).toBe(true);
+      expect(isIonicApp(ws, UI)).toBe(false);
+      const r = step(ws, [APP]);
+      expect(r.changed).toEqual([
+        'libs/ui/src/lib/card.component.ts',
+        'apps/mobile/src/app/app.component.ts',
+        'apps/mobile/src/main.ts',
+        'apps/mobile/project.json',
+      ]);
+      const card = fs.readFileSync(path.join(lib, 'lib/card.component.ts'), 'utf8');
+      expect(card).not.toContain('IonicModule');
+      expect(card).toContain("from '@ionic/angular/standalone'");
+      expect(card).toMatch(/imports: \[IonCard, IonIcon\]/);
+      expect(card).toContain('ToastController');
+      expect(card).toContain('addIcons({ star })');
+      expect(isIonicLib(ws, UI)).toBe(false);
+      // star is registered by the library, so the app's svg asset goes.
+      expect(r.said.join('\n')).toContain('ionicons svg asset removed');
+    });
+
+    it('a library used by an app that stays on IonicModule is left, and so are its other users', () => {
+      const { ws, src } = libWs();
+      const admin = path.join(ws, 'apps/admin/src/app');
+      fs.mkdirSync(admin, { recursive: true });
+      fs.writeFileSync(
+        path.join(admin, 'x.module.ts'),
+        "import { IonicModule } from '@ionic/angular';\nimport { CardComponent } from '@acme/ui';\n@NgModule({ imports: [IonicModule, CardComponent] })\nexport class XModule {}\n",
+      );
+      const before = fs.readFileSync(path.join(src, 'main.ts'), 'utf8');
+      const r = step(ws, [APP], { workspace: [APP, ADMIN, UI] });
+      expect(r.changed).toEqual([]);
+      expect(r.logged).toContain('  ui: left on IonicModule (no file changed):');
+      expect(r.logged).toContain('libs/ui: used by admin, which stays on IonicModule');
+      expect(r.logged).toContain(
+        'apps/mobile: imports @acme/ui, a library that still uses IonicModule',
+      );
+      expect(fs.readFileSync(path.join(src, 'main.ts'), 'utf8')).toBe(before);
+      expect(isIonicLib(ws, UI)).toBe(true);
+    });
+
+    it('a library with an unsafe file is left, and the apps using it with it', () => {
+      const { ws, lib } = libWs();
+      fs.writeFileSync(
+        path.join(lib, 'lib/ui.module.ts'),
+        "import { IonicModule } from '@ionic/angular';\n@NgModule({ imports: [IonicModule] })\nexport class UiModule {}\n",
+      );
+      const r = step(ws, [APP]);
+      expect(r.changed).toEqual([]);
+      expect(r.logged).toContain(
+        'libs/ui/src/lib/ui.module.ts: an NgModule still imports IonicModule',
+      );
+      expect(r.logged).toContain('  mobile: left on IonicModule (no file changed):');
+    });
+
+    it('icon names a library cannot register keep the svg asset of the apps that use it', () => {
+      const { ws } = libWs(CARD('[name]="icon"'));
+      const r = step(ws, [APP]);
+      expect(r.changed).toContain('libs/ui/src/lib/card.component.ts');
+      expect(r.changed).not.toContain('apps/mobile/project.json');
+      expect(r.logged).toContain('(apps using the library keep the ionicons svg asset)');
+      expect(r.logged).toContain('apps/mobile/project.json: ionicons svg asset kept');
+    });
+
+    it('a library alone converts when nothing on IonicModule uses it; a rerun changes nothing', () => {
+      const { ws } = libWs();
+      fs.writeFileSync(
+        path.join(ws, 'apps/mobile/src/app/home.page.ts'),
+        "import { Component } from '@angular/core';\n@Component({ selector: 'h', standalone: true, template: '' })\nexport class HomePage {}\n",
+      );
+      expect(step(ws, [], { workspace: [APP, UI] }).changed).toEqual([
+        'libs/ui/src/lib/card.component.ts',
+      ]);
+      const again = step(ws, [], { workspace: [APP, UI] });
+      expect(again.changed).toEqual([]);
+      expect(again.said).toEqual(['nothing to change']);
+    });
   });
 
   it('the installed standalone entry and ionicons decide the known classes and icons', () => {

@@ -3,6 +3,35 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.16.0
+
+- `pstack upgrade standalone --ionic` also converts Ionic libraries: a selected library whose
+  sources still use `IonicModule` gets the same changes as the apps' components (`Ion*` imports
+  per component, Ionic imports from the standalone entry, `addIcons`). Libraries and apps convert
+  together so no app mixes the two Ionic builds: a library is left when a project that stays on
+  `IonicModule` imports it, and an app is left when an Ionic library it imports is left; the run
+  says which and why. Icon names a library cannot register keep the ionicons svg asset in the apps
+  that use it.
+- `pstack upgrade standalone`: before `prune-ng-modules`, a module that only re-exports
+  standalone components (a library's `FeedModule` exporting `FeedPage`) is replaced by those
+  components in the `imports` of the modules and components that use it. Angular's prune removed
+  such a module from them without importing what it exported, so templates using a library page
+  failed to build.
+- `pstack upgrade standalone`: after each Angular schematic mode, an import the schematic wrote as
+  a relative path into another project (`../../../../libs/feed/src/lib/feed/feed.page`) goes back to
+  that library's tsconfig path when the path exports it; Nx's module boundary rule failed the check.
+- `pstack upgrade angular`: `@angular-builders/*` packages (custom-webpack, jest, …) move to the
+  new Angular major with the build packages. An older custom-webpack builder rejected the
+  `polyfills` list Angular 15 writes.
+- `pstack migrate` (Angular CLI sources), from an acceptance run on a second real Angular 14 repo:
+  - `customWebpackConfig` (path or `{ path }`) and `indexTransform` of
+    `@angular-builders/custom-webpack` targets move with the app; release builds of such apps failed
+    to find the webpack config.
+  - The `typecheck` target uses the build target's tsconfig when the app's `tsconfig.app.json`
+    names files that are not there (a `src/main.ts` the build does not use).
+  - A Karma test target is dropped, with a report line, when the source has no `karma` in its
+    package.json (it could not run there either).
+
 ## 1.15.1
 
 - No change for workspaces. The plugin's own development tooling moves from Nx 17.0.6 to Nx 22.7.12
