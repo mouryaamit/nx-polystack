@@ -3,6 +3,13 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.15.1
+
+- No change for workspaces. The plugin's own development tooling moves from Nx 17.0.6 to Nx 22.7.12
+  (typescript stays 4.9), with npm overrides for the high-severity advisories that come in through
+  Nx 22 (`axios`, `follow-redirects`, `smol-toml`, `brace-expansion` 5). CI also tests on Nx 17.0.6,
+  the oldest Nx the plugin supports. See SECURITY.md.
+
 ## 1.15.0
 
 - `pstack upgrade standalone --ionic` moves Ionic apps from `IonicModule` to Ionic's standalone

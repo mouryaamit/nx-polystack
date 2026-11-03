@@ -21,3 +21,17 @@ jobs:
       - run: npm run lint
       - run: npm test -- --ci
       - run: npm run build
+
+  # The repository's own tooling is on Nx 22; the plugin supports workspaces from Nx 17.
+  nx17:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm i --no-save nx@17.0.6 @nx/devkit@17.0.6
+      - run: npm test -- --ci
+      - run: npm run build
