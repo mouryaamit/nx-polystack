@@ -216,6 +216,15 @@ export function buildPackageSpecs(pkg: Json, major: number, pins: AngularPins): 
   if (packagr !== undefined && majorOfSpec(packagr) !== major) {
     out.push(`ng-packagr@^${major}.0.0`);
   }
+  // @angular-builders/* (custom-webpack, jest, …) follow Angular's major: an older builder
+  // rejects options the new Angular writes (polyfills as a list from 15).
+  const all = { ...(pkg['dependencies'] as Json), ...(pkg['devDependencies'] as Json) };
+  for (const name of Object.keys(all)
+    .filter((n) => n.startsWith('@angular-builders/'))
+    .sort()) {
+    const has = declared(pkg, name);
+    if (has !== undefined && majorOfSpec(has) !== major) out.push(`${name}@^${major}.0.0`);
+  }
   const ts = declared(pkg, 'typescript');
   if (ts !== undefined && ts.replace(/^[~^]/, '') !== pins.typescript) {
     out.push(`typescript@~${pins.typescript}`);

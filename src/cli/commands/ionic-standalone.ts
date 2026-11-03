@@ -104,13 +104,28 @@ export function ionicContext(ts: Ts, root: string, major: number): IonicContext 
   };
 }
 
-/** An app whose sources still import IonicModule from @ionic/angular (spec files aside). */
-export function isIonicApp(root: string, project: AngularProject): boolean {
-  if (!project.app) return false;
-  return tsFiles(path.join(root, project.root, 'src')).some((f) => {
+/** The source folder of a project: <root>/src, or the project root when it has no src. */
+export function projectSrc(root: string, project: AngularProject): string {
+  const src = path.join(root, project.root, 'src');
+  return fs.existsSync(src) ? src : path.join(root, project.root);
+}
+
+/** Whether the project's sources still import IonicModule from @ionic/angular (spec files aside). */
+function usesIonicModule(root: string, project: AngularProject): boolean {
+  return tsFiles(projectSrc(root, project)).some((f) => {
     const text = fs.readFileSync(f, 'utf8');
     return /\bIonicModule\b/.test(text) && /['"]@ionic\/angular(\/lazy)?['"]/.test(text);
   });
+}
+
+/** An app whose sources still import IonicModule from @ionic/angular (spec files aside). */
+export function isIonicApp(root: string, project: AngularProject): boolean {
+  return project.app && usesIonicModule(root, project);
+}
+
+/** A library whose sources still import IonicModule from @ionic/angular (spec files aside). */
+export function isIonicLib(root: string, project: AngularProject): boolean {
+  return !project.app && usesIonicModule(root, project);
 }
 
 export interface TemplateTag {
@@ -645,7 +660,44 @@ function specFiles(dir: string): string[] {
   return out;
 }
 
-/** Import aliases (tsconfig paths) of libraries whose sources still use IonicModule. */
+/** The workspace's tsconfig paths (tsconfig.base.json, else tsconfig.json). */
+function tsconfigPaths(root: string): Json {
+  for (const name of ['tsconfig.base.json', 'tsconfig.json']) {
+    try {
+      const json = JSON.parse(fs.readFileSync(path.join(root, name), 'utf8')) as Json;
+      const co = json['compilerOptions'];
+      if (isObject(co) && isObject(co['paths'])) return co['paths'];
+    } catch {
+      // no such tsconfig, or not plain JSON
+    }
+  }
+  return {};
+}
+
+/** Import aliases (tsconfig paths) that point into a library. */
+function libAliases(paths: Json, lib: AngularProject): string[] {
+  return Object.entries(paths)
+    .filter(
+      ([, targets]) =>
+        Array.isArray(targets) &&
+        targets.some(
+          (t) => typeof t === 'string' && t.replace(/^\.\//, '').startsWith(`${lib.root}/`),
+        ),
+    )
+    .map(([alias]) => alias.replace(/\/\*$/, ''));
+}
+
+/** The aliases among these that some file imports (or re-exports from). */
+function importedAliases(files: string[], aliases: string[]): string[] {
+  const texts = files.map((f) => fs.readFileSync(f, 'utf8'));
+  return aliases.filter((alias) => {
+    const esc = alias.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const re = new RegExp(`from\\s*['"]${esc}(/[^'"]*)?['"]`);
+    return texts.some((t) => re.test(t));
+  });
+}
+
+/** Import aliases of libraries whose sources still use IonicModule. */
 function ionicModuleLibAliases(root: string, libs: AngularProject[]): string[] {
   const withModule = libs.filter((l) =>
     tsFiles(path.join(root, l.root)).some((f) =>
@@ -653,30 +705,53 @@ function ionicModuleLibAliases(root: string, libs: AngularProject[]): string[] {
     ),
   );
   if (withModule.length === 0) return [];
-  let paths: Json = {};
-  for (const name of ['tsconfig.base.json', 'tsconfig.json']) {
-    try {
-      const json = JSON.parse(fs.readFileSync(path.join(root, name), 'utf8')) as Json;
-      const co = json['compilerOptions'];
-      if (isObject(co) && isObject(co['paths'])) {
-        paths = co['paths'];
-        break;
-      }
-    } catch {
-      // no such tsconfig, or not plain JSON
-    }
+  const paths = tsconfigPaths(root);
+  return withModule.flatMap((l) => libAliases(paths, l));
+}
+
+/** Spec files of a project that still use IonicModule, as a note (they are not converted). */
+function specNote(c: IonicContext, src: string): string | undefined {
+  const specs = specFiles(src).filter((f) => /\bIonicModule\b/.test(fs.readFileSync(f, 'utf8')));
+  if (specs.length === 0) return undefined;
+  return (
+    `${specs
+      .map((f) => path.relative(c.root, f).split(path.sep).join('/'))
+      .join(', ')}: spec files still use IonicModule (left as they are; ` +
+    'TestBed can use provideIonicAngular() and the components instead)'
+  );
+}
+
+export interface IonicLibResult extends IonicAppResult {
+  /** Icon names addIcons cannot register; the apps using the library keep the svg asset. */
+  loose: string[];
+}
+
+/**
+ * Converts one Ionic library (nothing is written here): its components import the Ion* classes
+ * they use, Ionic imports move to the standalone entry, ion-icon names go through addIcons. No
+ * providers and no assets: those belong to the apps.
+ */
+export function convertIonicLib(c: IonicContext, project: AngularProject): IonicLibResult {
+  const src = projectSrc(c.root, project);
+  const lib: AppScan = {
+    writes: new Map(),
+    done: [],
+    notes: [],
+    reasons: [],
+    loose: [],
+    providers: true,
+  };
+  for (const f of tsFiles(src)) convertFile(c, f, lib);
+  if (lib.reasons.length > 0) return { ...lib, writes: new Map(), done: [] };
+  const note = specNote(c, src);
+  if (note) lib.notes.push(note);
+  if (lib.loose.length > 0) {
+    lib.notes.push(
+      `icon names addIcons does not register: ${lib.loose.join('; ')} ` +
+        '(apps using the library keep the ionicons svg asset)',
+    );
   }
-  return Object.entries(paths)
-    .filter(
-      ([, targets]) =>
-        Array.isArray(targets) &&
-        targets.some(
-          (t) =>
-            typeof t === 'string' &&
-            withModule.some((l) => t.replace(/^\.\//, '').startsWith(`${l.root}/`)),
-        ),
-    )
-    .map(([alias]) => alias.replace(/\/\*$/, ''));
+  return lib;
 }
 
 /** Converts one Ionic app (nothing is written here; see IonicAppResult). */
@@ -684,6 +759,7 @@ export function convertIonicApp(
   c: IonicContext,
   project: AngularProject,
   libs: AngularProject[] = [],
+  libLoose: string[] = [],
 ): IonicAppResult {
   const src = path.join(c.root, project.root, 'src');
   const app: AppScan = {
@@ -701,24 +777,14 @@ export function convertIonicApp(
       `${project.root}/src: no importProvidersFrom(IonicModule.forRoot()) in main.ts or app/app.config.ts to replace`,
     );
   }
-  for (const alias of ionicModuleLibAliases(c.root, libs)) {
-    const esc = alias.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-    const re = new RegExp(`from\\s*['"]${esc}(/[^'"]*)?['"]`);
-    if (files.some((f) => re.test(fs.readFileSync(f, 'utf8')))) {
-      app.reasons.push(`${project.root}: imports ${alias}, a library that still uses IonicModule`);
-    }
+  for (const alias of importedAliases(files, ionicModuleLibAliases(c.root, libs))) {
+    app.reasons.push(`${project.root}: imports ${alias}, a library that still uses IonicModule`);
   }
   if (app.reasons.length > 0) return { ...app, writes: new Map(), done: [] };
+  app.loose.push(...libLoose);
 
-  const specs = specFiles(src).filter((f) => /\bIonicModule\b/.test(fs.readFileSync(f, 'utf8')));
-  if (specs.length > 0) {
-    app.notes.push(
-      `${specs
-        .map((f) => path.relative(c.root, f).split(path.sep).join('/'))
-        .join(', ')}: spec files still use IonicModule (left as they are; ` +
-        'TestBed can use provideIonicAngular() and the components instead)',
-    );
-  }
+  const note = specNote(c, src);
+  if (note) app.notes.push(note);
 
   // The ionicons svg asset: only needed for icon names addIcons does not register.
   const pjFile = path.join(c.root, project.root, 'project.json');
@@ -755,9 +821,24 @@ export function convertIonicApp(
   return app;
 }
 
+export interface IonicStepOptions {
+  /** Libraries on IonicModule to convert along with the apps. */
+  ionicLibs?: AngularProject[];
+  /**
+   * Every project of the workspace; a library converts only when no project that stays on
+   * IonicModule uses it. Defaults to the apps and libraries passed.
+   */
+  workspace?: AngularProject[];
+}
+
 /**
- * The ionic-standalone step on these apps: writes the changes of every app that converts safely,
- * reports the others, and returns the files written (workspace-relative).
+ * The ionic-standalone step on these apps (and, with options.ionicLibs, libraries): writes the
+ * changes of every project that converts safely, reports the others, and returns the files
+ * written (workspace-relative).
+ *
+ * No app mixes the two Ionic builds: an app converts only when every library it imports that uses
+ * IonicModule converts too, and a library converts only when no project that stays on IonicModule
+ * imports it.
  */
 export function runIonicStep(
   root: string,
@@ -766,6 +847,7 @@ export function runIonicStep(
   angularMajor: number,
   say: (line: string) => void,
   log: (line: string) => void,
+  options: IonicStepOptions = {},
 ): string[] {
   const ts = loadTypescript(root);
   if (!ts) {
@@ -776,25 +858,112 @@ export function runIonicStep(
   if (!c.exports) {
     log(`  ${c.standaloneEntry} is not installed; the built-in list of Ionic components is used.`);
   }
-  const written: string[] = [];
+  const ionicLibs = (options.ionicLibs ?? []).filter((l) => isIonicLib(root, l));
+  const unique = (ps: AngularProject[]) =>
+    ps.filter((p, i) => ps.findIndex((q) => q.root === p.root) === i);
+  const workspace = unique(options.workspace ?? [...apps, ...libs, ...ionicLibs]);
+  const moduleLibs = unique([...libs, ...ionicLibs]).filter((l) => isIonicLib(root, l));
+
+  const stepApps: AngularProject[] = [];
   for (const p of apps) {
     if (!standaloneMain(root, p)) {
       log(`  ${p.name}: still bootstraps an NgModule; ionic-standalone skipped.`);
       continue;
     }
-    if (!isIonicApp(root, p)) continue;
-    const r = convertIonicApp(c, p, libs);
-    if (r.reasons.length > 0) {
-      log(`  ${p.name}: left on IonicModule (no file changed):`);
-      for (const reason of r.reasons) log(`    - ${reason}`);
-      continue;
+    if (isIonicApp(root, p)) stepApps.push(p);
+  }
+
+  // Which Ionic libraries each project imports (through tsconfig paths).
+  const paths = tsconfigPaths(root);
+  const imports = new Map<AngularProject, AngularProject[]>();
+  for (const p of workspace) {
+    const files = tsFiles(projectSrc(root, p));
+    imports.set(
+      p,
+      moduleLibs.filter(
+        (l) => l.root !== p.root && importedAliases(files, libAliases(paths, l)).length > 0,
+      ),
+    );
+  }
+  const usesOf = (p: AngularProject) => imports.get(p) ?? [];
+
+  const libResults = new Map(ionicLibs.map((l) => [l, convertIonicLib(c, l)] as const));
+  const ok = new Set(ionicLibs.filter((l) => libResults.get(l)?.reasons.length === 0));
+  const libReasons = new Map(ionicLibs.map((l) => [l, libResults.get(l)?.reasons ?? []]));
+  /** Icon names the converting libraries an app uses (directly or not) cannot register. */
+  const looseFor = (p: AngularProject): string[] => {
+    const seen = new Set<AngularProject>();
+    const walk = (q: AngularProject) => {
+      for (const l of usesOf(q)) {
+        if (ok.has(l) && !seen.has(l)) {
+          seen.add(l);
+          walk(l);
+        }
+      }
+    };
+    walk(p);
+    return [...seen].flatMap((l) => libResults.get(l)?.loose ?? []);
+  };
+  let appResults = new Map<AngularProject, IonicAppResult>();
+  for (;;) {
+    const left = moduleLibs.filter((l) => !ok.has(l));
+    appResults = new Map(
+      stepApps.map((a) => [a, convertIonicApp(c, a, left, looseFor(a))] as const),
+    );
+    const converting = new Set<AngularProject>([
+      ...ok,
+      ...stepApps.filter((a) => appResults.get(a)?.reasons.length === 0),
+    ]);
+    let changed = false;
+    for (const l of [...ok]) {
+      const leftUsed = usesOf(l).filter((m) => !ok.has(m));
+      const stuck = workspace.filter(
+        (q) =>
+          q.root !== l.root &&
+          !converting.has(q) &&
+          (isIonicApp(root, q) || isIonicLib(root, q)) &&
+          usesOf(q).includes(l),
+      );
+      if (leftUsed.length === 0 && stuck.length === 0) continue;
+      ok.delete(l);
+      changed = true;
+      libReasons.set(l, [
+        ...leftUsed.map((m) => `${l.root}: imports ${m.name}, a library that stays on IonicModule`),
+        ...(stuck.length > 0
+          ? [
+              `${l.root}: used by ${stuck.map((q) => q.name).join(', ')}, which stay${
+                stuck.length === 1 ? 's' : ''
+              } on IonicModule`,
+            ]
+          : []),
+      ]);
     }
+    if (!changed) break;
+  }
+
+  const written: string[] = [];
+  const write = (p: AngularProject, r: IonicAppResult) => {
     for (const [file, text] of r.writes) {
       fs.writeFileSync(file, text);
       written.push(path.relative(root, file).split(path.sep).join('/'));
     }
     for (const d of r.done) say(d);
     for (const n of r.notes) log(`  ${n}`);
+  };
+  const leave = (p: AngularProject, reasons: string[]) => {
+    log(`  ${p.name}: left on IonicModule (no file changed):`);
+    for (const reason of reasons) log(`    - ${reason}`);
+  };
+  for (const l of ionicLibs) {
+    const r = libResults.get(l);
+    if (ok.has(l) && r) write(l, r);
+    else leave(l, libReasons.get(l) ?? []);
+  }
+  for (const a of stepApps) {
+    const r = appResults.get(a);
+    if (!r) continue;
+    if (r.reasons.length > 0) leave(a, r.reasons);
+    else write(a, r);
   }
   if (written.length === 0) say('nothing to change');
   return written;

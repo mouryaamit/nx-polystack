@@ -40,6 +40,46 @@ function buildTsconfig(tree: Tree, targets: Record<string, unknown>): string | u
   return typeof ts === 'string' && tree.exists(ts) ? ts : undefined;
 }
 
+/**
+ * Whether every entry of the tsconfig's `files` exists. A leftover tsconfig.app.json (an Angular CLI
+ * repo whose apps build with their own tsconfig) can name a src/main.ts that is not there.
+ */
+function filesExist(tree: Tree, tsconfig: string): boolean {
+  let files: unknown;
+  try {
+    files = (parseJson(tree.read(tsconfig, 'utf8') ?? '{}') as { files?: unknown }).files;
+  } catch {
+    return true;
+  }
+  if (!Array.isArray(files)) return true;
+  const dir = tsconfig.includes('/') ? tsconfig.slice(0, tsconfig.lastIndexOf('/')) : '';
+  return files.every((f) => {
+    if (typeof f !== 'string') return true;
+    const parts = (dir ? `${dir}/${f}` : f).split('/');
+    const out: string[] = [];
+    for (const part of parts) {
+      if (part === '..') out.pop();
+      else if (part !== '.' && part !== '') out.push(part);
+    }
+    return tree.exists(out.join('/'));
+  });
+}
+
+/**
+ * The tsconfig a typecheck target uses: tsconfig.app.json (or .lib.json), unless it names files
+ * that are missing and the build target compiles with another tsconfig; then the build's.
+ */
+function typecheckTargetTsconfig(
+  tree: Tree,
+  root: string,
+  targets: Record<string, unknown>,
+): string | undefined {
+  const own = typecheckTsconfig(tree, root);
+  const build = buildTsconfig(tree, targets);
+  if (own && build && own !== build && !filesExist(tree, own)) return build;
+  return own ?? build;
+}
+
 const ANGULAR_EXECUTOR =
   /^(?:@angular-devkit\/build-angular|@angular\/build|@nx\/angular|@nrwl\/angular|@mouryaamit\/nx-polystack:build$)/;
 
@@ -98,7 +138,7 @@ export function updateProjectJson(
 export function typecheckTargetChange(tree: Tree, root: string): TargetChange {
   return updateProjectJson(tree, root, (json) => {
     const targets = (json['targets'] ?? {}) as Record<string, unknown>;
-    const tsconfig = typecheckTsconfig(tree, root) ?? buildTsconfig(tree, targets);
+    const tsconfig = typecheckTargetTsconfig(tree, root, targets);
     if (!tsconfig) return 'none';
     if (targets['typecheck'] !== undefined) return 'exists';
     const templates = isAngularProject(tree, root, json);

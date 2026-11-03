@@ -84,6 +84,21 @@ describe('migrate generator: multi-project Angular CLI workspace', () => {
     expect(report).toMatch(/\|\s*`portal-e2e`\s*\|\s*e2e\s*\|/);
   });
 
+  it('drops Karma test targets when the source does not install karma', async () => {
+    const tree = workspace();
+    const src = fixtureCopy('angular15-workspace');
+    const pkg = readJsonFile(src, 'package.json') as { devDependencies: Record<string, string> };
+    for (const k of Object.keys(pkg.devDependencies)) {
+      if (/karma|jasmine/.test(k)) delete pkg.devDependencies[k];
+    }
+    putJson(src, 'package.json', pkg);
+    await migrateGenerator(tree, { source: src, projects: 'portal' });
+    expect(readJson(tree, 'apps/portal/project.json').targets.test).toBeUndefined();
+    expect(tree.read('docs/migrations/field-workspace.md', 'utf8')).toContain(
+      '`portal`: `test` target dropped: it runs Karma',
+    );
+  });
+
   it('--projects=portal brings the library it imports', async () => {
     const tree = workspace();
     await migrateGenerator(tree, {

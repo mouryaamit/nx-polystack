@@ -114,10 +114,10 @@ OPTIONS — upgrade standalone (Angular 15.2+)
   --all                        Every Angular app and library with NgModules (schematic over the
                                whole workspace; nx.json pstack.angular.style becomes standalone)
   --project=<a,b>              Only these projects
-  --ionic                      Also move Ionic apps from IonicModule to Ionic's standalone
-                               components (step ionic-standalone: provideIonicAngular, Ion*
-                               imports per component, addIcons); an app it cannot convert safely
-                               is left whole and the run says why
+  --ionic                      Also move Ionic apps and libraries from IonicModule to Ionic's
+                               standalone components (step ionic-standalone: provideIonicAngular,
+                               Ion* imports per component, addIcons); a project it cannot convert
+                               safely is left whole, with what depends on it, and the run says why
   --skip-check                 Skip "nx run-many -t build lint" after each mode
   --no-commit                  Leave the first mode uncommitted (one mode only)
   --dry-run                    Print the modes; change nothing

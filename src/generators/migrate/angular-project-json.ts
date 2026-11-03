@@ -110,6 +110,8 @@ const PATH_OPTIONS = [
   'proxyConfig',
   'ngswConfigPath',
   'webWorkerTsConfig',
+  // @angular-builders/custom-webpack: index.html transform module.
+  'indexTransform',
 ];
 
 /** Options whose array entries are a path or a package, as a string or an { input } object. */
@@ -144,6 +146,14 @@ function mapOption(key: string, value: unknown, oldProject: string, m: PathMappe
   // Application builder: `serviceWorker` is the ngsw-config.json path (the browser builder's is a
   // boolean, with the path in ngswConfigPath).
   if (key === 'serviceWorker' && typeof value === 'string') return mapPath(value, m);
+  // @angular-builders/custom-webpack: a config file path, or { path, mergeStrategies, … }.
+  if (key === 'customWebpackConfig') {
+    if (typeof value === 'string') return mapPath(value, m);
+    if (isObject(value) && typeof value['path'] === 'string') {
+      return { ...value, path: mapPath(value['path'] as string, m) };
+    }
+    return value;
+  }
   if (PATH_OPTIONS.includes(key) && typeof value === 'string') return mapPath(value, m);
   if (key === 'index') {
     if (typeof value === 'string') return mapPath(value, m);

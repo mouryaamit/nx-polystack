@@ -281,6 +281,31 @@ describe('angular.json → project.json', () => {
     ]);
   });
 
+  it('maps @angular-builders/custom-webpack paths (customWebpackConfig, indexTransform)', () => {
+    expect(
+      mapOptions(
+        {
+          customWebpackConfig: {
+            path: './extra-webpack.config.js',
+            mergeStrategies: { plugins: 'append' },
+          },
+          indexTransform: 'index-html-transform.ts',
+        },
+        'x',
+        mapper(),
+      ),
+    ).toEqual({
+      customWebpackConfig: {
+        path: 'apps/portal/extra-webpack.config.js',
+        mergeStrategies: { plugins: 'append' },
+      },
+      indexTransform: 'apps/portal/index-html-transform.ts',
+    });
+    expect(mapOptions({ customWebpackConfig: 'webpack.config.js' }, 'x', mapper())).toEqual({
+      customWebpackConfig: 'apps/portal/webpack.config.js',
+    });
+  });
+
   it('index as an object maps its input', () => {
     expect(
       mapOptions({ index: { input: 'src/index.prod.html', output: 'index.html' } }, 'x', mapper()),

@@ -490,6 +490,30 @@ export class AppComponent {}
       ]);
     });
 
+    it('lists Ionic libraries on IonicModule in the ionic-standalone step', async () => {
+      const ws = ionicWorkspace();
+      writeJson(path.join(ws, 'libs/ui/project.json'), { name: 'ui', projectType: 'library' });
+      fs.mkdirSync(path.join(ws, 'libs/ui/src'), { recursive: true });
+      fs.writeFileSync(
+        path.join(ws, 'libs/ui/src/card.component.ts'),
+        "import { Component } from '@angular/core';\nimport { IonicModule } from '@ionic/angular';\n@Component({ selector: 'c', standalone: true, imports: [IonicModule], template: '<ion-card></ion-card>' })\nexport class CardComponent {}\n",
+      );
+      const { deps, out } = gitDeps(ws);
+      await runUpgrade(
+        makeCtx({
+          cwd: ws,
+          positionals: ['standalone'],
+          flags: { project: 'ui', ionic: true },
+          dryRun: true,
+        }),
+        deps,
+      );
+      const log = out.join('\n');
+      expect(log).toContain('Standalone migration (Angular 17.3.12) of ui:');
+      expect(log).toContain("  1. ionic-standalone: Ionic's standalone components");
+      expect(log).toContain('(libs/ui)');
+    });
+
     it('no Ionic app: no ionic-standalone step, and it says so', async () => {
       const ws = workspace();
       const { deps, out } = fakeDeps(ws);
@@ -503,7 +527,7 @@ export class AppComponent {}
         deps,
       );
       const log = out.join('\n');
-      expect(log).toContain('--ionic: no Ionic app on IonicModule');
+      expect(log).toContain('--ionic: no Ionic app or library on IonicModule');
       expect(log).not.toContain('ionic-standalone:');
     });
 

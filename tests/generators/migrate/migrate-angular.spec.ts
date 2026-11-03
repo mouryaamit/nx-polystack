@@ -386,6 +386,30 @@ describe('migrate generator: standalone Angular CLI app', () => {
       expect(tree.exists('apps/legacy-portal/project.json')).toBe(true);
     });
 
+    it('drops a Karma test target when the source does not install karma', async () => {
+      const src = fixtureCopy('angular15-app');
+      const pkgFile = path.join(src, 'package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+      for (const k of Object.keys(pkg.devDependencies)) {
+        if (/karma|jasmine/.test(k)) delete pkg.devDependencies[k];
+      }
+      fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2));
+      await migrateGenerator(tree, { source: src, name: 'portal' });
+      const targets = readJson(tree, 'apps/portal/project.json').targets;
+      expect(targets.test).toBeUndefined();
+      expect(targets.build).toBeDefined();
+      expect(tree.read('docs/migrations/portal.md', 'utf8')).toContain(
+        "`test` target dropped: it runs Karma, and karma is not in the source's package.json",
+      );
+    });
+
+    it('keeps the Karma test target when karma is installed', async () => {
+      await migrateGenerator(tree, { source: FIXTURE, name: 'portal' });
+      expect(readJson(tree, 'apps/portal/project.json').targets.test.executor).toBe(
+        '@angular-devkit/build-angular:karma',
+      );
+    });
+
     it("puts the base hrefs of the source's ng build scripts on the release target (NX-117)", async () => {
       const src = fixtureCopy('angular15-app');
       const pkgFile = path.join(src, 'package.json');

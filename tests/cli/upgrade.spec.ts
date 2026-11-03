@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import {
+  buildPackageSpecs,
   frameworkPatchSpecs,
   repairHttpClientModule,
   runUpgrade,
@@ -478,6 +479,22 @@ describe('pstack upgrade angular (NX-76)', () => {
     expect(calls.some((c) => c.cmd === 'git')).toBe(false);
     expect(out.join('\n')).toContain('--no-commit: only the Angular 19 step runs');
     expect(readPkg(ws).devDependencies['nx']).toBe('20.8.4');
+  });
+});
+
+describe('buildPackageSpecs', () => {
+  it('moves @angular-builders/* to the Angular major (NX-119)', () => {
+    const pkg = {
+      dependencies: { '@angular-builders/custom-webpack': '^14.0.1' },
+      devDependencies: { '@angular-builders/jest': '^15.0.0', 'webpack-obfuscator': '3.5.1' },
+    };
+    expect(buildPackageSpecs(pkg, 15, ANGULAR_PINS[15])).toEqual([
+      '@angular-builders/custom-webpack@^15.0.0',
+    ]);
+    expect(buildPackageSpecs(pkg, 16, ANGULAR_PINS[16])).toEqual([
+      '@angular-builders/custom-webpack@^16.0.0',
+      '@angular-builders/jest@^16.0.0',
+    ]);
   });
 });
 

@@ -10,7 +10,12 @@ import {
   workspaceGeneratorMajor,
 } from '../../../lib/utils/angular-deps';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
-import { karmaNote, modernizeKarmaConfigs } from '../../../lib/utils/karma-ci';
+import {
+  dropKarmaTargetsWithoutKarma,
+  karmaDroppedNote,
+  karmaNote,
+  modernizeKarmaConfigs,
+} from '../../../lib/utils/karma-ci';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
 import { setProjectTags } from '../../../lib/utils/nx-targets';
 import { angularCodeNotes } from '../angular-code-scan';
@@ -388,6 +393,11 @@ export function migrateAngularApp(
     );
     data.notes.push(...hrefNotes.map((n) => n[0].toUpperCase() + n.slice(1) + '.'));
   }
+  const noKarma = dropKarmaTargetsWithoutKarma(
+    pj.projectJson,
+    sourceDependency(sourcePkg, 'karma') !== undefined,
+  );
+  if (noKarma.length > 0) data.notes.push(karmaDroppedNote(noKarma));
   writeJson(tree, `${projectRoot}/project.json`, pj.projectJson);
   if (pj.releaseConfigurations.length > 0) {
     const notes: string[] = [];

@@ -7,7 +7,8 @@ import { flagBoolean, flagString } from '../args';
 import { findWorkspaceRoot } from '../context';
 import { CliError, CommandContext } from '../types';
 
-import { isIonicApp, runIonicStep } from './ionic-standalone';
+import { isIonicApp, isIonicLib, runIonicStep } from './ionic-standalone';
+import { aliasCrossProjectImports, inlineReexportModules } from './reexport-modules';
 import { loadTypescript, ProvidersResult, tidyStandaloneProviders } from './standalone-providers';
 import type { UpgradeDeps } from './upgrade';
 
@@ -22,8 +23,8 @@ import type { UpgradeDeps } from './upgrade';
  * BrowserModule, and the root routing module becomes provideRouter(routes) (standalone-providers.ts).
  * It also runs alone on apps already bootstrapped with bootstrapApplication.
  *
- * With --ionic, a last pstack step, ionic-standalone, moves Ionic apps from IonicModule to Ionic's
- * standalone components (ionic-standalone.ts).
+ * With --ionic, a last pstack step, ionic-standalone, moves Ionic apps and libraries from
+ * IonicModule to Ionic's standalone components (ionic-standalone.ts).
  *
  * And the pstack parts the schematic does not know: the CSP nonce import stays first in main.ts,
  * Angular 21 apps keep zone.js change detection, `prefer-standalone` is turned back on, and with
@@ -409,12 +410,17 @@ export async function runUpgradeStandalone(
           isIonicApp(root, p),
       )
     : [];
-  if (ionic && ionicApps.length === 0) {
+  // Ionic libraries on IonicModule convert in the same step, when no project left on IonicModule
+  // uses them.
+  const ionicLibs = ionic ? selected.filter((p) => isIonicLib(root, p)) : [];
+  if (ionic && ionicApps.length === 0 && ionicLibs.length === 0) {
     deps.log(
-      '--ionic: no Ionic app on IonicModule in the selected projects; no ionic-standalone step.',
+      '--ionic: no Ionic app or library on IonicModule in the selected projects; ' +
+        'no ionic-standalone step.',
     );
   }
-  if (targets.length === 0 && providerApps.length === 0 && ionicApps.length === 0) {
+  const ionicStep = ionicApps.length > 0 || ionicLibs.length > 0;
+  if (targets.length === 0 && providerApps.length === 0 && !ionicStep) {
     deps.log('No NgModules in the selected projects; nothing to do.');
     return 0;
   }
@@ -424,19 +430,21 @@ export async function runUpgradeStandalone(
       ? STANDALONE_MODES.filter((m) => m !== 'standalone-bootstrap' || bootstrapApps.length > 0)
       : []),
     ...(providerApps.length > 0 ? [PROVIDERS_STEP] : []),
-    ...(ionicApps.length > 0 ? [IONIC_STEP] : []),
+    ...(ionicStep ? [IONIC_STEP] : []),
   ];
   const check = !flagBoolean(ctx.flags, 'skipCheck');
   const commit = !flagBoolean(ctx.flags, 'noCommit');
 
-  const names = [...new Set([...targets, ...providerApps, ...ionicApps].map((p) => p.name))];
+  const names = [
+    ...new Set([...targets, ...providerApps, ...ionicApps, ...ionicLibs].map((p) => p.name)),
+  ];
   deps.log(`Standalone migration (Angular ${core}) of ${names.join(', ')}:`);
   modes.forEach((m, i) => {
     const where =
       m === PROVIDERS_STEP
         ? providerApps.map((p) => `${p.root}/src`)
         : m === IONIC_STEP
-        ? ionicApps.map((p) => `${p.root}/src`)
+        ? [...ionicApps.map((p) => `${p.root}/src`), ...ionicLibs.map((p) => p.root)]
         : paths;
     deps.log(`  ${i + 1}. ${m}: ${MODE_TITLE[m]} (${where.join(', ')})`);
   });
@@ -477,7 +485,10 @@ export async function runUpgradeStandalone(
     }
     if (mode === IONIC_STEP) {
       const libs = projects.filter((p) => !p.app);
-      const changed = runIonicStep(root, ionicApps, libs, major, say, deps.log);
+      const changed = runIonicStep(root, ionicApps, libs, major, say, deps.log, {
+        ionicLibs,
+        workspace: projects,
+      });
       if (changed.length === 0) continue;
       tidyMains(
         root,
@@ -485,6 +496,15 @@ export async function runUpgradeStandalone(
         deps,
         say,
       );
+    }
+    if (mode === 'prune-ng-modules') {
+      // Angular's prune drops re-exporting NgModules without importing what they export.
+      const ts = loadTypescript(root);
+      const r = ts
+        ? inlineReexportModules(ts, root, projects, paths, major)
+        : { changed: [], done: [], notes: [] };
+      for (const d of r.done) say(d);
+      for (const n of r.notes) deps.log(`  ${n}`);
     }
     for (const p of mode === PROVIDERS_STEP || mode === IONIC_STEP ? [] : paths) {
       say(`nx g @angular/core:standalone --path=${p} --mode=${mode}`);
@@ -500,6 +520,9 @@ export async function runUpgradeStandalone(
         ],
         root,
       );
+    }
+    if (mode !== PROVIDERS_STEP && mode !== IONIC_STEP) {
+      for (const d of aliasCrossProjectImports(root, projects)) say(d);
     }
     if (mode === lastMode) {
       for (const p of targets) {
@@ -578,10 +601,10 @@ export async function runUpgradeStandalone(
       deps.exec('git', ['commit', '-m', `chore: ${mode} (pstack upgrade standalone)`], root);
     }
   }
-  if (!ionic && selected.some((p) => isIonicApp(root, p))) {
+  if (!ionic && selected.some((p) => isIonicApp(root, p) || isIonicLib(root, p))) {
     deps.log(
-      "\nIonic apps keep IonicModule (Ionic's lazy build works with standalone components). " +
-        "Run again with --ionic to move them to Ionic's standalone components " +
+      "\nIonic apps and libraries keep IonicModule (Ionic's lazy build works with standalone " +
+        "components). Run again with --ionic to move them to Ionic's standalone components " +
         '(provideIonicAngular, Ion* imports, addIcons).',
     );
   }
