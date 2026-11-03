@@ -1,6 +1,6 @@
 {
   "name": "@mouryaamit/nx-polystack",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Nx plugin and pstack CLI that scaffold and build multi-tech monorepos (Angular, Ionic, Flutter) with a hardened release pipeline.",
   "license": "MIT",
   "type": "commonjs",
@@ -81,7 +81,7 @@
     "tslib": "^2.6.0"
   },
   "devDependencies": {
-    "@nx/devkit": "17.0.6",
+    "@nx/devkit": "^22.7.12",
     "@types/crypto-js": "^4.2.2",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.10.0",
@@ -94,7 +94,7 @@
     "eslint-plugin-unused-imports": "^3.2.0",
     "javascript-obfuscator": "^4.2.2",
     "jest": "^29.7.0",
-    "nx": "17.0.6",
+    "nx": "^22.7.12",
     "prettier": "^2.8.8",
     "sharp": "^0.35.5",
     "terser": "^5.51.2",
@@ -104,7 +104,11 @@
   },
   "overrides": {
     "minimatch@^3": "^3.1.4",
-    "js-yaml@^4": "^4.3.2"
+    "js-yaml@^4": "^4.3.2",
+    "axios": "^1.21.0",
+    "follow-redirects": "^1.16.2",
+    "smol-toml": "^1.9.1",
+    "brace-expansion@^5": "^5.0.12"
   },
   "author": "mouryaamit",
   "repository": {

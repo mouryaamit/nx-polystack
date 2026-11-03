@@ -31,11 +31,15 @@ pipeline you wrote yourself needs the same two changes by hand.
 ### Development tools of this repository
 
 `minimatch` (glob patterns that expand into very many parts; fixed only in minimatch 11, whose API
-the test runner, linter and Nx 17 tooling here do not use) and `deepmerge` (prototype poisoning in
+the test runner, linter and Nx tooling here do not use) and `deepmerge` (prototype poisoning in
 `mergeObject`; no fixed release) come in only through development tools, with patterns and
-configuration from this repository itself. They are not part of the published package. This
-repository's own tests run on Nx 17.0.6, the oldest Nx the plugin supports, with the table above in
-mind.
+configuration from this repository itself. They are not part of the published package.
+
+This repository's own tooling runs on Nx 22.7.12. Nx 22 pins `axios`, `follow-redirects` and
+`smol-toml` to releases with high-severity advisories, and its `minimatch` brings `brace-expansion`
+5 with one; npm `overrides` in `package.json` move all four to fixed releases (none of them is part
+of the published package either). CI also runs the tests on Nx 17.0.6, the oldest Nx the plugin
+supports, with the table above in mind.
 
 `sharp`, used by release builds to strip image metadata, should be 0.35.5 or newer (`pstack update`
 moves existing workspaces there).
