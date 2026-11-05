@@ -39,6 +39,7 @@ import {
 import { upTo } from '../names';
 import { browserslistFile, classifyDependencySpec, SpecContext } from '../npm-deps';
 import { applyBaseHrefs, readBuildScripts } from '../nx/build-scripts';
+import { applyNonceScript, readNonceScript } from '../nonce-script';
 import { catalogMissMessage, sourceRootPackage } from '../pnpm';
 import {
   PackageJson,
@@ -392,6 +393,19 @@ export function migrateAngularApp(
       hrefNotes,
     );
     data.notes.push(...hrefNotes.map((n) => n[0].toUpperCase() + n.slice(1) + '.'));
+    // A post-build script that writes the CSP nonce (an Apache SSI echo) into index.html.
+    const index = (
+      pj.projectJson['targets'] as Record<string, { options?: { index?: unknown } }> | undefined
+    )?.['build']?.options?.index;
+    const nonceScript = readNonceScript(
+      sourceDir,
+      sourcePkg?.scripts,
+      sourceProject,
+      typeof index === 'string' ? tree.read(index, 'utf8') ?? undefined : undefined,
+      true,
+    );
+    const scriptNote = nonceScript ? applyNonceScript(release, nonceScript) : undefined;
+    if (scriptNote) data.notes.push(`${scriptNote}.`);
   }
   const noKarma = dropKarmaTargetsWithoutKarma(
     pj.projectJson,
