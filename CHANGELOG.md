@@ -3,6 +3,13 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.18.0
+
+- `pstack upgrade standalone` moves Ionic apps and libraries to Ionic's standalone components by
+  default (the ionic-standalone step, as `--ionic` did since 1.15.0); it has passed the gate on
+  Angular 15, 16, 20 and 21. `--no-ionic` (or `--ionic=false`) keeps them on `IonicModule`, and
+  `--ionic` is still accepted. A workspace without Ionic is not affected.
+
 ## 1.17.0
 
 - `pstack migrate` of Ionic apps (Ionic adapter, Nx `ionic-app` projects, Angular CLI workspaces):

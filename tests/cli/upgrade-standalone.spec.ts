@@ -531,7 +531,7 @@ export class AppComponent {}
       expect(log).not.toContain('ionic-standalone:');
     });
 
-    it('without --ionic: no ionic step, Ionic apps keep IonicModule and the run points at --ionic', async () => {
+    it('the Ionic step runs by default (v1.18.0), as with --ionic', async () => {
       const ws = ionicWorkspace();
       const { deps, out } = gitDeps(ws);
       await runUpgrade(
@@ -540,14 +540,49 @@ export class AppComponent {}
       );
       expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
         'git commit -m chore: standalone-providers (pstack upgrade standalone)',
+        'git commit -m chore: ionic-standalone (pstack upgrade standalone)',
       ]);
       expect(fs.readFileSync(path.join(ws, 'apps/mobile/src/main.ts'), 'utf8')).toContain(
-        'IonicModule.forRoot()',
+        'provideIonicAngular()',
       );
-      const log = out.join('\n');
-      expect(log).not.toContain('ionic-standalone');
-      expect(log).toContain('Run again with --ionic');
-      expect(log).not.toContain('codemod');
+      expect(out.join('\n')).not.toContain('keep IonicModule');
+    });
+
+    it.each([[{ noIonic: true }], [{ ionic: 'false' }]])(
+      '%j: no ionic step, Ionic apps keep IonicModule and the run says how to move them',
+      async (flag) => {
+        const ws = ionicWorkspace();
+        const { deps, out } = gitDeps(ws);
+        await runUpgrade(
+          makeCtx({ cwd: ws, positionals: ['standalone'], flags: { all: true, ...flag } }),
+          deps,
+        );
+        expect(calls.filter((c) => c.startsWith('git commit'))).toEqual([
+          'git commit -m chore: standalone-providers (pstack upgrade standalone)',
+        ]);
+        expect(fs.readFileSync(path.join(ws, 'apps/mobile/src/main.ts'), 'utf8')).toContain(
+          'IonicModule.forRoot()',
+        );
+        const log = out.join('\n');
+        expect(log).not.toContain('ionic-standalone');
+        expect(log).toContain('as --no-ionic asks. Run again without it');
+        expect(log).not.toContain('codemod');
+      },
+    );
+
+    it('a workspace without Ionic says nothing about Ionic unless --ionic was asked for', async () => {
+      const ws = workspace();
+      for (const [flags, said] of [
+        [{ all: true }, false],
+        [{ all: true, ionic: true }, true],
+      ] as const) {
+        const { deps, out } = fakeDeps(ws);
+        await runUpgrade(
+          makeCtx({ cwd: ws, positionals: ['standalone'], flags: { ...flags }, dryRun: true }),
+          deps,
+        );
+        expect(out.join('\n').includes('--ionic: no Ionic app or library')).toBe(said);
+      }
     });
 
     it('--ionic needs nx-polystack 1.15.0 in the workspace when delegated', () => {

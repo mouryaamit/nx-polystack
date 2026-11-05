@@ -23,8 +23,9 @@ import type { UpgradeDeps } from './upgrade';
  * BrowserModule, and the root routing module becomes provideRouter(routes) (standalone-providers.ts).
  * It also runs alone on apps already bootstrapped with bootstrapApplication.
  *
- * With --ionic, a last pstack step, ionic-standalone, moves Ionic apps and libraries from
- * IonicModule to Ionic's standalone components (ionic-standalone.ts).
+ * Then a last pstack step, ionic-standalone, moves Ionic apps and libraries from IonicModule to
+ * Ionic's standalone components (ionic-standalone.ts); since v1.18.0 by default, `--no-ionic`
+ * leaves them on IonicModule.
  *
  * And the pstack parts the schematic does not know: the CSP nonce import stays first in main.ts,
  * Angular 21 apps keep zone.js change detection, `prefer-standalone` is turned back on, and with
@@ -43,7 +44,7 @@ export const STANDALONE_MODES = [
 type Mode = (typeof STANDALONE_MODES)[number];
 /** pstack's step after the schematic's modes. */
 const PROVIDERS_STEP = 'standalone-providers' as const;
-/** pstack's Ionic step (--ionic), after the providers step. */
+/** pstack's Ionic step (default; --no-ionic skips it), after the providers step. */
 const IONIC_STEP = 'ionic-standalone' as const;
 type Step = Mode | typeof PROVIDERS_STEP | typeof IONIC_STEP;
 
@@ -340,7 +341,7 @@ function angularCoreVersion(root: string): string | undefined {
 }
 
 /**
- * pstack upgrade standalone --all | --project=<a,b> [--ionic] [--skip-check] [--no-commit]
+ * pstack upgrade standalone --all | --project=<a,b> [--no-ionic] [--skip-check] [--no-commit]
  * [--dry-run]
  */
 export async function runUpgradeStandalone(
@@ -400,7 +401,11 @@ export async function runUpgradeStandalone(
       bootstrapApps.includes(p) ||
       (standaloneMain(root, p) !== undefined && providerFiles(root, p).length > 0),
   );
-  const ionic = flagBoolean(ctx.flags, 'ionic');
+  // The Ionic step runs by default (v1.18.0); --no-ionic (or --ionic=false) skips it. --ionic is
+  // still accepted.
+  const ionicAsked = ctx.flags['ionic'] !== undefined && flagBoolean(ctx.flags, 'ionic');
+  const ionic =
+    !flagBoolean(ctx.flags, 'noIonic') && (ctx.flags['ionic'] === undefined || ionicAsked);
   // Apps for the Ionic step: Ionic apps on IonicModule that bootstrap with bootstrapApplication, or
   // will after the bootstrap mode.
   const ionicApps = ionic
@@ -413,7 +418,7 @@ export async function runUpgradeStandalone(
   // Ionic libraries on IonicModule convert in the same step, when no project left on IonicModule
   // uses them.
   const ionicLibs = ionic ? selected.filter((p) => isIonicLib(root, p)) : [];
-  if (ionic && ionicApps.length === 0 && ionicLibs.length === 0) {
+  if (ionicAsked && ionicApps.length === 0 && ionicLibs.length === 0) {
     deps.log(
       '--ionic: no Ionic app or library on IonicModule in the selected projects; ' +
         'no ionic-standalone step.',
@@ -604,7 +609,8 @@ export async function runUpgradeStandalone(
   if (!ionic && selected.some((p) => isIonicApp(root, p) || isIonicLib(root, p))) {
     deps.log(
       "\nIonic apps and libraries keep IonicModule (Ionic's lazy build works with standalone " +
-        "components). Run again with --ionic to move them to Ionic's standalone components " +
+        "components), as --no-ionic asks. Run again without it to move them to Ionic's " +
+        'standalone components ' +
         '(provideIonicAngular, Ion* imports, addIcons).',
     );
   }
