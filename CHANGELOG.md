@@ -3,6 +3,15 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.19.0
+
+- `pstack migrate` (Angular CLI apps): a post-build npm script that writes the CSP nonce into
+  index.html as an Apache SSI echo (`<!--#echo var='UNIQUE_ID' -->`) is read, and the release
+  target gets `secure: true` with the matching `nonce` options (placeholder, which tags, where the
+  attribute goes, the tokens it replaces). Before, the release build kept the source's
+  `nonce="random-csp-nonce"`, which a server that fills nonces through SSI never matches with its
+  CSP header. Found in an acceptance run on a real Angular 14 repo.
+
 ## 1.18.0
 
 - `pstack upgrade standalone` moves Ionic apps and libraries to Ionic's standalone components by
