@@ -3,6 +3,14 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.21.0
+
+- `pstack migrate` of a multi-project Angular CLI repo maps a post-build CSP nonce script too (as
+  1.19.0 does for single apps): the app whose name the npm script contains (`postbuild:portal`),
+  or the only app, gets `secure: true` and the matching `nonce` options.
+- `pstack update` ends with one line on workspaces whose env encryption is still CryptoJS AES
+  (cipher absent or `cryptojs`), naming `pstack encryption --cipher=aes-gcm`. Nothing is switched.
+
 ## 1.20.0
 
 - New workspaces use AES-256-GCM for env encryption: `pstack new` writes `cipher: "aes-gcm"` in

@@ -107,4 +107,23 @@ html = html.replace(/<style([^>]*)>/g, \`<style$1 nonce="\${nonceValue}">\`);`);
       expect(release.options.nonce).toBeUndefined();
     });
   });
+
+  it('Angular CLI workspace: the app the npm script names gets the options, the others not', async () => {
+    jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
+    tree.write('package.json', JSON.stringify({ name: '@acme/ws', scripts: {} }));
+    const src = fixtureCopy('angular15-workspace');
+    const pkgFile = path.join(src, 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+    pkg.scripts = { ...pkg.scripts, 'postbuild:portal': "node tools/inject-nonce.js '/portal/'" };
+    fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2));
+    put(src, 'tools/inject-nonce.js', LEGACY);
+    await migrateGenerator(tree, { source: src });
+    const release = (app: string) => readJson(tree, `apps/${app}/project.json`).targets.release;
+    expect(release('portal').options.secure).toBe(true);
+    expect(release('portal').options.nonce.tags).toBe('legacy');
+    expect(release('admin').options.nonce).toBeUndefined();
+    jest.restoreAllMocks();
+  });
 });

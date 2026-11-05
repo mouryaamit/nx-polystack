@@ -183,6 +183,8 @@ export async function runUpdate(
   // An unreadable pin on the current version is still rewritten to a normal pin.
   if (target.action === 'noop' && !pin.fromInstalled) {
     console.log(`Already on nx-polystack v${target.to}.`);
+    const cipher = cipherNote(root);
+    if (cipher) console.log(`\n${cipher}`);
     return 0;
   }
 
@@ -285,7 +287,30 @@ export async function runUpdate(
         '(PSTACK_REPO_TOKEN, gh release). Rewrite them with: pstack infra --with=ci,upgrades --force',
     );
   }
+  const cipher = cipherNote(root);
+  if (cipher) console.log(`\n${cipher}`);
   return 0;
+}
+
+/**
+ * One line for a workspace whose env encryption is still CryptoJS AES (nx.json
+ * pstack.envEncryption.cipher absent or "cryptojs"); new workspaces use aes-gcm since v1.20.0.
+ * Nothing is switched: aes-gcm rewrites main.ts and needs https (or localhost) at runtime.
+ */
+export function cipherNote(root: string): string | undefined {
+  let cipher: unknown;
+  try {
+    const nx = JSON.parse(fs.readFileSync(path.join(root, 'nx.json'), 'utf8'));
+    cipher = nx?.pstack?.envEncryption?.cipher;
+  } catch {
+    return undefined;
+  }
+  if (cipher === 'aes-gcm') return undefined;
+  return (
+    'Env encryption uses CryptoJS AES (cipher cryptojs). New workspaces use AES-256-GCM; switch ' +
+    'with: pstack encryption --cipher=aes-gcm (it rewrites main.ts to await envReady; serve over ' +
+    'https or localhost).'
+  );
 }
 
 /** GitHub workflows written for a plugin installed from a GitHub repo. */

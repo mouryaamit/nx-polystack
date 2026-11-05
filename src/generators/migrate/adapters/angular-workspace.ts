@@ -34,6 +34,7 @@ import { withIonicSkip } from '../ionic/skip';
 import { kebabName } from '../names';
 import { readSourceAliases, selectProjects } from '../nx/selection';
 import { isObject, isSupportedKind, Json, SourceProject } from '../nx/workspace-source';
+import { applyNonceScript, readNonceScript } from '../nonce-script';
 import { catalogMissMessage, sourceRootPackage } from '../pnpm';
 import {
   parseJsonStrict,
@@ -334,6 +335,21 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
       sourceDependency(sourceRootPackage(ctx.sourceDir).pkg, 'karma') !== undefined,
     );
     if (noKarma.length > 0) data.notes.push(`${code(p.name)}: ${karmaDroppedNote(noKarma)}`);
+    if (kind !== 'lib') {
+      // A post-build script that writes the CSP nonce: its npm script name holds the app's name
+      // (or it is the only app).
+      const targets = pj.projectJson['targets'] as Record<string, Json> | undefined;
+      const index = (targets?.['build']?.['options'] as Json | undefined)?.['index'];
+      const found = readNonceScript(
+        sourceDir,
+        sourceRootPackage(sourceDir).pkg?.scripts,
+        p.source.name,
+        typeof index === 'string' ? tree.read(index, 'utf8') ?? undefined : undefined,
+        plan.projects.filter((x) => x.source.kind !== 'lib').length === 1,
+      );
+      const line = found ? applyNonceScript(targets?.['release'], found) : undefined;
+      if (line) data.notes.push(`${code(p.name)}: ${line}.`);
+    }
     writeJson(tree, `${p.newRoot}/project.json`, pj.projectJson);
     if (pj.releaseConfigurations.length > 0) {
       const notes: string[] = [];
