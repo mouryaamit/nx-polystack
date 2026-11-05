@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { migrateArgs, runUpdate, UpdateDeps } from '../../src/cli/commands/update';
+import { cipherNote, migrateArgs, runUpdate, UpdateDeps } from '../../src/cli/commands/update';
 import { DEV_GITHUB_REPO, setInstallSourceForTests } from '../../src/cli/install-source';
 
 import { fakeLocalPlugin, makeCtx, tmpDir, writeJson } from './helpers';
@@ -421,5 +421,21 @@ describe('pstack update', () => {
       ).rejects.toThrow('"latest" is not a valid version');
       expect(readPkg(ws).devDependencies['@mouryaamit/nx-polystack']).toBe(SPEC('0.2.2'));
     });
+  });
+});
+
+describe('cipherNote (v1.21.0)', () => {
+  const ws = (nx: unknown) => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, 'nx.json'), JSON.stringify(nx));
+    return dir;
+  };
+  it('names the switch for cryptojs workspaces (cipher absent or cryptojs), not for aes-gcm', () => {
+    expect(cipherNote(ws({}))).toContain('pstack encryption --cipher=aes-gcm');
+    expect(cipherNote(ws({ pstack: { envEncryption: { cipher: 'cryptojs' } } }))).toContain(
+      'CryptoJS AES',
+    );
+    expect(cipherNote(ws({ pstack: { envEncryption: { cipher: 'aes-gcm' } } }))).toBeUndefined();
+    expect(cipherNote(tmpDir())).toBeUndefined();
   });
 });
