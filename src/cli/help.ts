@@ -69,6 +69,8 @@ OPTIONS — new / preset
                                first Angular or Ionic app)
   --standalone                 New Angular and Ionic apps and libraries use standalone components
                                (default: NgModules; saved as nx.json pstack.angular.style)
+  --cipher=<aes-gcm|cryptojs>  Env encryption cipher for release builds (default: aes-gcm, v1.20.0;
+                               nx.json pstack.envEncryption.cipher)
   --skipFormat                 Skip Prettier format pass
   --skip-install               new only — do not run npm install
   --skip-git                   new only — do not initialise git

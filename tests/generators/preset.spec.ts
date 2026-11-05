@@ -16,6 +16,16 @@ describe('preset generator', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
+  it('--cipher=cryptojs keeps the older cipher; another value fails (v1.20.0)', async () => {
+    await presetGenerator(tree, { cipher: 'cryptojs' });
+    expect(JSON.parse(tree.read('nx.json', 'utf8') ?? '{}').pstack.envEncryption.cipher).toBe(
+      'cryptojs',
+    );
+    await expect(presetGenerator(tree, { cipher: 'des' as never })).rejects.toThrow(
+      '--cipher must be aes-gcm or cryptojs',
+    );
+  });
+
   it('default run generates workspace root config files', async () => {
     await presetGenerator(tree, {});
     expect(tree.exists('nx.json')).toBe(true);
@@ -28,7 +38,7 @@ describe('preset generator', () => {
     const nx = JSON.parse(tree.read('nx.json')!.toString());
     expect(nx.pstack.envEncryption).toMatchObject({
       mode: 'listed',
-      cipher: 'cryptojs',
+      cipher: 'aes-gcm',
       keySources: ['commit'],
       keys: { default: [] },
       format: 'enc',

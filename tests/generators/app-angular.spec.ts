@@ -12,6 +12,32 @@ describe('app generator --type=angular', () => {
     tree.write('tsconfig.base.json', JSON.stringify({ compilerOptions: { paths: {} } }));
   });
 
+  it('in an aes-gcm workspace main.ts awaits envReady before bootstrap (v1.20.0)', async () => {
+    tree.write(
+      'nx.json',
+      JSON.stringify({ pstack: { envEncryption: { cipher: 'aes-gcm', keySources: ['commit'] } } }),
+    );
+    await appGenerator(tree, { name: 'my-app', type: 'angular' });
+    const main = tree.read('apps/my-app/src/main.ts', 'utf8') ?? '';
+    expect(main).toContain(
+      "import { envReady } from '@mouryaamit/nx-polystack/runtime/env-secret';",
+    );
+    expect(main).toMatch(
+      /envReady\(environment[^)]*\)\s*\n\s*\.then\(\(\) => platformBrowserDynamic\(\)/,
+    );
+    // A second app leaves the first as it is.
+    const before = main;
+    await appGenerator(tree, { name: 'other', type: 'angular' });
+    expect(tree.read('apps/my-app/src/main.ts', 'utf8')).toBe(before);
+    expect(tree.read('apps/other/src/main.ts', 'utf8')).toContain('envReady(');
+  });
+
+  it('in a cryptojs workspace main.ts does not wait for envReady', async () => {
+    tree.write('nx.json', JSON.stringify({ pstack: { envEncryption: { cipher: 'cryptojs' } } }));
+    await appGenerator(tree, { name: 'my-app', type: 'angular' });
+    expect(tree.read('apps/my-app/src/main.ts', 'utf8')).not.toContain('envReady');
+  });
+
   it('generates apps/<name>/src/index.html with filled title', async () => {
     await appGenerator(tree, { name: 'my-app', type: 'angular' });
     expect(tree.exists('apps/my-app/src/index.html')).toBe(true);
