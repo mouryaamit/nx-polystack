@@ -3,6 +3,19 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.20.0
+
+- New workspaces use AES-256-GCM for env encryption: `pstack new` writes `cipher: "aes-gcm"` in
+  nx.json `pstack.envEncryption`; `--cipher=cryptojs` keeps the older CryptoJS cipher. Existing
+  workspaces keep what they have (a block without `cipher` is still `cryptojs`); switch them with
+  `pstack encryption --cipher=aes-gcm`.
+- `pstack app --type=angular|ionic` in an aes-gcm workspace writes `main.ts` that awaits
+  `envReady` before bootstrap, as switching does for existing apps. Before, a new app in such a
+  workspace bootstrapped with its values still encrypted.
+- `pstack encryption --cipher=aes-gcm` (and new apps, above) also rewrite Angular 21 `main.ts`
+  files, which have a comment line between `platformBrowserDynamic()` and `.bootstrapModule(`;
+  they were reported as an unknown shape and left without `envReady`.
+
 ## 1.19.0
 
 - `pstack migrate` (Angular CLI apps): a post-build npm script that writes the CSP nonce into

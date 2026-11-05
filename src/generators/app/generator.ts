@@ -12,6 +12,9 @@ import {
   readJson,
 } from '@nx/devkit';
 
+import { normalizeEnvEncryption } from '../../lib/env-encryption/config';
+import { switchAppsToGcm } from '../../lib/env-encryption/switch-gcm';
+import { readEnvEncryptionBlock } from '../../lib/env-encryption/workspace';
 import {
   ANGULAR_VERSION,
   ensureAngularDependencies,
@@ -266,6 +269,10 @@ export default async function appGenerator(
     );
 
     addTsPath(tree, `@mouryaamit/${projectName}`, `${projectPath}/src`);
+
+    // An aes-gcm workspace decrypts env values before bootstrap (v1.20.0): main.ts awaits envReady,
+    // as `pstack encryption --cipher=aes-gcm` makes existing apps do.
+    gcmBootstrap(tree);
 
     // Both only edit package.json; one install task covers them.
     const hardeningTask = ensureReleaseHardeningDependencies(tree);
@@ -589,4 +596,18 @@ function envImportSpecifier(tree: Tree, envFile: string, fromDir: string): strin
   }
   const rel = path.posix.relative(fromDir, envFile);
   return rel.startsWith('.') ? rel : `./${rel}`;
+}
+
+/** main.ts files await envReady when nx.json says cipher aes-gcm (every app; reruns change nothing). */
+function gcmBootstrap(tree: Tree): void {
+  const raw = readEnvEncryptionBlock(tree);
+  if (raw === undefined) return;
+  let cfg;
+  try {
+    cfg = normalizeEnvEncryption(raw);
+  } catch {
+    return;
+  }
+  if (cfg.cipher !== 'aes-gcm') return;
+  for (const note of switchAppsToGcm(tree, cfg.publicKeys, cfg)) logger.info(note);
 }

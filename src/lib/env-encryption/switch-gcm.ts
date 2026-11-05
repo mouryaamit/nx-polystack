@@ -64,8 +64,12 @@ export function rewriteMainForGcm(
   metaName?: string,
 ): string | undefined {
   if (/\benvReady\s*\(/.test(blankStrings(stripComments(text)))) return text;
-  const re =
-    /\bplatformBrowserDynamic\s*\(\s*\)\s*\.\s*bootstrapModule\s*\(|\bbootstrapApplication\s*\(/g;
+  // Whitespace or comments (Angular 21 apps have a comment line before `.bootstrapModule(`).
+  const gap = String.raw`(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*`;
+  const re = new RegExp(
+    String.raw`\bplatformBrowserDynamic\s*\(\s*\)${gap}\.\s*bootstrapModule\s*\(|\bbootstrapApplication\s*\(`,
+    'g',
+  );
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) && !isCodeAt(text, m.index));
   if (!m) return undefined;
@@ -73,7 +77,9 @@ export function rewriteMainForGcm(
   const close = closingBracket(text, open);
   if (close < 0) return undefined;
   const args = text.slice(open + 1, close);
-  const callee = m[0].slice(0, -1).replace(/\s+/g, '');
+  const callee = m[0].startsWith('bootstrapApplication')
+    ? 'bootstrapApplication'
+    : 'platformBrowserDynamic().bootstrapModule';
   let end = close + 1;
   let handler: string | undefined;
   const c = /^\s*\.\s*catch\s*\(/.exec(text.slice(end));

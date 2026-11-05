@@ -74,6 +74,30 @@ describe('switch to aes-gcm', () => {
     expect(rewriteMainForGcm(out, 'x')).toBe(out);
   });
 
+  it('rewrites an Angular 21 main.ts with a comment before .bootstrapModule (v1.20.0)', () => {
+    const main = `import { enableProdMode, provideZoneChangeDetection } from '@angular/core';
+import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
+
+import { AppModule } from './app/app.module';
+import { environment } from '@env/web/environment';
+
+platformBrowserDynamic()
+  // Angular 21 is zoneless by default; this app keeps zone.js change detection.
+  .bootstrapModule(AppModule, {
+    applicationProviders: [provideZoneChangeDetection()],
+  })
+  .catch((err) => console.error(err));
+`;
+    const out = rewriteMainForGcm(main, '@env/web/environment');
+    expect(out).toBeDefined();
+    expect(out).toContain(
+      'envReady(environment, { inPlace: true })\n  .then(() => platformBrowserDynamic().bootstrapModule(AppModule, {',
+    );
+    expect(out).toContain('applicationProviders: [provideZoneChangeDetection()]');
+    expect(out).toContain('.catch((err) => console.error(err));');
+    expect(rewriteMainForGcm(out as string, 'x')).toBe(out);
+  });
+
   it('adds the environment import when main.ts has none', () => {
     const noEnv = MAIN.replace(
       "import { environment } from '../../../environments/environment';\n",

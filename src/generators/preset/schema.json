@@ -2,14 +2,14 @@
   "$schema": "http://json-schema.org/schema",
   "cli": "nx",
   "id": "preset",
-  "title": "Preset — Workspace Bootstrap",
+  "title": "Preset \u2014 Workspace Bootstrap",
   "description": "Generate the root workspace skeleton: config files, repo infrastructure (via :infra), AI-assistant instructions (via :llm).",
   "type": "object",
   "properties": {
     "npmScope": {
       "type": "string",
       "default": "mouryaamit",
-      "description": "npm scope used in package names (e.g. 'mouryaamit' → '@mouryaamit/...')."
+      "description": "npm scope used in package names (e.g. 'mouryaamit' \u2192 '@mouryaamit/...')."
     },
     "baseBranch": {
       "type": "string",
@@ -33,25 +33,25 @@
     "ciCache": {
       "type": "boolean",
       "default": false,
-      "description": ":infra — GitHub Actions: cache the Nx cache directory."
+      "description": ":infra \u2014 GitHub Actions: cache the Nx cache directory."
     },
     "flutter": {
       "type": "string",
       "enum": ["auto", "on", "off"],
       "default": "auto",
-      "description": ":infra — set up Flutter in CI: auto (when the workspace has Flutter projects), on, off."
+      "description": ":infra \u2014 set up Flutter in CI: auto (when the workspace has Flutter projects), on, off."
     },
     "upgradeSchedule": {
       "type": "string",
       "enum": ["weekly", "monthly"],
       "default": "weekly",
-      "description": ":infra — dependency-upgrade workflow schedule."
+      "description": ":infra \u2014 dependency-upgrade workflow schedule."
     },
     "upgradeScope": {
       "type": "string",
       "enum": ["polystack", "nx-minor"],
       "default": "polystack",
-      "description": ":infra — what the dependency-upgrade workflow upgrades."
+      "description": ":infra \u2014 what the dependency-upgrade workflow upgrades."
     },
     "llm": {
       "type": "string",
@@ -85,6 +85,12 @@
     "standalone": {
       "type": "boolean",
       "description": "New Angular and Ionic apps and libraries use standalone components instead of NgModules (saved as nx.json pstack.angular.style)."
+    },
+    "cipher": {
+      "type": "string",
+      "enum": ["aes-gcm", "cryptojs"],
+      "default": "aes-gcm",
+      "description": "Env encryption cipher for release builds (nx.json pstack.envEncryption.cipher): aes-gcm (AES-256-GCM, default since v1.20.0) or cryptojs (the older CryptoJS AES)."
     },
     "pluginVersion": {
       "type": "string",

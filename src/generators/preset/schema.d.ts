@@ -19,6 +19,8 @@ export interface PresetGeneratorSchema {
   angular?: number;
   /** New Angular and Ionic apps and libraries use standalone components (nx.json pstack.angular.style). */
   standalone?: boolean;
+  /** Env encryption cipher for release builds (default aes-gcm, v1.20.0). */
+  cipher?: 'aes-gcm' | 'cryptojs';
   /** nx-polystack version to pin in the generated package.json (default: this plugin's version). */
   pluginVersion?: string;
 }

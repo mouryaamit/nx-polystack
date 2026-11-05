@@ -116,9 +116,14 @@ export default async function presetGenerator(
   };
 
   generateFiles(tree, path.join(__dirname, 'files', 'root'), '.', vars);
-  // Env encryption settings for release builds (pstack encryption changes them).
-  // New workspaces mark encrypted values as ENC(...) (read by runtime/env-secret).
-  writeEnvEncryptionBlock(tree, { ...defaultEnvEncryptionConfig(), format: 'enc' });
+  // Env encryption settings for release builds (pstack encryption changes them). New workspaces
+  // use AES-256-GCM (v1.20.0; `pstack new --cipher=cryptojs` keeps the older cipher, whose values
+  // are marked ENC(...) for runtime/env-secret).
+  const cipher = options.cipher ?? 'aes-gcm';
+  if (cipher !== 'aes-gcm' && cipher !== 'cryptojs') {
+    throw new Error(`preset: --cipher must be aes-gcm or cryptojs (got "${cipher}").`);
+  }
+  writeEnvEncryptionBlock(tree, { ...defaultEnvEncryptionConfig(), cipher, format: 'enc' });
   const pluginVersion =
     options.pluginVersion ||
     readPackageVersion(path.join(selfPackageRoot(__dirname), 'package.json'));

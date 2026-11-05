@@ -18,6 +18,16 @@ export interface NewDeps {
 const defaultDeps: NewDeps = { exec: execOrThrow, hasGit };
 
 /** --angular=<major> of pstack new / preset: undefined when absent, else a generator major. */
+/** `--cipher=aes-gcm|cryptojs` (default: the preset's aes-gcm). */
+export function cipherFlag(flags: Flags): 'aes-gcm' | 'cryptojs' | undefined {
+  const raw = flags['cipher'];
+  if (raw === undefined) return undefined;
+  if (raw !== 'aes-gcm' && raw !== 'cryptojs') {
+    throw new CliError('--cipher must be aes-gcm or cryptojs.');
+  }
+  return raw;
+}
+
 export function angularMajorFlag(flags: Flags): number | undefined {
   const raw = flags['angular'];
   if (raw === undefined) return undefined;
@@ -76,6 +86,7 @@ export async function runNew(ctx: CommandContext, deps: NewDeps = defaultDeps): 
       projectDescription: flagString(ctx.flags, 'projectDescription'),
       angular,
       standalone: ctx.flags['standalone'] === true || undefined,
+      cipher: cipherFlag(ctx.flags),
       // Prettier cannot resolve config for a folder that does not exist yet (dry run).
       skipFormat: ctx.dryRun || !!ctx.flags['skipFormat'],
       pluginVersion: ctx.selfVersion,
