@@ -356,6 +356,30 @@ describe('renderBlock', () => {
     expect(body()).toBe(body());
   });
 
+  it('adds an Ionic rule for the workspace style (NX-105 part D)', () => {
+    const ws = scanWorkspace(polystack());
+    const standalone = renderBlock({
+      ...ws,
+      angularVersion: '~20.3.0',
+      angularStyle: 'standalone',
+    });
+    expect(standalone).toContain(
+      '- Ionic: import each `Ion*` component a template uses from `@ionic/angular/standalone`',
+    );
+    expect(standalone).toContain('register icons with `addIcons({ … })` from `ionicons/icons`');
+    const v21 = renderBlock({ ...ws, angularVersion: '~21.2.25', angularStyle: 'standalone' });
+    expect(v21).toContain('a template uses from `@ionic/angular` into that component');
+    const module = renderBlock({ ...ws, angularVersion: '~20.3.0', angularStyle: 'module' });
+    expect(module).toContain("- Ionic apps use `IonicModule` (Ionic's lazy build)");
+    const noIonic = renderBlock({
+      ...ws,
+      apps: ws.apps.filter((a) => a.type !== 'ionic'),
+      angularVersion: '~20.3.0',
+      angularStyle: 'standalone',
+    });
+    expect(noIonic).not.toContain('- Ionic');
+  });
+
   it('says when there are no apps or libs yet', () => {
     const tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
     const md = renderBlock(scanWorkspace(tree));

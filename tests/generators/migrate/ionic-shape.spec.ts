@@ -1,7 +1,11 @@
 import { readJson, Tree } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 
-import { applyIonicShape, nativeImports } from '../../../src/generators/migrate/ionic/shape';
+import {
+  applyIonicShape,
+  detectIonicSource,
+  nativeImports,
+} from '../../../src/generators/migrate/ionic/shape';
 
 function app(tree: Tree, root: string, project: Record<string, unknown>): void {
   tree.write(`${root}/project.json`, JSON.stringify(project));
@@ -229,6 +233,65 @@ describe('applyIonicShape', () => {
       optionalDependencies: { 'cordova-plugin-file': '8.0.0' },
     });
     expect(report.otherApps).toEqual(['@capacitor/camera']);
+  });
+
+  describe('Ionic build of the source (NX-105 part C)', () => {
+    const STANDALONE_MAIN = `import { bootstrapApplication } from '@angular/platform-browser';
+import { provideIonicAngular } from '@ionic/angular/standalone';
+import { AppComponent } from './app/app.component';
+bootstrapApplication(AppComponent, { providers: [provideIonicAngular()] });
+`;
+    const MODULE_MAIN = `import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
+import { AppModule } from './app/app.module';
+platformBrowserDynamic().bootstrapModule(AppModule);
+`;
+    const APP_MODULE = `import { IonicModule } from '@ionic/angular';
+@NgModule({ imports: [IonicModule.forRoot()] })
+export class AppModule {}
+`;
+    const shape = () =>
+      applyIonicShape(tree, {
+        name: 'a',
+        appRoot: 'apps/a',
+        sourcePkg: { dependencies: { '@ionic/angular': '^8.0.0' } },
+        alsoAtRoot: new Set(),
+        releaseConfigurations: ['dev', 'prod'],
+      });
+    const assets = () => readJson(tree, 'apps/a/project.json').targets.build.options.assets;
+
+    it('standalone Ionic: no ionicons svg asset; the style differs from a module workspace', () => {
+      app(tree, 'apps/a', angularProject('a', 'dist/apps/a'));
+      tree.write('apps/a/src/main.ts', STANDALONE_MAIN);
+      const { report } = shape();
+      expect(report.ionicBuild).toBe('standalone');
+      expect(report.style).toBe('standalone');
+      expect(report.workspaceStyle).toBe('module');
+      expect(JSON.stringify(assets())).not.toContain('ionicons');
+    });
+
+    it('IonicModule: the svg asset is added; same style as the workspace: no style line', () => {
+      app(tree, 'apps/a', angularProject('a', 'dist/apps/a'));
+      tree.write('apps/a/src/main.ts', MODULE_MAIN);
+      tree.write('apps/a/src/app/app.module.ts', APP_MODULE);
+      const { report } = shape();
+      expect(report.ionicBuild).toBe('lazy');
+      expect(report.style).toBe('module');
+      expect(report.workspaceStyle).toBeUndefined();
+      expect(JSON.stringify(assets())).toContain('ionicons/dist/ionicons/svg');
+    });
+
+    it('both IonicModule and provideIonicAngular: mixed (the asset stays for the lazy part)', () => {
+      tree.write('apps/a/src/main.ts', STANDALONE_MAIN);
+      tree.write('apps/a/src/app/legacy.module.ts', APP_MODULE);
+      // Spec files do not count.
+      tree.write('apps/a/src/app/x.spec.ts', "import { IonicModule } from '@ionic/angular';\n");
+      expect(detectIonicSource(tree, 'apps/a')).toEqual({ build: 'mixed', style: 'standalone' });
+      tree.delete('apps/a/src/app/legacy.module.ts');
+      expect(detectIonicSource(tree, 'apps/a')).toEqual({
+        build: 'standalone',
+        style: 'standalone',
+      });
+    });
   });
 
   it('collects the native packages the code imports', () => {

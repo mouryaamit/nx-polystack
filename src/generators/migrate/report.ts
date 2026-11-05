@@ -328,6 +328,31 @@ function ionicBlock(i: IonicReport): string {
       }`,
     );
   }
+  if (i.ionicBuild) {
+    lines.push(
+      i.ionicBuild === 'standalone'
+        ? '- Ionic build: standalone components (`provideIonicAngular`, `Ion*` imports); no ionicons svg asset added (icons come from `addIcons`)'
+        : i.ionicBuild === 'lazy'
+        ? `- Ionic build: \`IonicModule\` (Ionic's lazy build); \`pstack upgrade standalone --project=${i.project} --ionic\` moves it to standalone components`
+        : '- Ionic build: **both** `IonicModule` and `provideIonicAngular`, which Ionic does not support in one app; keep one (`pstack upgrade standalone --project=' +
+          `${i.project} --ionic\` moves the rest to standalone components)`,
+    );
+  }
+  if (i.workspaceStyle && i.style) {
+    lines.push(
+      `- Style: the app ${
+        i.style === 'standalone' ? 'bootstraps standalone components' : 'bootstraps an NgModule'
+      }, the workspace's style is ${code(
+        i.workspaceStyle,
+      )} (new apps and libraries follow the workspace); the app was not converted${
+        i.style === 'module'
+          ? ` (\`pstack upgrade standalone --project=${i.project}${
+              i.ionicBuild === 'lazy' ? ' --ionic' : ''
+            }\` converts it)`
+          : ''
+      }`,
+    );
+  }
   if (i.capacitor) {
     lines.push(
       `- Capacitor: ${code(i.capacitor)}${

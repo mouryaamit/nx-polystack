@@ -141,6 +141,9 @@ describe('app generator --type=ionic', () => {
     expect(cmp).toContain("import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';");
     expect(cmp).toContain('imports: [IonApp, IonRouterOutlet]');
     expect(tree.read('apps/field-ops/src/app/app.component.html', 'utf8')).toContain('<ion-app>');
+    // Icons come from addIcons: no ionicons svg asset (NX-105 part D).
+    const assets = readJson(tree, 'apps/field-ops/project.json').targets.build.options.assets;
+    expect(JSON.stringify(assets)).not.toContain('ionicons');
   });
 
   it('--standalone on Angular 21 imports from @ionic/angular (Ionic 9)', async () => {
