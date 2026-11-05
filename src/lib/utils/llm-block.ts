@@ -594,7 +594,7 @@ function ionicRules(ws: LlmWorkspace): string[] {
   if (!ws.apps.some((a) => a.type === 'ionic') || !ws.angularStyle) return [];
   if (ws.angularStyle === 'module') {
     return [
-      "- Ionic apps use `IonicModule` (Ionic's lazy build); `pstack upgrade standalone --ionic` " +
+      "- Ionic apps use `IonicModule` (Ionic's lazy build); `pstack upgrade standalone` " +
         "moves them to Ionic's standalone components.",
     ];
   }

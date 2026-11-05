@@ -20,8 +20,8 @@ import {
 } from './upgrade-standalone';
 
 /**
- * The `ionic-standalone` step of `pstack upgrade standalone --ionic`: moves an Ionic app that
- * bootstraps with `bootstrapApplication` from Ionic's lazy build (`IonicModule`) to Ionic's
+ * The `ionic-standalone` step of `pstack upgrade standalone` (default since v1.18.0): moves an
+ * Ionic app that bootstraps with `bootstrapApplication` from Ionic's lazy build (`IonicModule`) to Ionic's
  * standalone components:
  *
  * 1. `importProvidersFrom(IonicModule.forRoot(config))` → `provideIonicAngular(config)` in
