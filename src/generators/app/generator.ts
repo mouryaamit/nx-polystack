@@ -244,7 +244,7 @@ export default async function appGenerator(
     const targetOptions = { envLayout, port, angularMajor: workspaceGeneratorMajor(tree) };
     const targets =
       type === 'ionic'
-        ? ionicProjectTargets(projectName, projectPath, targetOptions)
+        ? ionicProjectTargets(projectName, projectPath, { ...targetOptions, standalone })
         : angularProjectTargets(projectName, projectPath, targetOptions);
     const projectJson = buildAngularProjectJson(projectName, projectPath, targets) as Record<
       string,

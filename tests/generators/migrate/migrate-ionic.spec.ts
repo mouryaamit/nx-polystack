@@ -86,6 +86,43 @@ describe('migrate generator: standalone Ionic app', () => {
     expect(report).toContain('`npx nx run field-notes:cap-sync --platform=android`');
   });
 
+  it('a standalone Ionic source: no svg asset, and the report states its build and style', async () => {
+    const src = fixtureCopy('ionic7-app');
+    put(
+      src,
+      'src/main.ts',
+      `import { bootstrapApplication } from '@angular/platform-browser';
+import { provideIonicAngular } from '@ionic/angular/standalone';
+import { AppComponent } from './app/app.component';
+bootstrapApplication(AppComponent, { providers: [provideIonicAngular()] });
+`,
+    );
+    put(src, 'src/app/app.module.ts', 'export {};\n');
+    put(src, 'src/app/app-routing.module.ts', 'export {};\n');
+    // The source's own ionicons asset is kept (its icons may load by name).
+    const kept = workspace();
+    await migrateGenerator(kept, { source: src });
+    expect(
+      JSON.stringify(readJson(kept, 'apps/field-notes/project.json').targets.build.options.assets),
+    ).toContain('ionicons');
+    // Without one, none is added.
+    const ng = readJsonFile(src, 'angular.json') as {
+      projects: Record<string, { architect: { build: { options: { assets: unknown[] } } } }>;
+    };
+    for (const p of Object.values(ng.projects)) {
+      const o = p.architect.build.options;
+      o.assets = o.assets.filter((a) => !JSON.stringify(a).includes('ionicons'));
+    }
+    putJson(src, 'angular.json', ng);
+    const tree = workspace();
+    await migrateGenerator(tree, { source: src });
+    const assets = readJson(tree, 'apps/field-notes/project.json').targets.build.options.assets;
+    expect(JSON.stringify(assets)).not.toContain('ionicons');
+    const report = tree.read('docs/migrations/field-notes.md', 'utf8') ?? '';
+    expect(report).toContain('- Ionic build: standalone components');
+    expect(report).toContain("the workspace's style is `module`");
+  });
+
   it('ignores an e2e-only project (app + app-e2e, as older Ionic templates have)', async () => {
     const src = fixtureCopy('ionic7-app');
     const ws = readJsonFile<{ projects: Record<string, unknown> }>(src, 'angular.json');

@@ -79,6 +79,16 @@ export interface IonicReport {
   droppedTargets: string[];
   /** Old build outputPath when it was inside the app folder (e.g. apps/a/www). */
   outputPathMoved?: string;
+  /**
+   * How the source app uses Ionic (NX-105 part C): `lazy` (IonicModule, Ionic's lazy build),
+   * `standalone` (provideIonicAngular and Ion* imports per component) or `mixed` (both, which Ionic
+   * does not support); absent when neither is found.
+   */
+  ionicBuild?: 'lazy' | 'standalone' | 'mixed';
+  /** How the app bootstraps: `standalone` (bootstrapApplication) or `module` (bootstrapModule). */
+  style?: 'module' | 'standalone';
+  /** nx.json pstack.angular.style, when it differs from the app's style (nothing is converted). */
+  workspaceStyle?: 'module' | 'standalone';
 }
 
 /** What an adapter did, for docs/migrations/<name>.md. */

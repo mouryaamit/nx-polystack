@@ -3,6 +3,20 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.17.0
+
+- `pstack migrate` of Ionic apps (Ionic adapter, Nx `ionic-app` projects, Angular CLI workspaces):
+  the report says whether the app uses `IonicModule` (Ionic's lazy build), Ionic's standalone
+  components (`provideIonicAngular`, `Ion*` imports) or both, and when its style
+  (`bootstrapApplication` or `bootstrapModule`) differs from the workspace's
+  `pstack.angular.style`, with the `pstack upgrade standalone` command that converts it. Nothing is
+  converted. A standalone Ionic source no longer gets the ionicons svg asset added (icons come from
+  `addIcons`); a source that lists the asset keeps it.
+- `pstack app --type=ionic --standalone` no longer adds the ionicons svg asset.
+- The `pstack llm` block of a workspace with Ionic apps has an Ionic rule for its style: standalone
+  components import their `Ion*` classes from the standalone entry and register icons with
+  `addIcons`, never `IonicModule`; NgModule workspaces use `IonicModule`.
+
 ## 1.16.0
 
 - `pstack upgrade standalone --ionic` also converts Ionic libraries: a selected library whose

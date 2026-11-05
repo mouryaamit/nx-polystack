@@ -198,18 +198,21 @@ export const CAPACITOR_EXECUTOR = '@mouryaamit/nx-polystack:capacitor';
 export function ionicProjectTargets(
   name: string,
   root = `apps/${name}`,
-  opts: AngularTargetOptions = {},
+  opts: AngularTargetOptions & { standalone?: boolean } = {},
 ): Record<string, unknown> {
   const targets = angularProjectTargets(name, root, opts);
   const release = targets['release'] as { options: Record<string, unknown> };
   release.options['type'] = 'ionic';
   const build = targets['build'] as { options: { assets: unknown[] } };
-  // ion-icon loads its SVGs from /svg at runtime.
-  build.options.assets.push({
-    glob: '**/*.svg',
-    input: 'node_modules/ionicons/dist/ionicons/svg',
-    output: './svg',
-  });
+  // With IonicModule (Ionic's lazy build), ion-icon loads its SVGs by name from /svg at runtime.
+  // Standalone Ionic apps register their icons with addIcons, so they need no asset.
+  if (!opts.standalone) {
+    build.options.assets.push({
+      glob: '**/*.svg',
+      input: 'node_modules/ionicons/dist/ionicons/svg',
+      output: './svg',
+    });
+  }
   // The capacitor executor defaults to dist/apps/<name>; a nested app tells it where its build is.
   const webDir = `dist/${root}`;
   const extra = webDir === `dist/apps/${name}` ? {} : { webDir };

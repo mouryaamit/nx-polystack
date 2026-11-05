@@ -149,4 +149,50 @@ describe('report: Ionic section', () => {
       '- Capacitor: `^6.0.0` (the workspace generates Capacitor 7 apps; this app keeps its version)',
     );
   });
+
+  it('states the Ionic build and a style that differs from the workspace (NX-105 part C)', () => {
+    const base = {
+      packagePath: 'apps/x/package.json',
+      nativePackages: [],
+      alsoAtRoot: [],
+      otherApps: [],
+      platforms: [],
+      cordovaPlugins: [],
+      droppedTargets: [],
+    };
+    const data = emptyReportData();
+    data.ionic = [
+      {
+        ...base,
+        project: 'sa',
+        ionicBuild: 'standalone',
+        style: 'standalone',
+        workspaceStyle: 'module',
+      },
+      { ...base, project: 'lz', ionicBuild: 'lazy', style: 'module', workspaceStyle: 'standalone' },
+      { ...base, project: 'mx', ionicBuild: 'mixed', style: 'standalone' },
+    ];
+    const md = renderReport({
+      name: 'x',
+      adapterId: 'ionic',
+      adapterLabel: 'standalone Ionic Angular app',
+      detection: { confidence: 0.95, reasons: ['x'] },
+      forced: false,
+      source: '../x',
+      data,
+    });
+    expect(md).toContain(
+      '- Ionic build: standalone components (`provideIonicAngular`, `Ion*` imports); no ionicons svg asset added',
+    );
+    expect(md).toContain(
+      "- Style: the app bootstraps standalone components, the workspace's style is `module`",
+    );
+    expect(md).toContain(
+      "- Ionic build: `IonicModule` (Ionic's lazy build); `pstack upgrade standalone --project=lz --ionic`",
+    );
+    expect(md).toContain(
+      'the app was not converted (`pstack upgrade standalone --project=lz --ionic` converts it)',
+    );
+    expect(md).toContain('- Ionic build: **both** `IonicModule` and `provideIonicAngular`');
+  });
 });

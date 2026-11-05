@@ -4,6 +4,7 @@ import * as path from 'path';
 import { GeneratorCallback, readJson, Tree, updateJson } from '@nx/devkit';
 
 import { workspaceGeneratorVersions } from '../../../lib/utils/angular-deps';
+import { workspaceAngularStyle } from '../../../lib/utils/angular-style';
 import { CAPACITOR_EXECUTOR, POLYSTACK_BUILD_EXECUTOR } from '../../../lib/utils/angular-project';
 import { addMissingDependencies, declaredVersion, majorOf } from '../../../lib/utils/dependencies';
 import { addNpmScripts } from '../../../lib/utils/npm-scripts';
@@ -91,6 +92,44 @@ function optionSets(target: Json | undefined): Json[] {
   return sets;
 }
 
+/**
+ * How the copied app uses Ionic and Angular, from its TypeScript sources (spec files aside):
+ * - build: `lazy` with IonicModule, `standalone` with provideIonicAngular (Ion* imported per
+ *   component), `mixed` with both;
+ * - style: `standalone` when main.ts calls bootstrapApplication, `module` with bootstrapModule.
+ */
+export function detectIonicSource(
+  tree: Tree,
+  appRoot: string,
+): { build?: 'lazy' | 'standalone' | 'mixed'; style?: 'module' | 'standalone' } {
+  let ionicModule = false;
+  let provide = false;
+  let style: 'module' | 'standalone' | undefined;
+  const visit = (rel: string) => {
+    for (const child of tree.children(rel)) {
+      const at = `${rel}/${child}`;
+      if (tree.isFile(at)) {
+        if (!at.endsWith('.ts') || at.endsWith('.spec.ts') || at.endsWith('.d.ts')) continue;
+        const text = tree.read(at, 'utf8') ?? '';
+        if (/\bIonicModule\b/.test(text) && /['"]@ionic\/angular(\/lazy)?['"]/.test(text)) {
+          ionicModule = true;
+        }
+        if (/\bprovideIonicAngular\s*\(/.test(text)) provide = true;
+        if (child === 'main.ts') {
+          if (/\bbootstrapApplication\s*\(/.test(text)) style = 'standalone';
+          else if (/\bbootstrapModule\s*\(/.test(text)) style ??= 'module';
+        }
+      } else if (!WALK_SKIP.has(child)) {
+        visit(at);
+      }
+    }
+  };
+  visit(tree.exists(`${appRoot}/src`) ? `${appRoot}/src` : appRoot);
+  const build =
+    ionicModule && provide ? 'mixed' : provide ? 'standalone' : ionicModule ? 'lazy' : undefined;
+  return { build, style };
+}
+
 export function applyIonicShape(tree: Tree, input: IonicShapeInput): IonicShapeResult {
   const { name, appRoot } = input;
   const isNative = input.isNative ?? isNativePackage;
@@ -111,6 +150,13 @@ export function applyIonicShape(tree: Tree, input: IonicShapeInput): IonicShapeR
     cordovaPlugins: cordovaPlugins(input.sourcePkg),
     droppedTargets: [],
   };
+  const source = detectIonicSource(tree, appRoot);
+  if (source.build) report.ionicBuild = source.build;
+  if (source.style) {
+    report.style = source.style;
+    const ws = workspaceAngularStyle(tree);
+    if (ws !== source.style) report.workspaceStyle = ws;
+  }
 
   // 1. project.json
   let webOutput = dist;
@@ -144,7 +190,10 @@ export function applyIonicShape(tree: Tree, input: IonicShapeInput): IonicShapeR
       const hasIonicons = assets.some((a) =>
         (typeof a === 'string' ? a : String((a as Json)['input'] ?? '')).includes('ionicons'),
       );
-      if (!hasIonicons) buildOptions['assets'] = [...assets, IONICONS_ASSET];
+      // Standalone Ionic registers icons with addIcons; only the lazy build loads them by name.
+      if (!hasIonicons && report.ionicBuild !== 'standalone') {
+        buildOptions['assets'] = [...assets, IONICONS_ASSET];
+      }
     }
 
     for (const [target, config] of Object.entries(targets)) {
