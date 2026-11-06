@@ -232,6 +232,10 @@ describe('migrate generator: standalone Angular CLI app', () => {
         });
         const report = tree.read('docs/migrations/portal.md', 'utf8') ?? '';
         expect(report).not.toContain('became @angular-devkit/build-angular:browser');
+        // main.ts found through options.browser: the CSP nonce import is added (v1.21.1).
+        expect(tree.read('apps/portal/src/main.ts', 'utf8')).toContain(
+          "import '@mouryaamit/nx-polystack/runtime/csp-nonce';",
+        );
       });
 
       it('converts the application builder to the Angular 15 browser builder', async () => {

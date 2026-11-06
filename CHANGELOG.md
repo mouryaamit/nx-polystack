@@ -3,6 +3,18 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.21.1
+
+- Apps on the Angular 17+ application builder name their entry file in the build option
+  `browser`, not `main`. pstack read only `main` in four places, so for those apps (Angular 21
+  ones included) it silently skipped `main.ts`:
+  - `pstack migrate` (Angular CLI, Angular workspace and Nx sources): the CSP nonce import;
+  - `pstack update` (migration `add-csp-nonce-import`): the same import in existing apps;
+  - `pstack encryption --cipher=aes-gcm` and new apps in aes-gcm workspaces: the `envReady`
+    bootstrap.
+- All of them now read `main`, else `browser`. `pstack update` to 1.21.1 runs
+  `add-csp-nonce-import` again, so apps it skipped before get the import.
+
 ## 1.21.0
 
 - `pstack migrate` of a multi-project Angular CLI repo maps a post-build CSP nonce script too (as

@@ -9,6 +9,7 @@ import {
   STANDALONE_FALSE_MAJOR,
   workspaceGeneratorMajor,
 } from '../../../lib/utils/angular-deps';
+import { buildEntry } from '../../../lib/utils/angular-project';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import {
   dropKarmaTargetsWithoutKarma,
@@ -425,9 +426,10 @@ export function migrateAngularApp(
   const label = opts.notesLabel ? `${opts.notesLabel} ` : '';
   data.angularNotes.push(...pj.angularNotes.map((n) => `${label}${n}`));
   data.angularNotes.push(...angularCodeNotes(tree, projectRoot, copy.copied, opts.notesLabel));
-  const main = (pj.projectJson['targets'] as Record<string, { options?: { main?: unknown } }>)?.[
-    'build'
-  ]?.options?.main;
+  const main = buildEntry(
+    (pj.projectJson['targets'] as Record<string, { options?: unknown }> | undefined)?.['build']
+      ?.options,
+  );
   const nonceNote = typeof main === 'string' ? noncePatchMains(tree, [main]) : undefined;
   if (nonceNote) data.notes.push(nonceNote);
   const karma = modernizeKarmaConfigs(tree, pj.projectJson);

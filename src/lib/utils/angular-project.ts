@@ -192,6 +192,20 @@ export function angularProjectTargets(
   };
 }
 
+/**
+ * The entry file of an Angular build target's options: `main` (browser builder) or `browser`
+ * (application builder, Angular 17+). Undefined when neither is a non-empty string.
+ */
+export function buildEntry(options: unknown): string | undefined {
+  if (typeof options !== 'object' || options === null) return undefined;
+  const o = options as Record<string, unknown>;
+  for (const key of ['main', 'browser']) {
+    const v = o[key];
+    if (typeof v === 'string' && v !== '') return v.replace(/^\.\//, '');
+  }
+  return undefined;
+}
+
 export const CAPACITOR_EXECUTOR = '@mouryaamit/nx-polystack:capacitor';
 
 /** Ionic app: Angular targets with an ionic release, plus Capacitor sync/open/add (--platform=android|ios). */

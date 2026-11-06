@@ -142,6 +142,11 @@
       "version": "1.14.0",
       "description": "Run typecheck-everywhere again: projects without tsconfig.app.json/tsconfig.lib.json get typecheck from the tsconfig their build target names",
       "implementation": "./src/migrations/typecheck-everywhere/typecheck-everywhere"
+    },
+    "add-csp-nonce-import-1.21.1": {
+      "version": "1.21.1",
+      "description": "Run add-csp-nonce-import again: apps on the Angular 17+ application builder (build option browser instead of main) get the CSP nonce import too",
+      "implementation": "./src/migrations/add-csp-nonce-import/add-csp-nonce-import"
     }
   }
 }
