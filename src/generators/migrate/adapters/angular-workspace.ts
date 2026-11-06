@@ -4,6 +4,7 @@ import { GeneratorCallback, installPackagesTask, Tree, updateJson } from '@nx/de
 
 import { adoptHtaccess, htaccessNote } from '../../../lib/release/htaccess-adopt';
 import { ngPackagrDependencies } from '../../../lib/utils/angular-deps';
+import { buildEntry } from '../../../lib/utils/angular-project';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import { addMissingDependencies, declaredVersion } from '../../../lib/utils/dependencies';
 import {
@@ -366,9 +367,10 @@ function migrateAngularWorkspace(tree: Tree, ctx: WorkspaceMigrationContext): Wo
     data.angularNotes.push(...pj.angularNotes.map((n) => `${code(p.name)} ${n}`));
     data.angularNotes.push(...angularCodeNotes(tree, p.newRoot, copy.copied, code(p.name)));
     if (kind !== 'lib') {
-      const main = (
-        pj.projectJson['targets'] as Record<string, { options?: { main?: unknown } }>
-      )?.['build']?.options?.main;
+      const main = buildEntry(
+        (pj.projectJson['targets'] as Record<string, { options?: unknown }> | undefined)?.['build']
+          ?.options,
+      );
       const note = typeof main === 'string' ? noncePatchMains(tree, [main]) : undefined;
       if (note) data.notes.push(`${code(p.name)}: ${note}`);
     }

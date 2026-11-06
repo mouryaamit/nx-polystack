@@ -4,6 +4,7 @@ import * as path from 'path';
 import { GeneratorCallback, installPackagesTask, readJson, Tree, updateJson } from '@nx/devkit';
 
 import { ngPackagrDependencies } from '../../../lib/utils/angular-deps';
+import { buildEntry } from '../../../lib/utils/angular-project';
 import { noncePatchMains } from '../../../lib/utils/csp-nonce';
 import {
   addMissingDependencies,
@@ -1060,10 +1061,8 @@ function convertFlatEslint(tree: Tree, root: string, copied: string[]): string[]
   return flat.map((f) => `${root}/${f}`);
 }
 
-const mainOf = (targets: Json): string | undefined => {
-  const main = (objectField(targets, 'build')['options'] as Json | undefined)?.['main'];
-  return typeof main === 'string' ? main : undefined;
-};
+const mainOf = (targets: Json): string | undefined =>
+  buildEntry(objectField(targets, 'build')['options']);
 
 /**
  * The source's root package.json fields the install and the build rely on: `overrides`,

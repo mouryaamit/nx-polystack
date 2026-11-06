@@ -148,6 +148,27 @@ await decryptEnvironmentAsync(other);
     expect(decryptEnvironmentCalls(src)).toEqual(['appProfile', "this.load('x')"]);
   });
 
+  it('switches an application-builder app (options.browser, Angular 17+)', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    addProjectConfiguration(tree, 'web', {
+      root: 'apps/web',
+      sourceRoot: 'apps/web/src',
+      targets: {
+        build: {
+          executor: '@angular/build:application',
+          options: { browser: 'apps/web/src/main.ts' },
+        },
+        release: {
+          executor: '@mouryaamit/nx-polystack:build',
+          options: { type: 'angular', outputPath: 'dist/apps/web', envProject: 'web' },
+        },
+      },
+    });
+    tree.write('apps/web/src/main.ts', MAIN);
+    switchAppsToGcm(tree, []);
+    expect(tree.read('apps/web/src/main.ts', 'utf8')).toContain('envReady(environment');
+  });
+
   it('switches every release app and reports what it could not do', () => {
     const tree = createTreeWithEmptyWorkspace();
     addProjectConfiguration(tree, 'portal', {

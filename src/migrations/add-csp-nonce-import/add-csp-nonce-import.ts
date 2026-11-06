@@ -1,6 +1,6 @@
 import { logger, readJson, Tree } from '@nx/devkit';
 
-import { POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
+import { buildEntry, POLYSTACK_BUILD_EXECUTOR } from '../../lib/utils/angular-project';
 import { patchMainInTree } from '../../lib/utils/csp-nonce';
 import { projectJsonFiles } from '../../lib/utils/project-json-files';
 
@@ -33,7 +33,7 @@ export default function addCspNonceImport(tree: Tree): void {
     const buildTarget = String(release.options?.['buildTarget'] ?? `${name}:build`);
     const [owner, target] = buildTarget.split(':');
     const build = owner === name ? targets[target ?? 'build'] : undefined;
-    const main = build?.options?.['main'];
+    const main = buildEntry(build?.options);
     if (typeof main !== 'string' || !tree.exists(main)) continue;
     const before = tree.read(main, 'utf8');
     // Local nonce patches stay: an update only adds the library import before them.

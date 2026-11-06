@@ -2,7 +2,7 @@ import * as path from 'path';
 
 import { Tree } from '@nx/devkit';
 
-import { POLYSTACK_BUILD_EXECUTOR } from '../utils/angular-project';
+import { buildEntry, POLYSTACK_BUILD_EXECUTOR } from '../utils/angular-project';
 import { FoundProject, findProjects } from '../utils/llm-block';
 import { envAliasImport, hasEnvAlias } from '../utils/env-alias';
 import { EnvEncryptionConfig, listedKeys } from './config';
@@ -347,7 +347,7 @@ export function switchAppsToGcm(
     releaseApps++;
     const name = projectName(p);
     const buildTarget = String(release.options?.['buildTarget'] ?? `${name}:build`).split(':')[1];
-    const main = targets[buildTarget]?.options?.['main'] as string | undefined;
+    const main = buildEntry(targets[buildTarget]?.options);
     const envProject = String(release.options?.['envProject'] ?? name);
     const files = tsFiles(tree, sourceRootOf(p));
     if (main && tree.exists(main)) {
