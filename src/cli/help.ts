@@ -19,6 +19,8 @@ COMMANDS
               one commit per mode
   preset      Bootstrap a workspace root skeleton in the current directory
   app         Scaffold a new application into an existing workspace
+  remove      Retire apps: delete an app with its env files, npm scripts and wiring, and
+              uninstall runtime packages nothing else uses (one commit; libraries are kept)
   lib         Scaffold a shared library (ts, angular, ionic, flutter, assets, styles,
               state, design-tokens, session, pii)
   env         Add an environment to some or all apps later, copied from an existing one
@@ -111,6 +113,15 @@ OPTIONS — upgrade angular
   --no-commit                  Leave each step's changes uncommitted (with --to, stops after one)
   --dry-run                    Print the steps; change nothing
   Needs a clean git tree and the Node major of the step (Node 22 for Angular 21).
+
+OPTIONS — remove
+  --app=<a,b>                  The apps to retire (an <app>-e2e project goes with its app)
+  --dry-run                    Print the plan; change nothing
+  --yes                        Do not ask before removing (needed when not in a terminal)
+  --force                      Remove even when other projects depend on an app
+  Needs a clean git tree. Tags the last commit with the app as retired/<app>, then makes one
+  commit (undo with git revert). Shared libraries are never removed, only listed; runtime
+  packages that nothing else names are uninstalled; mentions in CI files and README are listed.
 
 OPTIONS — upgrade standalone (Angular 15.2+)
   --all                        Every Angular app and library with NgModules (schematic over the
@@ -408,6 +419,7 @@ EXAMPLES
   pstack upgrade standalone --all --dry-run
   pstack upgrade standalone --all --no-ionic
   pstack upgrade nx --dry-run
+  pstack remove --app=legacy-portal --dry-run
   pstack adopt --compare --app=portal --base=HEAD~1
   pstack adopt --remove-old-scripts --dry-run
 `.trimStart();

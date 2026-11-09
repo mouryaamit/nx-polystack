@@ -72,7 +72,7 @@ export interface UpgradeDeps {
 const useShell = (cmd: string): boolean =>
   process.platform === 'win32' && (cmd === 'npm' || cmd === 'npx');
 
-const defaultDeps: UpgradeDeps = {
+export const defaultUpgradeDeps: UpgradeDeps = {
   exec(cmd, args, cwd, env) {
     const r = spawnSync(cmd, args, {
       cwd,
@@ -657,7 +657,7 @@ function runStep(o: StepOptions, deps: UpgradeDeps): void {
 /** pstack upgrade angular [--to=N] [--yes] [--skip-check] [--no-commit] [--dry-run] */
 export async function runUpgrade(
   ctx: CommandContext,
-  deps: UpgradeDeps = defaultDeps,
+  deps: UpgradeDeps = defaultUpgradeDeps,
 ): Promise<number> {
   const what = ctx.positionals[0];
   if (what === 'nx') return runUpgradeNx(ctx, deps);
@@ -882,7 +882,7 @@ function runNxStep(o: NxStepOptions, deps: UpgradeDeps): void {
  */
 export async function runUpgradeNx(
   ctx: CommandContext,
-  deps: UpgradeDeps = defaultDeps,
+  deps: UpgradeDeps = defaultUpgradeDeps,
 ): Promise<number> {
   const root = findWorkspaceRoot(ctx.cwd);
   if (!root || !fs.existsSync(path.join(root, 'package.json'))) {
