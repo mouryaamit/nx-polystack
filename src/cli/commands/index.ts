@@ -23,4 +23,5 @@ export const COMMANDS: Record<string, CommandHandler> = {
   inspect: async (c) => (await import('./inspect')).runInspect(c),
   assets: async (c) => (await import('./assets')).runAssets(c),
   upgrade: async (c) => (await import('./upgrade')).runUpgrade(c),
+  remove: async (c) => (await import('./remove')).runRemove(c),
 };

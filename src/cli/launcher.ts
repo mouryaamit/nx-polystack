@@ -28,6 +28,7 @@ export const WORKSPACE_COMMANDS = new Set([
   'csp',
   'shared',
   'upgrade',
+  'remove',
 ]);
 
 /** First plugin version whose CLI has each command; older pinned copies cannot run them. */
@@ -45,6 +46,7 @@ export const MIN_LOCAL_VERSION: Readonly<Record<string, string>> = {
   upgrade: '1.2.12',
   adopt: '1.7.1',
   assets: '1.12.0',
+  remove: '1.22.0',
 };
 
 /** First plugin version that understands a flag of a command (checked when the flag is given). */

@@ -3,6 +3,15 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.22.0
+
+- New `pstack remove --app=<a,b>` retires apps that are outdated or out of production. It deletes
+  the app (with an `<app>-e2e` project), its env folder, tsconfig path, npm scripts, nx.json
+  encryption keys, migration report and dist output, uninstalls runtime packages nothing else
+  names, and refreshes the `pstack llm` blocks, in one commit after tagging `retired/<app>`.
+  Shared libraries are never removed, only listed. It refuses apps other projects depend on
+  (unless `--force`) and a dirty tree; `--dry-run` shows the plan.
+
 ## 1.21.1
 
 - Apps on the Angular 17+ application builder name their entry file in the build option
