@@ -593,6 +593,24 @@ describe('infra generator', () => {
       expect(report.notes.join('\n')).toContain('PSTACK_REPO_TOKEN');
     });
 
+    it('a git build needs no token, and notes that the upgrade workflow looks on npm (v1.23.0)', () => {
+      setInstallSourceForTests({
+        kind: 'git',
+        template: 'git+https://git.example.com/acme/tool.git#dist-v{version}',
+      });
+      try {
+        const tree = workspace();
+        const report = applyInfra(tree, { with: 'upgrades,ci' });
+        expect(read(tree, '.github/workflows/dependency-upgrade.yml')).not.toContain(
+          'PSTACK_REPO_TOKEN',
+        );
+        expect(report.notes.join('\n')).toContain('git install source');
+        expect(report.notes.join('\n')).not.toContain('PSTACK_REPO_TOKEN');
+      } finally {
+        setInstallSourceForTests(DEV);
+      }
+    });
+
     it('an npm build needs no token: npm view finds the latest version (NX-51)', () => {
       setInstallSourceForTests({ kind: 'npm' });
       try {

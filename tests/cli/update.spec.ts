@@ -119,6 +119,93 @@ describe('pstack update', () => {
     ]);
   });
 
+  it('updates a renamed plugin from a git source under its own name and URL (v1.23.0)', async () => {
+    const template = 'git+https://git.example.com/acme/tool.git#dist-v{version}';
+    const url = (v: string) => template.replace('{version}', v);
+    const ws = tmpDir();
+    fs.writeFileSync(path.join(ws, 'nx.json'), '{}');
+    writeJson(path.join(ws, 'package.json'), {
+      name: 'ws',
+      devDependencies: { nx: '^17.0.0', '@acme/tool': url('0.2.2') },
+    });
+    fs.writeFileSync(path.join(ws, 'package-lock.json'), 'LOCK-BEFORE');
+    const install = (version: string) => {
+      const root = path.join(ws, 'node_modules', '@acme', 'tool');
+      writeJson(path.join(root, 'package.json'), {
+        name: '@acme/tool',
+        version,
+        bin: { pstack: 'dist/bin/cli.js' },
+        pstack: { installSource: template },
+      });
+      fs.mkdirSync(path.join(root, 'dist', 'bin'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'dist', 'bin', 'cli.js'), '');
+    };
+    install('0.2.2');
+    const calls: string[] = [];
+    const d: UpdateDeps = {
+      exec: (cmd, args) => {
+        calls.push(`${cmd} ${args.join(' ')}`);
+        const pkg = readPkg(ws);
+        pkg.devDependencies['@acme/tool'] = args[1].slice('@acme/tool@'.length);
+        writeJson(path.join(ws, 'package.json'), pkg);
+        install('0.3.0');
+      },
+      gitStatus: () => '',
+      runLocalMigrate: (cliPath, from, to) => {
+        expect(cliPath).toContain(path.join('@acme', 'tool'));
+        calls.push(`migrate ${from} ${to}`);
+        return 0;
+      },
+    };
+    expect(await runUpdate(makeCtx({ cwd: ws }), d)).toBe(0);
+    expect(readPkg(ws).devDependencies['@acme/tool']).toBe(url('0.3.0'));
+    expect(readPkg(ws).devDependencies['@mouryaamit/nx-polystack']).toBeUndefined();
+    expect(calls).toEqual([
+      `npm install @acme/tool@${url('0.3.0')} --save-dev`,
+      'migrate 0.2.2 0.3.0',
+    ]);
+  });
+
+  it('moves a renamed copy older than git install sources along its pinned URL (v1.23.0)', async () => {
+    const url = (v: string) => `git+https://git.example.com/acme/tool.git#dist-v${v}`;
+    const ws = tmpDir();
+    fs.writeFileSync(path.join(ws, 'nx.json'), '{}');
+    writeJson(path.join(ws, 'package.json'), { devDependencies: { '@acme/tool': url('0.2.2') } });
+    const install = (version: string, installSource: string) => {
+      const root = path.join(ws, 'node_modules', '@acme', 'tool');
+      writeJson(path.join(root, 'package.json'), {
+        name: '@acme/tool',
+        version,
+        bin: { pstack: 'dist/bin/cli.js' },
+        pstack: { installSource },
+      });
+      fs.mkdirSync(path.join(root, 'dist', 'bin'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'dist', 'bin', 'cli.js'), '');
+    };
+    // The old copy was built when only npm and GitHub sources existed: it says "npm".
+    install('0.2.2', 'npm');
+    const calls: string[] = [];
+    const d: UpdateDeps = {
+      exec: (cmd, args) => {
+        calls.push(`${cmd} ${args.join(' ')}`);
+        const pkg = readPkg(ws);
+        pkg.devDependencies['@acme/tool'] = args[1].slice('@acme/tool@'.length);
+        writeJson(path.join(ws, 'package.json'), pkg);
+        install('0.3.0', 'git+https://git.example.com/acme/tool.git#dist-v{version}');
+      },
+      gitStatus: () => '',
+      runLocalMigrate: (_cli, from, to) => {
+        calls.push(`migrate ${from} ${to}`);
+        return 0;
+      },
+    };
+    expect(await runUpdate(makeCtx({ cwd: ws }), d)).toBe(0);
+    expect(calls).toEqual([
+      `npm install @acme/tool@${url('0.3.0')} --save-dev`,
+      'migrate 0.2.2 0.3.0',
+    ]);
+  });
+
   it('installs @nx/devkit pinned to the installed Nx with the plugin', async () => {
     const ws = workspace();
     writeJson(path.join(ws, 'node_modules/nx/package.json'), { name: 'nx', version: '17.0.6' });

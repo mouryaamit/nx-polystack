@@ -61,6 +61,26 @@ describe('findPluginPin hints (NX-51)', () => {
   });
 });
 
+describe('findPluginPin for a renamed plugin from a git source (v1.23.0)', () => {
+  const plugin = {
+    name: '@acme/tool',
+    source: { kind: 'git', template: 'git+https://git.example.com/acme/tool.git#dist-v{version}' },
+  } as const;
+
+  it('reads the pin under that name and its URL', () => {
+    const spec = 'git+https://git.example.com/acme/tool.git#dist-v1.22.0';
+    expect(
+      findPluginPin({ devDependencies: { '@acme/tool': spec } }, '1.23.0', undefined, plugin),
+    ).toEqual({ field: 'devDependencies', version: '1.22.0', spec, range: false });
+  });
+
+  it('suggests the quoted git install', () => {
+    expect(() => findPluginPin({}, '1.23.0', undefined, plugin)).toThrow(
+      'Add it first: npm i -D "@acme/tool@git+https://git.example.com/acme/tool.git#dist-v1.23.0"',
+    );
+  });
+});
+
 describe('resolveTarget', () => {
   it('defaults to the CLI version', () => {
     expect(resolveTarget('0.2.2', undefined, '0.3.0', false)).toEqual({

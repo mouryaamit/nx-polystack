@@ -3,6 +3,17 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.23.0
+
+- `pstack.installSource` in the plugin's `package.json` may now be a git URL whose ref holds
+  `{version}` (`git+https://git.example.com/acme/nx-polystack.git#dist-v{version}`), for teams that
+  keep a prebuilt copy of the package on their own git server. `pstack new` and `pstack update` pin
+  that URL with the version, `pstack update` still runs the plugin's migrations, and the install
+  hint prints `npm i -g "<package>@<url>"`.
+- Such a copy may have its own package name: the global CLI finds it through the workspace's
+  dependencies, hands workspace commands to it, and `pstack update` moves that package. A copy
+  older than 1.23.0 (its install source still says npm) moves along the git URL it is pinned to.
+
 ## 1.22.0
 
 - New `pstack remove --app=<a,b>` retires apps that are outdated or out of production. It deletes

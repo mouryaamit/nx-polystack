@@ -47,6 +47,57 @@ describe('resolveLocalPlugin', () => {
     expect(resolveLocalPlugin(ws)).toBeNull();
   });
 
+  it('finds the plugin under another name through the workspace dependencies (v1.23.0)', () => {
+    const ws = tmpDir();
+    const template = 'git+https://git.example.com/acme/tool.git#dist-v{version}';
+    writeJson(path.join(ws, 'package.json'), {
+      devDependencies: { nx: '^22.0.0', '@acme/tool': template.replace('{version}', '1.23.0') },
+    });
+    const root = path.join(ws, 'node_modules', '@acme', 'tool');
+    writeJson(path.join(ws, 'node_modules', 'nx', 'package.json'), {
+      name: 'nx',
+      version: '22.0.0',
+    });
+    writeJson(path.join(root, 'package.json'), {
+      name: '@acme/tool',
+      version: '1.23.0',
+      bin: { pstack: 'dist/bin/cli.js' },
+      pstack: { installSource: template },
+    });
+    fs.mkdirSync(path.join(root, 'dist', 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'dist', 'bin', 'cli.js'), '');
+    expect(resolveLocalPlugin(ws)).toEqual({
+      root,
+      version: '1.23.0',
+      cliPath: path.join(root, 'dist', 'bin', 'cli.js'),
+      other: { name: '@acme/tool', source: { kind: 'git', template } },
+    });
+    // Its own name wins when both are installed.
+    const own = fakeLocalPlugin(ws, '1.22.0');
+    expect(resolveLocalPlugin(ws)?.root).toBe(own);
+  });
+
+  it('ignores dependencies that are not the plugin', () => {
+    const ws = tmpDir();
+    writeJson(path.join(ws, 'package.json'), { devDependencies: { a: '1.0.0', b: '1.0.0' } });
+    // a: a pstack bin but no install source; b: an install source this build cannot read.
+    for (const [name, extra] of [
+      ['a', {}],
+      ['b', { pstack: { installSource: 'svn:nope' } }],
+    ] as const) {
+      const root = path.join(ws, 'node_modules', name);
+      writeJson(path.join(root, 'package.json'), {
+        name,
+        version: '1.0.0',
+        bin: { pstack: 'dist/bin/cli.js' },
+        ...extra,
+      });
+      fs.mkdirSync(path.join(root, 'dist', 'bin'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'dist', 'bin', 'cli.js'), '');
+    }
+    expect(resolveLocalPlugin(ws)).toBeNull();
+  });
+
   it('returns null when installed but dist/bin/cli.js is missing', () => {
     const ws = tmpDir();
     writeJson(path.join(ws, 'node_modules', '@mouryaamit', 'nx-polystack', 'package.json'), {

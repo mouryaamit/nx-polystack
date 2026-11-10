@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { InstallSource, parseInstallSource } from './install-source';
 import { PLUGIN_NAME } from './versions';
 
 export interface LocalPlugin {
@@ -9,6 +10,11 @@ export interface LocalPlugin {
   version: string;
   /** Built CLI entry to delegate to. */
   cliPath: string;
+  /**
+   * Set when the workspace installs the plugin under another package name (a renamed copy, e.g.
+   * from another git server): that name and its package.json pstack.installSource (v1.23.0).
+   */
+  other?: { name: string; source: InstallSource };
 }
 
 /** Walk up from `start` until a directory containing nx.json is found. */
@@ -42,8 +48,9 @@ export function selfPackageRoot(from: string = __dirname): string {
   }
 }
 
-export function resolveLocalPlugin(workspaceRoot: string): LocalPlugin | null {
-  const root = path.join(workspaceRoot, 'node_modules', ...PLUGIN_NAME.split('/'));
+/** The plugin installed under `name` in the workspace, or null. */
+function installedPlugin(workspaceRoot: string, name: string): LocalPlugin | null {
+  const root = path.join(workspaceRoot, 'node_modules', ...name.split('/'));
   const pkg = path.join(root, 'package.json');
   const cliPath = path.join(root, 'dist', 'bin', 'cli.js');
   if (!fs.existsSync(pkg) || !fs.existsSync(cliPath)) return null;
@@ -52,6 +59,49 @@ export function resolveLocalPlugin(workspaceRoot: string): LocalPlugin | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A dependency of the workspace that is this plugin under another name: its installed package.json
+ * has a `pstack` bin, a pstack.installSource this build understands and a built CLI.
+ */
+function renamedPlugin(workspaceRoot: string): LocalPlugin | null {
+  let names: string[];
+  try {
+    const ws = JSON.parse(
+      fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8').replace(/^\uFEFF/, ''),
+    );
+    names = Object.keys({ ...ws.dependencies, ...ws.devDependencies }).sort();
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    if (name === PLUGIN_NAME) continue;
+    try {
+      const pkg = JSON.parse(
+        fs.readFileSync(
+          path.join(workspaceRoot, 'node_modules', ...name.split('/'), 'package.json'),
+          'utf8',
+        ),
+      );
+      if (pkg.name !== name || pkg.bin?.pstack === undefined) continue;
+      if (typeof pkg.pstack?.installSource !== 'string') continue;
+      const source = parseInstallSource(pkg.pstack.installSource);
+      const found = installedPlugin(workspaceRoot, name);
+      if (found) return { ...found, other: { name, source } };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * The plugin installed in the workspace: under this package's name, else under another name (a
+ * renamed copy, found through the workspace's dependencies).
+ */
+export function resolveLocalPlugin(workspaceRoot: string): LocalPlugin | null {
+  return installedPlugin(workspaceRoot, PLUGIN_NAME) ?? renamedPlugin(workspaceRoot);
 }
 
 /**

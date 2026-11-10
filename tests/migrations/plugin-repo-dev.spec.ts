@@ -52,6 +52,21 @@ describe('plugin-repo-dev migration (v0.38.2)', () => {
     }
   });
 
+  it('does nothing in a git build either (v1.23.0)', async () => {
+    setInstallSourceForTests({
+      kind: 'git',
+      template: 'git+https://git.example.com/a/b.git#v{version}',
+    });
+    try {
+      const tree = createTreeWithEmptyWorkspace();
+      tree.write('.github/workflows/x.yml', 'repo: mouryaamit/nx-polystack\n');
+      await pluginRepoDev(tree);
+      expect(tree.read('.github/workflows/x.yml', 'utf-8')).toBe('repo: mouryaamit/nx-polystack\n');
+    } finally {
+      setInstallSourceForTests({ kind: 'github', repo: DEV_GITHUB_REPO });
+    }
+  });
+
   it('does nothing without workflows', async () => {
     const tree = createTreeWithEmptyWorkspace();
     await expect(pluginRepoDev(tree)).resolves.toBeUndefined();
