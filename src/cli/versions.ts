@@ -1,4 +1,9 @@
-import { DEV_GITHUB_REPO, installSource } from './install-source';
+import {
+  DEV_GITHUB_REPO,
+  InstallSource,
+  installSource,
+  VERSION_PLACEHOLDER,
+} from './install-source';
 import { CliError } from './types';
 
 export const PLUGIN_NAME = '@mouryaamit/nx-polystack';
@@ -13,8 +18,7 @@ const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, '\
 const NPM_SPEC = /^[\^~=]?v?(\d+\.\d+\.\d+)$/;
 
 /** Git-tag specs npm may save for the plugin's repos (".git" optional). */
-function gitSpec(): RegExp {
-  const source = installSource();
+function gitSpec(source: InstallSource): RegExp {
   const repos = new Set([PLUGIN_GITHUB_REPO, ...LEGACY_GITHUB_REPOS]);
   if (source.kind === 'github') repos.add(source.repo);
   const path = `(?:${[...repos].map(escapeRegExp).join('|')})`;
@@ -40,11 +44,34 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** The pin `pstack new` / `pstack update` write: a git tag of the repo, or an exact npm version. */
-export function formatPluginSpec(version: string): string {
+/** The spec of a git install source's template, as a pattern capturing the version. */
+function templateSpec(source: InstallSource): RegExp | null {
+  if (source.kind !== 'git') return null;
+  const [before, after] = source.template.split(VERSION_PLACEHOLDER).map(escapeRegExp);
+  return new RegExp(`^${before}(\\d+\\.\\d+\\.\\d+)${after}$`);
+}
+
+/**
+ * A git install source read off a workspace pin: the pin's git URL with `version` in its #ref
+ * (once) replaced by {version}, e.g. `git+https://host/org/repo.git#dist-v1.22.0` at 1.22.0. Lets
+ * `pstack update` move a renamed copy whose installed version predates git install sources
+ * (v1.23.0) along the URL the workspace already uses. Null for any other spec.
+ */
+export function templateFromPin(spec: string, version: string): InstallSource | null {
+  const m = /^(git\+(?:https?|ssh|file):\/\/[^\s#]+#)([^\s#]+)$/.exec(spec.trim());
+  if (!m || !/^\d+\.\d+\.\d+$/.test(version) || m[2].split(version).length !== 2) return null;
+  return { kind: 'git', template: m[1] + m[2].replace(version, VERSION_PLACEHOLDER) };
+}
+
+/**
+ * The pin `pstack new` / `pstack update` write: a git tag of the repo, an exact npm version, or
+ * the git install source's URL with the version filled in.
+ */
+export function formatPluginSpec(version: string, source: InstallSource = installSource()): string {
   const v = normalizeVersion(version);
-  const source = installSource();
-  return source.kind === 'npm' ? v : `github:${source.repo}#v${v}`;
+  if (source.kind === 'npm') return v;
+  if (source.kind === 'git') return source.template.split(VERSION_PLACEHOLDER).join(v);
+  return `github:${source.repo}#v${v}`;
 }
 
 /**
@@ -58,33 +85,41 @@ export function pluginSpecOverride(env: NodeJS.ProcessEnv = process.env): string
 }
 
 /** Extra `npm install` flags for a pin, so npm saves it as formatPluginSpec wrote it. */
-export function pinInstallFlags(): string[] {
-  return installSource().kind === 'npm' ? ['--save-exact'] : [];
+export function pinInstallFlags(source: InstallSource = installSource()): string[] {
+  return source.kind === 'npm' ? ['--save-exact'] : [];
 }
 
 /**
  * The pinned version, or null when the spec is neither a tag of the plugin repo (github:,
- * git+https, git+ssh or owner/repo form; earlier repo names too) nor an npm version (x.y.z,
- * ^x.y.z, ~x.y.z or =x.y.z).
+ * git+https, git+ssh or owner/repo form; earlier repo names too), the git install source's URL,
+ * nor an npm version (x.y.z, ^x.y.z, ~x.y.z or =x.y.z).
  */
-export function parsePluginSpec(spec: string): string | null {
+export function parsePluginSpec(
+  spec: string,
+  source: InstallSource = installSource(),
+): string | null {
   const s = spec.trim();
-  const m = gitSpec().exec(s) ?? NPM_SPEC.exec(s);
+  const m = templateSpec(source)?.exec(s) ?? gitSpec(source).exec(s) ?? NPM_SPEC.exec(s);
   return m ? m[1] : null;
 }
 
 /**
  * Shell command that installs the global CLI.
  * - npm source: `npm i -g <package>@<version>`.
+ * - git source: the URL with the version (a prebuilt package: nothing is built on install).
  * - GitHub source: the prebuilt release asset. Not `npm i -g github:…#vX`: npm prepares git deps
  *   of a global install in global mode, so devDependencies (typescript) are missing and the
  *   build fails. Not the release download URL: the repo is private, and npm can't authenticate
  *   to GitHub; `gh` downloads with the user's GitHub login.
  */
-export function globalInstallCommand(version: string): string {
+export function globalInstallCommand(
+  version: string,
+  source: InstallSource = installSource(),
+  name: string = PLUGIN_NAME,
+): string {
   const v = normalizeVersion(version);
-  const source = installSource();
-  if (source.kind === 'npm') return `npm i -g ${PLUGIN_NAME}@${v}`;
+  if (source.kind === 'npm') return `npm i -g ${name}@${v}`;
+  if (source.kind === 'git') return `npm i -g "${name}@${formatPluginSpec(v, source)}"`;
   const asset = `mouryaamit-nx-polystack-v${v}.tgz`;
   return (
     `gh release download v${v} -R ${source.repo} -p ${asset} -D /tmp --clobber` +

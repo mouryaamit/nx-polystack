@@ -1,3 +1,4 @@
+import { InstallSource, installSource } from './install-source';
 import { CliError } from './types';
 import {
   compareVersions,
@@ -9,11 +10,25 @@ import {
   PLUGIN_NAME,
 } from './versions';
 
+/** The plugin as a workspace names it: package name and where it is installed from. */
+export interface PluginIdentity {
+  name: string;
+  source: InstallSource;
+}
+
+/** This build of the plugin. */
+export function selfIdentity(): PluginIdentity {
+  return { name: PLUGIN_NAME, source: installSource() };
+}
+
 /** `npm i -D …` command that pins the plugin at `version` the way pstack update does. */
-function pinCommand(version: string): string {
-  return ['npm i -D', `${PLUGIN_NAME}@${formatPluginSpec(version)}`, ...pinInstallFlags()].join(
-    ' ',
-  );
+function pinCommand(version: string, plugin: PluginIdentity): string {
+  const spec = `${plugin.name}@${formatPluginSpec(version, plugin.source)}`;
+  return [
+    'npm i -D',
+    plugin.source.kind === 'git' ? `"${spec}"` : spec,
+    ...pinInstallFlags(plugin.source),
+  ].join(' ');
 }
 
 export type DepField = 'devDependencies' | 'dependencies';
@@ -47,24 +62,25 @@ export function findPluginPin(
   pkg: any,
   example = '0.3.0',
   installed?: string,
+  plugin: PluginIdentity = selfIdentity(),
 ): PluginPin {
   for (const field of ['devDependencies', 'dependencies'] as DepField[]) {
-    const spec: string | undefined = pkg?.[field]?.[PLUGIN_NAME];
+    const spec: string | undefined = pkg?.[field]?.[plugin.name];
     if (spec === undefined) continue;
-    const version = parsePluginSpec(spec);
+    const version = parsePluginSpec(spec, plugin.source);
     if (!version && installed && /^\d+\.\d+\.\d+$/.test(installed)) {
       return { field, version: installed, spec, range: false, fromInstalled: true };
     }
     if (!version) {
       throw new CliError(
-        `${PLUGIN_NAME} is "${spec}" in ${field} and no installed copy was found. ` +
-          `pstack update needs a pinned version — pin one first: ${pinCommand(example)}`,
+        `${plugin.name} is "${spec}" in ${field} and no installed copy was found. ` +
+          `pstack update needs a pinned version — pin one first: ${pinCommand(example, plugin)}`,
       );
     }
     return { field, version, spec, range: /^\s*[\^~]/.test(spec) };
   }
   throw new CliError(
-    `${PLUGIN_NAME} is not listed in package.json. Add it first: ${pinCommand(example)}`,
+    `${plugin.name} is not listed in package.json. Add it first: ${pinCommand(example, plugin)}`,
   );
 }
 

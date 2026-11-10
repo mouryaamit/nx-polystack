@@ -369,6 +369,18 @@ export function applyInfra(tree: Tree, schema: InfraGeneratorSchema): InfraRepor
         (o.parts.includes('upgrades') ? ' and the upgrade workflow can find its releases.' : '.'),
     );
   }
+  if (
+    github &&
+    source.kind === 'git' &&
+    o.parts.includes('upgrades') &&
+    [...report.written, ...report.overwritten].includes('.github/workflows/dependency-upgrade.yml')
+  ) {
+    report.notes.push(
+      'The dependency-upgrade workflow looks up new nx-polystack versions on npm; this plugin ' +
+        'comes from a git install source (pstack.installSource), so it will not find them. ' +
+        'Move the plugin with pstack update instead.',
+    );
+  }
   return report;
 }
 

@@ -14,6 +14,7 @@ import {
   globalInstallCommand,
   parsePluginSpec,
   pinInstallFlags,
+  templateFromPin,
 } from '../../src/cli/versions';
 
 const DEV = { kind: 'github', repo: DEV_GITHUB_REPO } as const;
@@ -71,6 +72,69 @@ describe('install source (NX-51)', () => {
     expect(parsePluginSpec('github:example-org/private-plugin#v1.2.0')).toBe('1.2.0');
     for (const s of ['1.2.0', '^1.2.0', '~1.2.0', '=1.2.0', ' 1.2.0 ']) {
       expect(parsePluginSpec(s)).toBe('1.2.0');
+    }
+  });
+
+  it('parses a git URL template whose #ref holds {version} (v1.23.0)', () => {
+    const t = 'git+https://git.example.com/acme/tool.git#dist-v{version}';
+    expect(parseInstallSource(t)).toEqual({ kind: 'git', template: t });
+    expect(parseInstallSource('git+ssh://git@git.example.com/acme/tool.git#v{version}')).toEqual({
+      kind: 'git',
+      template: 'git+ssh://git@git.example.com/acme/tool.git#v{version}',
+    });
+    for (const bad of [
+      'git+https://git.example.com/acme/tool.git#dist-v1.2.0', // no {version}
+      'git+https://git.example.com/{version}/tool.git#dist', // {version} not in the ref
+      'git+https://git.example.com/acme/tool.git#{version}-{version}', // twice
+      'https://git.example.com/acme/tool.git#dist-v{version}', // not git+
+      'git+https://git.example.com/acme/tool.git #dist-v{version}', // space
+    ]) {
+      expect(() => parseInstallSource(bad)).toThrow(/installSource must be/);
+    }
+  });
+
+  it('a git build pins its URL with the version and installs the CLI from it (v1.23.0)', () => {
+    const t = 'git+https://git.example.com/acme/tool.git#dist-v{version}';
+    setInstallSourceForTests({ kind: 'git', template: t });
+    expect(formatPluginSpec('v1.23.0')).toBe(
+      'git+https://git.example.com/acme/tool.git#dist-v1.23.0',
+    );
+    expect(pinInstallFlags()).toEqual([]);
+    expect(globalInstallCommand('1.23.0')).toBe(
+      'npm i -g "@mouryaamit/nx-polystack@git+https://git.example.com/acme/tool.git#dist-v1.23.0"',
+    );
+    expect(parsePluginSpec('git+https://git.example.com/acme/tool.git#dist-v1.23.0')).toBe(
+      '1.23.0',
+    );
+    expect(parsePluginSpec('git+https://git.example.com/acme/tool.git#dist-v1.23')).toBeNull();
+    expect(parsePluginSpec('git+https://git.example.com/acme/other.git#dist-v1.23.0')).toBeNull();
+    // Earlier pins are still read, so pstack update can move them to the git source.
+    expect(parsePluginSpec('1.22.0')).toBe('1.22.0');
+    expect(parsePluginSpec('github:example-org/private-plugin#v1.22.0')).toBe('1.22.0');
+    // Another package name for the CLI install (a renamed copy).
+    expect(globalInstallCommand('1.23.0', { kind: 'git', template: t }, '@acme/tool')).toBe(
+      'npm i -g "@acme/tool@git+https://git.example.com/acme/tool.git#dist-v1.23.0"',
+    );
+  });
+
+  it('reads a git install source off a workspace pin (v1.23.0)', () => {
+    expect(templateFromPin('git+https://git.example.com/a/b.git#dist-v1.22.0', '1.22.0')).toEqual({
+      kind: 'git',
+      template: 'git+https://git.example.com/a/b.git#dist-v{version}',
+    });
+    // The version only in the ref, once; not for other specs.
+    expect(templateFromPin('git+https://h/1.22.0/b.git#dist-v1.22.0', '1.22.0')).toEqual({
+      kind: 'git',
+      template: 'git+https://h/1.22.0/b.git#dist-v{version}',
+    });
+    for (const [spec, v] of [
+      ['git+https://h/a/b.git#dist-v1.21.0', '1.22.0'],
+      ['git+https://h/a/b.git#1.22.0-1.22.0', '1.22.0'],
+      ['1.22.0', '1.22.0'],
+      ['github:a/b#v1.22.0', '1.22.0'],
+      ['git+https://h/a/b.git#dist-v1.22.0', 'latest'],
+    ]) {
+      expect(templateFromPin(spec, v)).toBeNull();
     }
   });
 });

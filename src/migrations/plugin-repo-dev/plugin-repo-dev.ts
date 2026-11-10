@@ -24,8 +24,8 @@ export function renamePluginRepo(text: string): string {
  * `pstack update` itself moves the package.json pin.
  */
 export default async function pluginRepoDev(tree: Tree): Promise<void> {
-  // In the npm build the earlier name is the public repo: nothing to point elsewhere.
-  if (installSource().kind === 'npm' || !tree.exists(WORKFLOWS)) return;
+  // In the npm (or git) build the earlier name is the public repo: nothing to point elsewhere.
+  if (installSource().kind !== 'github' || !tree.exists(WORKFLOWS)) return;
   const changed: string[] = [];
   for (const name of tree.children(WORKFLOWS)) {
     const file = `${WORKFLOWS}/${name}`;

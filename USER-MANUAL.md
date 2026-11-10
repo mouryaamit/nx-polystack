@@ -291,6 +291,27 @@ through to the migration step.
 either `git checkout -- . && npm install` and then `pstack update` again, or, after fixing the cause, rerun only
 the migrations with `npx pstack _migrate --from=<from> --to=<to>`.
 
+**Installing from another git server (v1.23.0).** A team can keep its own copy of the published package on
+an internal git server, one tag per version, and point pstack at it. In that copy's `package.json`:
+
+```json
+"pstack": { "installSource": "git+https://git.example.com/acme/nx-polystack.git#dist-v{version}" }
+```
+
+`{version}` appears once, in the `#` ref, and is replaced by the version: `pstack new` and `pstack update` pin
+`git+https://git.example.com/acme/nx-polystack.git#dist-v1.23.0` and install it with
+`npm install <package>@<that URL>` (no `--save-exact`); `pstack --help` shows
+`npm i -g "<package>@<that URL>"` for the global CLI. The copy must be prebuilt, like the npm package (no
+`prepare` script), because npm does not build git dependencies of a global install. npm uses the machine's git
+credentials; nothing goes in the URL. `git+ssh://` and `git+file://` URLs work too.
+
+The copy may also have its own package name (for example `@acme/nx-polystack`). A global CLI under the original
+name finds it through the workspace's `dependencies`/`devDependencies` (an installed package with a `pstack` bin
+and an install source it can read), hands workspace commands to it, and `pstack update` moves that package with
+its own URL. A copy older than 1.23.0 still names npm as its install source; `pstack update` then keeps the git URL
+the workspace pins it to, with the new version in the ref. The executor and generator names in `nx.json` and
+`project.json` follow the package name.
+
 **The 0.4.1 migration.** `add-lint-dependencies` adds the ESLint packages the root `.eslintrc.json` needs
 (`eslint`, `@nx/eslint`, `@nx/eslint-plugin`, `@typescript-eslint/*`, `eslint-config-prettier`) when missing, and,
 for Angular 15 workspaces, any missing build/lint package (`@angular-devkit/build-angular`, `@angular/compiler-cli`,

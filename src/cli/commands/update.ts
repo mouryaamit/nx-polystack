@@ -6,16 +6,15 @@ import { loadJsonc, restoreJsonLayouts, snapshotJsonConfigs } from '../../lib/ut
 import { flagBoolean, flagString } from '../args';
 import { findWorkspaceRoot, resolveLocalPlugin } from '../context';
 import { execOrThrow, gitStatus } from '../exec';
-import { installSource } from '../install-source';
 import { delegate } from '../launcher';
 import { CliError, CommandContext } from '../types';
-import { findPluginPin, resolveTarget } from '../update-plan';
+import { findPluginPin, PluginIdentity, resolveTarget, selfIdentity } from '../update-plan';
 import {
   compareVersions,
   formatPluginSpec,
   normalizeVersion,
   pinInstallFlags,
-  PLUGIN_NAME,
+  templateFromPin,
 } from '../versions';
 
 export interface UpdateDeps {
@@ -156,12 +155,22 @@ export async function runUpdate(
   }
   const toVersion = requestedVersion(ctx.positionals, flagString(ctx.flags, 'to'));
   const pkgText = fs.readFileSync(pkgPath, 'utf8');
-  const installedVersion = resolveLocalPlugin(root)?.version;
-  const pin = findPluginPin(
-    JSON.parse(pkgText.replace(/^\uFEFF/, '')),
-    ctx.selfVersion,
-    installedVersion,
-  );
+  const installedNow = resolveLocalPlugin(root);
+  const installedVersion = installedNow?.version;
+  // A workspace on a renamed copy of the plugin keeps that name and its install source.
+  const pkgJson = JSON.parse(pkgText.replace(/^\uFEFF/, ''));
+  let plugin: PluginIdentity = installedNow?.other ?? selfIdentity();
+  if (installedNow?.other) {
+    // An installed copy older than git install sources says "npm": keep the git URL it is pinned to.
+    const spec = pkgJson.devDependencies?.[plugin.name] ?? pkgJson.dependencies?.[plugin.name];
+    const fromPin =
+      plugin.source.kind !== 'git' && typeof spec === 'string'
+        ? templateFromPin(spec, installedNow.version)
+        : null;
+    if (fromPin) plugin = { name: plugin.name, source: fromPin };
+    console.log(`The workspace uses the plugin as ${plugin.name}; updating that package.`);
+  }
+  const pin = findPluginPin(pkgJson, ctx.selfVersion, installedVersion, plugin);
   if (pin.fromInstalled) {
     console.log(
       `${pin.field}: "${pin.spec}" is not a version pin; migrating from the installed v${pin.version}.`,
@@ -188,7 +197,7 @@ export async function runUpdate(
     return 0;
   }
 
-  console.log(`${pin.field}: ${pin.spec} → ${formatPluginSpec(target.to)}`);
+  console.log(`${pin.field}: ${pin.spec} → ${formatPluginSpec(target.to, plugin.source)}`);
 
   if (ctx.dryRun) {
     console.log(
@@ -225,11 +234,13 @@ export async function runUpdate(
       'npm',
       [
         'install',
-        `${PLUGIN_NAME}@${formatPluginSpec(target.to)}`,
+        `${plugin.name}@${formatPluginSpec(target.to, plugin.source)}`,
         ...(devkit ? [`@nx/devkit@${devkit}`] : []),
         pin.field === 'dependencies' ? '--save-prod' : '--save-dev',
-        ...pinInstallFlags(),
-        ...(devkit && !pinInstallFlags().includes('--save-exact') ? ['--save-exact'] : []),
+        ...pinInstallFlags(plugin.source),
+        ...(devkit && !pinInstallFlags(plugin.source).includes('--save-exact')
+          ? ['--save-exact']
+          : []),
       ],
       root,
     );
@@ -281,9 +292,10 @@ export async function runUpdate(
 
   console.log(`\nUpdated nx-polystack v${pin.version} → v${target.to}. Review with "git diff".`);
   const stale = githubWorkflows(root);
-  if (installSource().kind === 'npm' && stale.length > 0) {
+  if (plugin.source.kind !== 'github' && stale.length > 0) {
+    const from = plugin.source.kind === 'npm' ? 'npm' : 'its git install source';
     console.log(
-      `\nThe plugin now comes from npm, but ${stale.join(', ')} still install it from GitHub ` +
+      `\nThe plugin now comes from ${from}, but ${stale.join(', ')} still install it from GitHub ` +
         '(PSTACK_REPO_TOKEN, gh release). Rewrite them with: pstack infra --with=ci,upgrades --force',
     );
   }
