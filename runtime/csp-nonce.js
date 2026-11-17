@@ -14,7 +14,7 @@
  * The nonce is read from `window.__cspNonce`, else from <meta property="csp-nonce" content="…">
  * (written by the pstack release build) or <meta name="csp-nonce">. A value the server did not
  * fill in (an SSI directive left as is, or a placeholder such as "random-csp-nonce") counts as no
- * nonce: nothing is patched.
+ * nonce: nothing is patched, and one console warning says the nonce was not filled in.
  *
  * Plain browser JavaScript with no imports, safe to load more than once.
  */
@@ -47,11 +47,31 @@
 
   var raw = window.__cspNonce;
   var nonce = valid(raw) ? raw : undefined;
+  var meta;
   if (!nonce) {
-    var meta = fromMeta();
+    meta = fromMeta();
     nonce = valid(meta) ? meta : undefined;
   }
   if (!nonce) {
+    // A value is there but was not filled in (the server did not replace it): say so once.
+    // No value at all (e.g. ng serve without a CSP) stays silent; '' is what this runtime writes.
+    var unfilled =
+      typeof raw === 'string' && raw !== '' ? raw : typeof meta === 'string' ? meta : undefined;
+    if (
+      unfilled !== undefined &&
+      !window.__pstackCspNonceWarned &&
+      typeof console !== 'undefined'
+    ) {
+      window.__pstackCspNonceWarned = true;
+      console.warn(
+        '[pstack csp-nonce] The CSP nonce was not filled in (found "' +
+          unfilled.slice(0, 40) +
+          '"), so no nonce is added: under a nonce-based CSP, runtime <style>, <script> and ' +
+          '<link rel="stylesheet"> elements will be blocked. The server must replace the ' +
+          'placeholder in index.html on every response (e.g. Apache SSI: Options +IncludesNOEXEC ' +
+          'and the INCLUDES output filter for index.html).',
+      );
+    }
     window.__cspNonce = '';
     return;
   }

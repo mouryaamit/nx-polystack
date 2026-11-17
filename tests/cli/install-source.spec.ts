@@ -58,7 +58,9 @@ describe('install source (NX-51)', () => {
     setInstallSourceForTests({ kind: 'npm' });
     expect(formatPluginSpec('v1.2.0')).toBe('1.2.0');
     expect(pinInstallFlags()).toEqual(['--save-exact']);
-    expect(globalInstallCommand('1.2.0')).toBe('npm i -g @mouryaamit/nx-polystack@1.2.0');
+    expect(globalInstallCommand('1.2.0')).toBe(
+      'npm i -g @mouryaamit/nx-polystack@1.2.0 nx@22 @nx/devkit@22',
+    );
     // Git pins of a dev workspace are still read, so pstack update can move them to npm.
     expect(parsePluginSpec('github:example-org/private-plugin#v0.38.2')).toBe('0.38.2');
   });
@@ -101,7 +103,7 @@ describe('install source (NX-51)', () => {
     );
     expect(pinInstallFlags()).toEqual([]);
     expect(globalInstallCommand('1.23.0')).toBe(
-      'npm i -g "@mouryaamit/nx-polystack@git+https://git.example.com/acme/tool.git#dist-v1.23.0"',
+      'npm i -g "@mouryaamit/nx-polystack@git+https://git.example.com/acme/tool.git#dist-v1.23.0" nx@22 @nx/devkit@22',
     );
     expect(parsePluginSpec('git+https://git.example.com/acme/tool.git#dist-v1.23.0')).toBe(
       '1.23.0',
@@ -113,7 +115,7 @@ describe('install source (NX-51)', () => {
     expect(parsePluginSpec('github:example-org/private-plugin#v1.22.0')).toBe('1.22.0');
     // Another package name for the CLI install (a renamed copy).
     expect(globalInstallCommand('1.23.0', { kind: 'git', template: t }, '@acme/tool')).toBe(
-      'npm i -g "@acme/tool@git+https://git.example.com/acme/tool.git#dist-v1.23.0"',
+      'npm i -g "@acme/tool@git+https://git.example.com/acme/tool.git#dist-v1.23.0" nx@22 @nx/devkit@22',
     );
   });
 

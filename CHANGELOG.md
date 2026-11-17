@@ -3,6 +3,26 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.24.0
+
+- New opt-in runtime `@mouryaamit/nx-polystack/runtime/csp-style-attr`, imported right after
+  `runtime/csp-nonce`: it routes `setAttribute('style', v)` and `setAttributeNS(null, 'style', v)`
+  to `el.style.cssText = v`, which a `style-src` without `'unsafe-inline'` allows. Static template
+  and host styles, `[attr.style]`, NgbModal, NgbTooltip, NgbPopover and ngx-extended-pdf-viewer no
+  longer hit `style-src-attr` on Angular 15–21. Conditions of use (F1–F5) are in the README.
+- `runtime/csp-nonce` logs one console warning when a nonce value is present but was not filled in
+  (an SSI directive, `(none)` or a placeholder); before, it did nothing, silently. No value at all
+  stays silent.
+- `nx` and `@nx/devkit` are now optional peer dependencies, so an app that only imports a runtime
+  file (an Angular CLI app outside a workspace) no longer gets Nx and its install script. Install
+  the global CLI with them: `npm i -g @mouryaamit/nx-polystack nx@22 @nx/devkit@22` (`pstack --help`
+  and `pstack update` print this); commands that need them say so when they are missing.
+  Workspaces are unchanged (they have both as devDependencies).
+- `ignore` is resolved through `nx` when `@nx/devkit` does not have it (Nx 22's devkit no longer
+  depends on it; it was found only when both were installed in one tree).
+- README: "Phase 1 – runtime only" (using `runtime/csp-nonce` without a workspace, with the Apache
+  SSI setup).
+
 ## 1.23.0
 
 - `pstack.installSource` in the plugin's `package.json` may now be a git URL whose ref holds

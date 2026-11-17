@@ -71,13 +71,17 @@ function browser(opts: { cspNonce?: string; meta?: Record<string, string> } = {}
   };
   const window: Record<string, unknown> = {};
   if (opts.cspNonce !== undefined) window['__cspNonce'] = opts.cspNonce;
-  vm.runInContext(SOURCE, vm.createContext({ window, document, Node, Element, DocumentFragment }));
+  const warnings: string[] = [];
+  const console = { warn: (...args: unknown[]) => warnings.push(args.join(' ')) };
+  const context = vm.createContext({ window, document, Node, Element, DocumentFragment, console });
+  const load = () => vm.runInContext(SOURCE, context);
+  load();
   const el = (name: string, attrs: Record<string, string> = {}) => {
     const e = new Element(name);
     Object.assign(e.attrs, attrs);
     return e;
   };
-  return { window, head, el, DocumentFragment };
+  return { window, head, el, DocumentFragment, warnings, load };
 }
 
 const NONCE = 'Abc123XyZ987==';
@@ -156,5 +160,49 @@ describe('runtime/csp-nonce', () => {
     b.head.appendChild(script);
     expect(script.getAttribute('nonce')).toBeNull();
     expect(b.window['__cspNonce']).toBe('');
+  });
+
+  describe('warning when the nonce was not filled in', () => {
+    it('warns once when the global holds an unprocessed SSI directive', () => {
+      const b = browser({ cspNonce: '<!--#echo var="CSP_NONCE" -->' });
+      expect(b.warnings).toHaveLength(1);
+      expect(b.warnings[0]).toContain('[pstack csp-nonce]');
+      expect(b.warnings[0]).toContain('not filled in');
+    });
+
+    it('warns when the meta tag holds the build placeholder', () => {
+      const b = browser({ meta: { 'meta[property="csp-nonce"]': 'random-csp-nonce' } });
+      expect(b.warnings).toHaveLength(1);
+      expect(b.warnings[0]).toContain('random-csp-nonce');
+    });
+
+    it("warns for Apache's (none) (SSI ran, variable not set) and an empty meta content", () => {
+      expect(browser({ cspNonce: '(none)' }).warnings).toHaveLength(1);
+      expect(browser({ meta: { 'meta[name="csp-nonce"]': '' } }).warnings).toHaveLength(1);
+    });
+
+    it('warns only once when the runtime is loaded twice', () => {
+      const b = browser({ cspNonce: 'random-csp-nonce' });
+      b.load();
+      expect(b.warnings).toHaveLength(1);
+    });
+
+    it('stays silent when there is no nonce value at all (e.g. ng serve without CSP)', () => {
+      const b = browser();
+      b.load();
+      expect(b.warnings).toHaveLength(0);
+    });
+
+    it('stays silent when a placeholder global is backed by a filled meta tag', () => {
+      const b = browser({
+        cspNonce: 'random-csp-nonce',
+        meta: { 'meta[property="csp-nonce"]': 'MetaNonce1234' },
+      });
+      expect(b.warnings).toHaveLength(0);
+    });
+
+    it('stays silent with a filled nonce', () => {
+      expect(browser({ cspNonce: NONCE }).warnings).toHaveLength(0);
+    });
   });
 });

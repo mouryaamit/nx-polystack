@@ -3,6 +3,7 @@ import {
   compareVersions,
   globalInstallCommand,
   formatPluginSpec,
+  missingNxPeerHint,
   normalizeVersion,
   parsePluginSpec,
   PLUGIN_NAME,
@@ -79,8 +80,23 @@ describe('versions', () => {
   it('globalInstallCommand downloads the private release asset with gh, then installs it', () => {
     expect(globalInstallCommand('v0.3.2')).toBe(
       'gh release download v0.3.2 -R example-org/private-plugin -p mouryaamit-nx-polystack-v0.3.2.tgz -D /tmp --clobber' +
-        ' && npm i -g /tmp/mouryaamit-nx-polystack-v0.3.2.tgz',
+        ' && npm i -g /tmp/mouryaamit-nx-polystack-v0.3.2.tgz nx@22 @nx/devkit@22',
     );
+  });
+
+  it('missingNxPeerHint names the install for a missing nx / @nx/devkit peer (v1.24.0), else nothing', () => {
+    const missing = (m: string) =>
+      Object.assign(new Error(`Cannot find module '${m}'\nRequire stack:\n- /x/run-tree.js`), {
+        code: 'MODULE_NOT_FOUND',
+      });
+    for (const m of ['@nx/devkit', 'nx', 'nx/src/generators/tree', '@nx/devkit/src/utils']) {
+      const hint = missingNxPeerHint(missing(m));
+      expect(hint).toContain('npm i -g nx@22 @nx/devkit@22');
+    }
+    expect(missingNxPeerHint(missing('sharp'))).toBeUndefined();
+    expect(missingNxPeerHint(missing('nxx'))).toBeUndefined();
+    expect(missingNxPeerHint(new Error("Cannot find module '@nx/devkit'"))).toBeUndefined();
+    expect(missingNxPeerHint('nope')).toBeUndefined();
   });
 
   it('pluginSpecOverride reads PSTACK_PLUGIN_SPEC; empty or unset is none', () => {

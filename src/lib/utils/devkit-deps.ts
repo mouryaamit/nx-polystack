@@ -19,8 +19,21 @@ export interface Ignore {
   ignores(pathname: string): boolean;
 }
 
+/**
+ * `ignore` is a dependency of nx, not of @nx/devkit 22: it resolved through @nx/devkit only when
+ * both were installed in one tree. Since 1.24.0 they can be separate global installs, so fall
+ * back to nx.
+ */
+function fromDevkitOrNx(id: string) {
+  try {
+    return fromDevkit(id);
+  } catch {
+    return createRequire(require.resolve('nx/package.json'))(id);
+  }
+}
+
 export const semver: Semver = fromDevkit('semver');
-const ignoreModule = fromDevkit('ignore');
+const ignoreModule = fromDevkitOrNx('ignore');
 export const createIgnore: () => Ignore = ignoreModule.default ?? ignoreModule;
 
 /**

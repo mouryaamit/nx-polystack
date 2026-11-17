@@ -118,11 +118,32 @@ export function globalInstallCommand(
   name: string = PLUGIN_NAME,
 ): string {
   const v = normalizeVersion(version);
-  if (source.kind === 'npm') return `npm i -g ${name}@${v}`;
-  if (source.kind === 'git') return `npm i -g "${name}@${formatPluginSpec(v, source)}"`;
+  if (source.kind === 'npm') return `npm i -g ${name}@${v} ${GLOBAL_NX_PEERS}`;
+  if (source.kind === 'git') {
+    return `npm i -g "${name}@${formatPluginSpec(v, source)}" ${GLOBAL_NX_PEERS}`;
+  }
   const asset = `mouryaamit-nx-polystack-v${v}.tgz`;
   return (
     `gh release download v${v} -R ${source.repo} -p ${asset} -D /tmp --clobber` +
-    ` && npm i -g /tmp/${asset}`
+    ` && npm i -g /tmp/${asset} ${GLOBAL_NX_PEERS}`
+  );
+}
+
+/**
+ * nx and @nx/devkit are optional peers since 1.24.0 (so apps that only import a runtime file do
+ * not get Nx), so the global CLI is installed with them: `pstack new` writes the new workspace
+ * through @nx/devkit before that workspace has its own.
+ */
+export const GLOBAL_NX_PEERS = 'nx@22 @nx/devkit@22';
+
+/** The fix for a command that failed to load because nx / @nx/devkit is missing, else undefined. */
+export function missingNxPeerHint(err: unknown): string | undefined {
+  if (!(err instanceof Error) || (err as NodeJS.ErrnoException).code !== 'MODULE_NOT_FOUND') {
+    return undefined;
+  }
+  if (!/Cannot find module '(@nx\/devkit|nx)(\/[^']*)?'/.test(err.message)) return undefined;
+  return (
+    'This command needs nx and @nx/devkit next to the global pstack CLI (optional peers since ' +
+    `1.24.0). Install them: npm i -g ${GLOBAL_NX_PEERS}`
   );
 }
