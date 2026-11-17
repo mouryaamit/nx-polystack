@@ -67,12 +67,15 @@ that target Angular, Ionic, Flutter, Android, and iOS from a single workspace. I
 ### Option A — global install (recommended)
 
 ```bash
-npm i -g @mouryaamit/nx-polystack
+npm i -g @mouryaamit/nx-polystack nx@22 @nx/devkit@22
 pstack --version
 pstack --help
 ```
 
-Requires npm 7+, which installs the `nx` and `@nx/devkit` peer dependencies next to the global package.
+Requires npm 7+. Since v1.24.0 `nx` and `@nx/devkit` are optional peer dependencies (so an app that
+only imports a runtime file, such as `runtime/csp-nonce`, does not get Nx), so the global install
+names them. `pstack new`, `preset`, `upgrade` and `migrate` need them; without them those commands
+stop with the install command. `pstack --help` and `pstack update` print it too.
 
 Note: `npm install` inside a new workspace (run by `pstack new`) downloads sharp's prebuilt binaries, so it needs network access.
 
@@ -946,9 +949,23 @@ blocks them (Angular 15 has no built-in nonce support).
   - `append`/`prepend`/`before`/`after`/`replaceWith`/`insertAdjacentElement`.
 - **Where the nonce comes from:** `window.__cspNonce`, or the `csp-nonce` meta tag that
   `release --secure` writes. An SSI directive the server did not process, or a placeholder such as
-  `random-csp-nonce`, counts as no nonce, and nothing is patched.
+  `random-csp-nonce`, counts as no nonce, and nothing is patched. Since v1.24.0 that case logs one
+  console warning (`[pstack csp-nonce] The CSP nonce was not filled in …`); no value at all
+  (e.g. `ng serve` without a CSP) stays silent.
 - **Existing apps:** `pstack update` (migration `add-csp-nonce-import`) adds the import to apps
   with the polystack release target. It never removes a local nonce patch import.
+- **Outside a workspace:** an Angular CLI app can install the package and import only this file;
+  see "Phase 1 – runtime only" in the README for the server side.
+
+#### Style attributes at runtime (v1.24.0, opt-in)
+
+`@mouryaamit/nx-polystack/runtime/csp-style-attr`, imported right after `runtime/csp-nonce`, routes
+`setAttribute('style', v)` and `setAttributeNS(null, 'style', v)` to `el.style.cssText = v`, which
+`style-src` without `'unsafe-inline'` allows. That covers static template and host styles,
+`[attr.style]` and libraries such as NgbModal, NgbTooltip, NgbPopover and ngx-extended-pdf-viewer,
+on Angular 15–21. Its conditions of use (no user-controlled data, no CSP reports for these writes,
+what stays blocked, normalised `getAttribute('style')`, import order and rollback) are in the
+README section "Style attributes under a strict CSP". pstack does not add the import; apps opt in.
 
 #### Env encryption settings (v0.25.0)
 
@@ -2053,7 +2070,7 @@ if it was stripped by the TypeScript compiler.
 version shown differs from what was installed, you may have a stale global install:
 
 ```bash
-npm i -g @mouryaamit/nx-polystack@latest
+npm i -g @mouryaamit/nx-polystack@latest nx@22 @nx/devkit@22
 ```
 
 Inside a workspace whose local plugin version differs from the global CLI, `pstack -v` prints the global

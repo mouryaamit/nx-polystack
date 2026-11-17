@@ -10,7 +10,7 @@ pipeline into every app, so they are all built the same way.
 ## Install
 
 ```bash
-npm i -g @mouryaamit/nx-polystack
+npm i -g @mouryaamit/nx-polystack nx@22 @nx/devkit@22
 pstack new my-workspace --npmScope=acme --ci=github-actions
 cd my-workspace
 pstack app --type=angular --name=portal
@@ -22,6 +22,10 @@ pstack app --from=portal --name=partner-portal   # a copy of portal, env values 
 `pstack new` pins the plugin in the workspace. Inside a workspace, `pstack` hands commands to that
 pinned copy, so output always matches the workspace's version. Move a workspace to a new release
 with `pstack update`, which installs it and runs its migrations.
+
+`nx` and `@nx/devkit` are optional peer dependencies (since 1.24.0, so apps that only import a
+runtime file do not get Nx), which is why the global install names them; without them, commands
+that need them stop with this install hint.
 
 Requires Node 20 and npm 10+. `pstack new` creates Nx 17 workspaces on Angular 15 or, with
 `--angular=16`, Angular 16, and Nx 18 workspaces with `--angular=17`; the plugin itself loads in workspaces on Nx 17 to 22.
@@ -133,6 +137,121 @@ npm i -D --save-exact @mouryaamit/nx-polystack @nx/devkit@17.0.6
 npx nx list @mouryaamit/nx-polystack
 npx nx g @mouryaamit/nx-polystack:app --type=angular --name=portal
 ```
+
+## Phase 1 – runtime only
+
+An Angular 15 app that is not in a pstack workspace yet (a plain Angular CLI repo) can use the CSP
+nonce runtime on its own. It needs no `nx.json` and no workspace config, and the install brings in
+no Nx and runs no install scripts (only `tslib` comes with it):
+
+```bash
+npm i -E @mouryaamit/nx-polystack@1.24.0      # or the team's git copy, e.g. "<package>@git+https://…#dist-v1.24.0"
+```
+
+First line of `src/main.ts` (a renamed copy uses its own package name):
+
+```ts
+import '@mouryaamit/nx-polystack/runtime/csp-nonce';
+```
+
+It gives the page nonce to the `<style>`, `<script>` and `<link rel="stylesheet">` elements that
+Angular 15 and webpack add at runtime (inserted via `appendChild`, `insertBefore`, `append`, … on
+the document, elements and shadow roots). Runtime 1.24.0 behaves the same as the 1.2.2 runtime
+(the file is unchanged apart from the warning below).
+
+**Server side.** The nonce must be new on every response, and the same value must appear in the CSP
+header and in `index.html`:
+
+- `<meta property="csp-nonce" content="…">` in `<head>` (preferred: the runtime reads it even
+  when an inline script is not allowed), or an inline
+  `<script nonce="…">window.__cspNonce = '…';</script>` before the app's scripts. The runtime
+  reads `window.__cspNonce` first, then the meta tag (`property="csp-nonce"` or `name="csp-nonce"`).
+- `nonce="…"` on every `<script>`, `<link rel="stylesheet">` and `<style>` in the built
+  `index.html`. Angular 15 does not add these; pstack's release build does, and outside a workspace
+  the app's own post-build step must (for example one that writes the SSI directive below).
+
+With Apache, mod_include (SSI) fills the value. In `index.html` (single quotes inside the
+directive, so an unprocessed directive cannot end the double-quoted attribute):
+
+```html
+<meta property="csp-nonce" content="<!--#echo var='CSP_NONCE' -->" />
+<script src="main.js" type="module" nonce="<!--#echo var='CSP_NONCE' -->"></script>
+```
+
+`.htaccess` next to `index.html` (needs `mod_rewrite`, `mod_headers`, `mod_include`,
+`mod_unique_id` and `mod_setenvif`, and `AllowOverride FileInfo Options=IncludesNOEXEC` for the
+folder). This is what `pstack csp` writes, reduced to the CSP parts:
+
+```apache
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
+
+# Per-request nonce: UNIQUE_ID without "@" (not allowed in a nonce). reqenv() reads the
+# environment only, so request headers cannot set it. Repeat the second line 8 times in all.
+SetEnvIfExpr "reqenv('UNIQUE_ID') =~ /^(.+)$/" CSP_NONCE=$1
+SetEnvIfExpr "reqenv('CSP_NONCE') =~ /^([^@]*)@(.*)$/" CSP_NONCE=$1_$2
+
+Options +IncludesNOEXEC
+<Files "index.html">
+    SetOutputFilter INCLUDES
+    Header always set Cache-Control "no-store"
+</Files>
+
+Header always set Content-Security-Policy "script-src 'self' 'nonce-%{CSP_NONCE}e' 'strict-dynamic'; style-src 'self' 'nonce-%{CSP_NONCE}e'; object-src 'none'; base-uri 'self'"
+```
+
+**When the value is not filled in.** A value that is not a real nonce (the SSI directive left as
+is, Apache's `(none)` for an unset variable, or a placeholder such as `random-csp-nonce`) counts as
+no nonce: nothing is patched, so runtime styles and scripts are blocked. Since 1.24.0 the runtime
+then logs one console warning, `[pstack csp-nonce] The CSP nonce was not filled in …`. No value at
+all (e.g. `ng serve` without a CSP) stays silent. If the server fills nothing, the browser usually
+blocks the app's own scripts first (their `nonce` attributes are unfilled too, and Angular 16+
+copies `ngCspNonce` onto its script tags), so the runtime never runs: the browser's CSP errors
+are then the signal.
+
+## Style attributes under a strict CSP: runtime/csp-style-attr (opt-in, 1.24.0)
+
+Under `style-src` without `'unsafe-inline'`, `element.setAttribute('style', …)` is blocked
+(`style-src-attr`), but the same declarations written through the CSSOM (`element.style.cssText`)
+are allowed. Angular writes static `style="…"` in templates, host styles and `[attr.style]` with
+`setAttribute('style')`, and so do libraries (NgbModal backdrop, NgbTooltip, NgbPopover,
+ngx-extended-pdf-viewer). This opt-in runtime routes those writes to the CSSOM. Angular 15–21 need
+it (Angular 21 for the NgbModal backdrop and NgbPopover). Import it right after the nonce runtime:
+
+```ts
+import '@mouryaamit/nx-polystack/runtime/csp-nonce';
+import '@mouryaamit/nx-polystack/runtime/csp-style-attr';
+```
+
+It replaces `Element.prototype.setAttribute` and `setAttributeNS` so that only
+`setAttribute('style', v)` (any case) and `setAttributeNS(null, 'style', v)` become
+`el.style.cssText = v`; every other attribute and namespace goes to the original method. It does
+not depend on the nonce. Angular 21's builder warns that the two runtime files are not ESM; that is
+harmless (they are side-effect-only scripts), and `allowedCommonJsDependencies` silences it.
+
+Conditions of use (any change to the patch needs a new security review):
+
+- **F1 – no user-controlled data** in `[attr.style]`, `[style]`, `[ngStyle]` or
+  `setAttribute('style', …)`. The patch lifts the CSP block on these writes, so CSS from user input
+  would be applied (CSS injection: overlays, data exfiltration through `url()`).
+- **F2 – no CSP reports for these writes.** They no longer raise `securitypolicyviolation` events
+  or reports. Keep CSP reporting on for everything else.
+- **F3 – only `setAttribute` / `setAttributeNS` are patched.** `setAttributeNode`,
+  `attributes.setNamedItem` and `Attr.value` still set the attribute and stay blocked.
+- **F4 – `getAttribute('style')` returns normalised text.** The browser's serialisation is
+  returned, not the string written, and declarations the browser does not support are dropped
+  (`'color: rgb(0, 0, 255); -x-unknown: 1'` reads back as `'color: rgb(0, 0, 255);'`).
+- **F5 – import order and rollback.** Import it right after `runtime/csp-nonce`. To roll back,
+  remove the line.
+
+Not covered (still blocked by `style-src-attr`): `style="…"` in markup parsed by the HTML parser,
+i.e. `innerHTML`, `insertAdjacentHTML`, `[innerHTML]` content and static `index.html` markup
+(for example ngx-extended-pdf-viewer's thumbnails, one report per page, which it builds with `innerHTML`).
+Static `style="…"` written in Angular templates is not parser markup: Angular sets it with
+`setAttribute`, so it is covered. Trusted Types and inline event handlers
+(`setAttribute('onclick', …)`) are unaffected.
 
 ## Contributing and security
 

@@ -21,6 +21,7 @@ import {
   workspaceNxProblem,
 } from '../src/cli/launcher';
 import { CliError, CommandContext } from '../src/cli/types';
+import { missingNxPeerHint } from '../src/cli/versions';
 
 async function main(argv: string[]): Promise<number> {
   const { command, positionals, flags } = parseArgs(argv);
@@ -107,6 +108,11 @@ async function main(argv: string[]): Promise<number> {
   try {
     return await handler(ctx);
   } catch (err: unknown) {
+    const hint = missingNxPeerHint(err);
+    if (hint) {
+      console.error(`\nError: ${hint}`);
+      return 1;
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\nError: ${message}`);
     if (verbose && !(err instanceof CliError) && err instanceof Error && err.stack) {
