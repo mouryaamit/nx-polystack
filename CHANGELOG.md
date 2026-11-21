@@ -3,6 +3,13 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.24.2
+
+- Packaging only: no changes to the code, the migrations or the runtime files since 1.24.1.
+  Published so that copies of the package rebuilt for another git server (a `git+…#…{version}`
+  `pstack.installSource`) can be released with a different install URL. Nothing to do for npm or
+  GitHub installs; `pstack update` from 1.24.1 runs no migrations.
+
 ## 1.24.1
 
 - `runtime/csp-nonce` and `runtime/csp-style-attr` also ship as ES modules (`.mjs`, same content)
