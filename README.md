@@ -228,8 +228,11 @@ import '@mouryaamit/nx-polystack/runtime/csp-style-attr';
 It replaces `Element.prototype.setAttribute` and `setAttributeNS` so that only
 `setAttribute('style', v)` (any case) and `setAttributeNS(null, 'style', v)` become
 `el.style.cssText = v`; every other attribute and namespace goes to the original method. It does
-not depend on the nonce. Angular 21's builder warns that the two runtime files are not ESM; that is
-harmless (they are side-effect-only scripts), and `allowedCommonJsDependencies` silences it.
+not depend on the nonce. Both runtime files ship twice with the same content: an ES module
+(`.mjs`, the `import` condition that Angular's application builder and webpack follow) and a
+CommonJS file (`.js`, for `require()`). Up to 1.24.0 they were CommonJS only, and Angular 21's builder
+warned that they are not ESM (harmless; `allowedCommonJsDependencies` silenced it); since 1.24.1
+no entry is needed.
 
 Conditions of use (any change to the patch needs a new security review):
 
@@ -247,11 +250,41 @@ Conditions of use (any change to the patch needs a new security review):
   remove the line.
 
 Not covered (still blocked by `style-src-attr`): `style="…"` in markup parsed by the HTML parser,
-i.e. `innerHTML`, `insertAdjacentHTML`, `[innerHTML]` content and static `index.html` markup
-(for example ngx-extended-pdf-viewer's thumbnails, one report per page, which it builds with `innerHTML`).
+i.e. `innerHTML`, `insertAdjacentHTML`, `[innerHTML]` content and static `index.html` markup.
+This is by design: the parser creates those attributes without calling `setAttribute`.
 Static `style="…"` written in Angular templates is not parser markup: Angular sets it with
 `setAttribute`, so it is covered. Trusted Types and inline event handlers
 (`setAttribute('onclick', …)`) are unaffected.
+
+How much a library still reports depends on how it builds its markup, so check the version you
+use. ngx-extended-pdf-viewer on Angular 15 (Chromium, strict nonce CSP, measured per page load):
+
+| ngx-extended-pdf-viewer             | Nonce runtime only | With csp-style-attr                      | What remains                                                                                                                        |
+| ----------------------------------- | ------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 15.x and older (15.2.2, 3-page PDF) | 60                 | 3                                        | the thumbnail selection rings, about one report per page; the viewer builds them with `innerHTML`                                   |
+| 18.x (18.1.15, an app's pdf route)  | 79                 | 60 (71 with sidebar, navigation or find) | mostly the toolbar icon SVGs, which the viewer inserts through `[innerHTML]` in its `pdf-shy-button` template; none from thumbnails |
+
+In 15.x the toolbar icon sizes are static template styles, so the patch covers them. In 18.x the
+same `style="width…; height…; margin-top…"` arrives as parser markup and stays blocked, so the
+icons lose their sizes (oversized, the rotate icons overlap). Restore them in a global stylesheet
+of the app with one rule per blocked value: each rule matches the icons whose `style` attribute
+holds that value and sets the same value, for example
+
+```css
+ngx-extended-pdf-viewer
+  :is(pdf-shy-button > .toolbarButton, .secondaryToolbarButton > .icon)
+  > svg[style*='width: 24px'] {
+  width: 24px;
+}
+```
+
+with one such rule for every `width`, `height` and `margin-top` value the viewer version uses (the
+icons range from 16 to 27 px). Do not use one fixed size for all icons: it changes the icons that
+have other sizes, and it also overrides the `width`/`height` attributes of newer viewer versions
+(32.x on Angular 21), which do not need the fix. A rule set like this was checked to be
+pixel-identical to the intended layout on 18.1.15 and to have no effect on 32.x; check it again
+for any other 18.x patch version. The Angular 21 test app did not include the pdf viewer, so
+there are no Angular 21 figures for it.
 
 ## Contributing and security
 

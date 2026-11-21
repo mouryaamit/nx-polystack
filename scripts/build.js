@@ -50,9 +50,13 @@ if (!cli.startsWith('#!/usr/bin/env node')) {
 fs.chmodSync(cliBin, 0o755);
 
 // ── 5. CommonJS copies of runtime ES modules (for Jest and other require() users) ────
+// A .mjs with a .js twin (csp-nonce, csp-style-attr: plain scripts, same bytes) needs no copy.
 const ts = require('typescript');
 fs.mkdirSync(path.join(DIST, 'runtime'), { recursive: true });
-for (const name of fs.readdirSync(path.join(ROOT, 'runtime')).filter((f) => f.endsWith('.mjs'))) {
+const runtimeDir = path.join(ROOT, 'runtime');
+const esmOnly = (f) =>
+  f.endsWith('.mjs') && !fs.existsSync(path.join(runtimeDir, f.replace(/\.mjs$/, '.js')));
+for (const name of fs.readdirSync(runtimeDir).filter(esmOnly)) {
   const source = fs.readFileSync(path.join(ROOT, 'runtime', name), 'utf8');
   const out = ts.transpileModule(source, {
     compilerOptions: {

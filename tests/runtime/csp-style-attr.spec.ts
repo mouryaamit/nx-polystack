@@ -2,7 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
 
-const SOURCE = fs.readFileSync(path.resolve(__dirname, '../../runtime/csp-style-attr.js'), 'utf8');
+/**
+ * The CommonJS file and its ESM twin (NX-129, same bytes). The .mjs runs in strict mode, as a
+ * bundler or browser evaluates an ES module.
+ */
+function read(file: string): string {
+  const src = fs.readFileSync(path.resolve(__dirname, '../../runtime', file), 'utf8');
+  return file.endsWith('.mjs') ? `'use strict';\n${src}` : src;
+}
+let SOURCE = '';
 
 /**
  * A small DOM shaped like the real one: setAttribute / setAttributeNS / setAttributeNode live on
@@ -49,7 +57,11 @@ function browser() {
   return { Element, nativeCalls, originals, window, load };
 }
 
-describe('runtime/csp-style-attr', () => {
+describe.each(['csp-style-attr.js', 'csp-style-attr.mjs'])('runtime/%s', (file) => {
+  beforeAll(() => {
+    SOURCE = read(file);
+  });
+
   it("routes setAttribute('style', v) to style.cssText, not to the attribute", () => {
     const b = browser();
     const el = new b.Element();

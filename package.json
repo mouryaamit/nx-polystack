@@ -1,6 +1,6 @@
 {
   "name": "@mouryaamit/nx-polystack",
-  "version": "1.24.0",
+  "version": "1.24.1",
   "description": "Nx plugin and pstack CLI that scaffold and build multi-tech monorepos (Angular, Ionic, Flutter) with a hardened release pipeline.",
   "license": "MIT",
   "type": "commonjs",
@@ -15,8 +15,14 @@
       "types": "./dist/src/migrate-sdk.d.ts",
       "default": "./dist/src/migrate-sdk.js"
     },
-    "./runtime/csp-nonce": "./runtime/csp-nonce.js",
-    "./runtime/csp-style-attr": "./runtime/csp-style-attr.js",
+    "./runtime/csp-nonce": {
+      "import": "./runtime/csp-nonce.mjs",
+      "default": "./runtime/csp-nonce.js"
+    },
+    "./runtime/csp-style-attr": {
+      "import": "./runtime/csp-style-attr.mjs",
+      "default": "./runtime/csp-style-attr.js"
+    },
     "./runtime/env-secret": {
       "types": "./runtime/env-secret.d.ts",
       "import": "./runtime/env-secret.mjs",

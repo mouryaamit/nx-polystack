@@ -2,7 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
 
-const SOURCE = fs.readFileSync(path.resolve(__dirname, '../../runtime/csp-nonce.js'), 'utf8');
+/**
+ * The CommonJS file and its ESM twin (NX-129, same bytes). The .mjs runs in strict mode, as a
+ * bundler or browser evaluates an ES module.
+ */
+function read(file: string): string {
+  const src = fs.readFileSync(path.resolve(__dirname, '../../runtime', file), 'utf8');
+  return file.endsWith('.mjs') ? `'use strict';\n${src}` : src;
+}
+let SOURCE = '';
 
 /**
  * A small DOM shaped like the real one: insertion methods live on Node.prototype (appendChild,
@@ -86,7 +94,11 @@ function browser(opts: { cspNonce?: string; meta?: Record<string, string> } = {}
 
 const NONCE = 'Abc123XyZ987==';
 
-describe('runtime/csp-nonce', () => {
+describe.each(['csp-nonce.js', 'csp-nonce.mjs'])('runtime/%s', (file) => {
+  beforeAll(() => {
+    SOURCE = read(file);
+  });
+
   it('stamps scripts, styles and stylesheet links appended to document.head', () => {
     const b = browser({ cspNonce: NONCE });
     const script = b.el('script');
