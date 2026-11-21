@@ -962,10 +962,17 @@ blocks them (Angular 15 has no built-in nonce support).
 `@mouryaamit/nx-polystack/runtime/csp-style-attr`, imported right after `runtime/csp-nonce`, routes
 `setAttribute('style', v)` and `setAttributeNS(null, 'style', v)` to `el.style.cssText = v`, which
 `style-src` without `'unsafe-inline'` allows. That covers static template and host styles,
-`[attr.style]` and libraries such as NgbModal, NgbTooltip, NgbPopover and ngx-extended-pdf-viewer,
-on Angular 15–21. Its conditions of use (no user-controlled data, no CSP reports for these writes,
+`[attr.style]` and libraries such as NgbModal, NgbTooltip and NgbPopover, on Angular 15–21. Style
+attributes created by the HTML parser stay blocked: ngx-extended-pdf-viewer 18.x inserts its toolbar
+icons that way (about 60 reports per page load; the icons lose their sizes until a global
+stylesheet restores each blocked value with a matching rule, not one fixed size), 15.x its
+thumbnail rings (about one per page); figures and the rule pattern in the README.
+Its conditions of use (no user-controlled data, no CSP reports for these writes,
 what stays blocked, normalised `getAttribute('style')`, import order and rollback) are in the
 README section "Style attributes under a strict CSP". pstack does not add the import; apps opt in.
+Since v1.24.1 both runtime files also ship as ES modules (`.mjs`, the `import` condition; same
+content), so Angular 21 builds need no `allowedCommonJsDependencies` entry for them; `require()`
+keeps the CommonJS `.js`.
 
 #### Env encryption settings (v0.25.0)
 

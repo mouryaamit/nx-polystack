@@ -3,6 +3,24 @@
 All notable changes are listed here. Versions follow [semver](https://semver.org); `pstack update`
 runs the migrations between the version you have and the one you install.
 
+## 1.24.1
+
+- `runtime/csp-nonce` and `runtime/csp-style-attr` also ship as ES modules (`.mjs`, same content)
+  through the `import` export condition; `require()` still gets the CommonJS `.js`. Angular 21's
+  application builder no longer warns that they are not ESM, so apps need no
+  `allowedCommonJsDependencies` entry for nx-polystack (one there is harmless). Webpack (Angular 15)
+  picks the `.mjs` too; the code is unchanged. `runtime/env-secret` was already an ES module; it
+  imports `crypto-js`, which is CommonJS, so Angular 21 apps that use it still list `crypto-js`
+  there.
+- Docs only: corrects the 1.24.0 note on ngx-extended-pdf-viewer. `runtime/csp-style-attr` does
+  not remove all of its `style-src-attr` reports: style attributes created by the HTML parser
+  (`innerHTML`, `[innerHTML]`, `insertAdjacentHTML`) stay blocked by design. On Angular 15,
+  viewer 15.x and older still reports about one per page (the thumbnail selection rings), and 18.x
+  about 60 per page load (the toolbar icon SVGs, inserted through `[innerHTML]`); with 18.x the
+  icons lose their sizes unless global stylesheet rules in the app restore each blocked value
+  (one rule per value, not one fixed size). The 1.24.0 test run had no pdf viewer on Angular 21. Figures and the workaround are in the README section
+  "Style attributes under a strict CSP".
+
 ## 1.24.0
 
 - New opt-in runtime `@mouryaamit/nx-polystack/runtime/csp-style-attr`, imported right after
